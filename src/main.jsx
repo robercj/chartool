@@ -8,6 +8,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Generate from './pages/Generate'
+import GenerateCharacter from './pages/GenerateCharacter'
 import Gallery from './pages/Gallery'
 import StorylineDetail from './pages/StorylineDetail'
 import BatchDetail from './pages/BatchDetail'
@@ -46,6 +47,10 @@ createRoot(document.getElementById('root')).render(
                 <Routes>
                   <Route path="/" element={<Navigate to="/generate" replace />} />
                   <Route path="/generate"              element={<Protected><Generate /></Protected>} />
+                  <Route path="/characters/generate"   element={<Protected><GenerateCharacter /></Protected>} />
+                  <Route path="/characters/generate/:draftId" element={<Protected><GenerateCharacter /></Protected>} />
+                  <Route path="/characters/:characterId" element={<Protected><GenerateCharacter /></Protected>} />
+                  <Route path="/characters"            element={<Navigate to="/characters/generate" replace />} />
                   <Route path="/gallery"               element={<Protected><Gallery /></Protected>} />
                   <Route path="/storyline"             element={<Protected><StorylineDetail /></Protected>} />
                   <Route path="/storyline/new"         element={<Protected><StorylineForm /></Protected>} />

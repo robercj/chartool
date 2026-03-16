@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { CharacterDraft } from '../lib/storage';
+import { CharacterDraft } from '../storage';
 
 const LOCAL_STORAGE_KEY = 'character_draft_';
 const DEBOUNCE_DELAY = 2000;
