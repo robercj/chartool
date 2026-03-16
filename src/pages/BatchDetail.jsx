@@ -324,7 +324,7 @@ export default function BatchDetail() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-6 md:py-8 px-4">
+    <div className="max-w-6xl mx-auto py-6 md:py-8 px-4" style={{ overflowX: 'hidden' }}>
       {/* ── Header — two rows on mobile ── */}
       <div className="mb-6">
         {/* Row 1: back + name */}
@@ -445,23 +445,23 @@ export default function BatchDetail() {
 
       {/* Add variation panel */}
       {showAddVariationPanel && (
-        <div className="mb-6 p-4 rounded-xl" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+        <div className="mb-6 p-4 rounded-xl w-full min-w-0" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
           <h3 className="font-medium mb-3" style={{ color: theme.textBody }}>Add Variation</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 min-w-0">
             <input
               type="text"
               value={newPose}
               onChange={(e) => setNewPose(e.target.value)}
               placeholder="Pose (e.g., arms crossed)"
-              className="w-full px-3 py-2 rounded-lg text-sm"
+              className="w-full min-w-0 px-3 py-2 rounded-lg text-sm"
               style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
             />
             <input
               type="text"
               value={newEmotion}
               onChange={(e) => setNewEmotion(e.target.value)}
-              placeholder="Emotion (e.g., happy)"
-              className="w-full px-3 py-2 rounded-lg text-sm"
+              placeholder="Emotion"
+              className="w-full min-w-0 px-3 py-2 rounded-lg text-sm"
               style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
             />
           </div>
