@@ -9,12 +9,14 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Generate from './pages/Generate'
 import GenerateCharacter from './pages/GenerateCharacter'
+import CharacterList from './pages/CharacterList'
 import Gallery from './pages/Gallery'
 import StorylineDetail from './pages/StorylineDetail'
 import BatchDetail from './pages/BatchDetail'
 import Settings from './pages/Settings'
 import StorylineForm from './pages/StorylineForm'
 import StorylineResult from './pages/StorylineResult'
+import AuthCallback from './pages/AuthCallback'
 import './index.css'
 // seedSettings.js no longer needed — API keys are managed by Supabase Edge Function secrets
 
@@ -46,11 +48,12 @@ createRoot(document.getElementById('root')).render(
               <Layout>
                 <Routes>
                   <Route path="/" element={<Navigate to="/generate" replace />} />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route path="/generate"              element={<Protected><Generate /></Protected>} />
+                  <Route path="/characters"            element={<Protected><CharacterList /></Protected>} />
                   <Route path="/characters/generate"   element={<Protected><GenerateCharacter /></Protected>} />
                   <Route path="/characters/generate/:draftId" element={<Protected><GenerateCharacter /></Protected>} />
                   <Route path="/characters/:characterId" element={<Protected><GenerateCharacter /></Protected>} />
-                  <Route path="/characters"            element={<Navigate to="/characters/generate" replace />} />
                   <Route path="/gallery"               element={<Protected><Gallery /></Protected>} />
                   <Route path="/storyline"             element={<Protected><StorylineDetail /></Protected>} />
                   <Route path="/storyline/new"         element={<Protected><StorylineForm /></Protected>} />

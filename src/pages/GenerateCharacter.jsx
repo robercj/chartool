@@ -15,6 +15,25 @@ import PromptPreviewPanel from '../components/character/PromptPreviewPanel';
 import ImageEditContext from '../components/character/ImageEditContext';
 import ExitConfirmationModal from '../components/character/ExitConfirmationModal';
 
+function sanitizeForStorage(data) {
+  const sanitized = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined || value === null || typeof value === 'function') {
+      continue;
+    }
+    if (typeof value === 'object' && value !== null) {
+      if (Array.isArray(value)) {
+        sanitized[key] = value;
+      } else {
+        sanitized[key] = sanitizeForStorage(value);
+      }
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 const INITIAL_FORM_STATE = {
   character_name: '',
   character_role: '',
@@ -83,15 +102,17 @@ export default function GenerateCharacterPage() {
   
   const abortControllerRef = useRef(null);
 
-  const { draft, isDirty, lastSaved, updateState, saveNow } = useDraftPersistence(
+  const { draft, isDirty, lastSaved, updateState, saveNow, isInitialized } = useDraftPersistence(
     draftId,
     user?.id
   );
 
+  const [isNewDraft, setIsNewDraft] = useState(false);
+
   useEffect(() => {
     if (draft) {
       setFormData(prev => ({ ...prev, ...draft }));
-      if (draft.appearance) {
+      if (draft.appearance && Object.keys(draft.appearance).length > 0) {
         setAppearanceExpanded(true);
       }
       if (draft.generated_image_url) {
@@ -110,8 +131,9 @@ export default function GenerateCharacterPage() {
   }, [storyIdParam, formData.assigned_story_id]);
 
   useEffect(() => {
-    if (!draftId && user) {
+    if (!draftId && user && !isNewDraft && isInitialized) {
       const createNewDraft = async () => {
+        setIsNewDraft(true);
         try {
           const newDraft = await CharacterDraft.create(user.id, {
             ...INITIAL_FORM_STATE,
@@ -126,7 +148,7 @@ export default function GenerateCharacterPage() {
       };
       createNewDraft();
     }
-  }, [draftId, user]);
+  }, [draftId, user, isNewDraft, isInitialized, navigate]);
 
   const handleFormChange = useCallback((updates) => {
     setFormData(prev => {
@@ -277,7 +299,33 @@ export default function GenerateCharacterPage() {
     }
 
     if (!formData.generated_image_url) {
-      toast.error('Please generate an image before finalizing');
+      toast.error('Please generate an image before finalization');
+      return;
+    }
+
+    const requiredFields = [
+      { key: 'character_role', label: 'Role in Story' },
+      { key: 'archetype', label: 'Archetype' },
+      { key: 'narrative_function', label: 'Narrative Function' },
+      { key: 'age', label: 'Age' },
+      { key: 'sex', label: 'Sex' },
+      { key: 'gender_expression', label: 'Gender Expression' },
+      { key: 'species_or_race', label: 'Species/Race' },
+      { key: 'nationality_or_origin', label: 'Nationality/Origin' },
+      { key: 'social_class', label: 'Social Class' },
+      { key: 'occupation_or_role', label: 'Occupation/Role' },
+      { key: 'backstory_summary', label: 'Backstory Summary' },
+      { key: 'formative_event', label: 'Formative Event' },
+      { key: 'relationship_to_protagonist', label: 'Relationship to Protagonist' },
+    ];
+
+    const missingFields = requiredFields.filter(field => {
+      const value = formData[field.key];
+      return !value || (Array.isArray(value) && value.length === 0);
+    });
+
+    if (missingFields.length > 0) {
+      toast.error(`Please fill in: ${missingFields.map(f => f.label).join(', ')}`);
       return;
     }
 
@@ -289,14 +337,16 @@ export default function GenerateCharacterPage() {
         appearance: formData.appearance || {},
       };
 
-      const manifest = await generateCharacterManifest(characterData);
+      const manifestResult = await generateCharacterManifest(characterData);
 
-      const characterRecord = {
-        ...formData,
-        character_manifest: manifest,
+      const enrichedData = manifestResult.enrichedData || characterData;
+
+      const characterRecord = sanitizeForStorage({
+        ...enrichedData,
+        character_manifest: manifestResult.manifest,
         creation_status: 'finalized',
         image_history: imageHistory,
-      };
+      });
 
       const created = await Character.create(user.id, characterRecord);
 

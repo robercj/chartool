@@ -1,6 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CharacterDraft } from '../storage';
 
+function sanitizeForStorage(data) {
+  const sanitized = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined || value === null || typeof value === 'function') {
+      continue;
+    }
+    if (typeof value === 'object' && value !== null) {
+      if (Array.isArray(value)) {
+        sanitized[key] = value;
+      } else {
+        sanitized[key] = sanitizeForStorage(value);
+      }
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 const LOCAL_STORAGE_KEY = 'character_draft_';
 const DEBOUNCE_DELAY = 2000;
 
@@ -55,8 +74,9 @@ export function useDraftPersistence(draftId, userId) {
   const saveToStorage = useCallback(async (state) => {
     if (!draftId || !hasHydratedRef.current) return;
     
+    const sanitizedState = sanitizeForStorage(state);
     const storageKey = getLocalStorageKey();
-    localStorage.setItem(storageKey, JSON.stringify(state));
+    localStorage.setItem(storageKey, JSON.stringify(sanitizedState));
     setLastSaved(new Date());
     setIsDirty(false);
 
@@ -66,12 +86,12 @@ export function useDraftPersistence(draftId, userId) {
         const existingDraft = await CharacterDraft.get(draftId);
         if (existingDraft) {
           await CharacterDraft.update(draftId, {
-            ...state,
+            ...sanitizedState,
             last_modified_at: new Date().toISOString(),
           });
         } else {
           await CharacterDraft.create(userId, {
-            ...state,
+            ...sanitizedState,
             draft_saved_at: new Date().toISOString(),
             last_modified_at: new Date().toISOString(),
           });
@@ -147,6 +167,7 @@ export function useDraftPersistence(draftId, userId) {
     isDirty,
     lastSaved,
     isSaving,
+    isInitialized: hasHydratedRef.current,
     updateState,
     saveNow,
     clearDraft,

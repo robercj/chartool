@@ -262,6 +262,34 @@ ${JSON.stringify(characterData, null, 2)}`;
 // ─── Character Manifest Generation: Claude ──────────────────────────────────
 // Generates a prose character manifest usable as a system prompt
 export async function generateCharacterManifest(characterData) {
+  const personalityFields = [
+    'dere_presets',
+    'custom_personality_modifier',
+    'personality_mode',
+    'surface_traits',
+    'hidden_traits',
+    'emotional_triggers_positive',
+    'emotional_triggers_negative',
+    'behavioral_tendencies',
+    'moral_alignment',
+    'values_and_beliefs',
+    'fears_and_insecurities',
+    'surface_goal',
+    'deep_desire',
+    'internal_conflict',
+    'speech_pattern',
+    'tone_of_voice',
+    'verbal_quirks',
+    'internal_monologue_style',
+    'consistency_anchors',
+    'contradiction_points',
+    'relationship_to_authority',
+    'relationship_to_peers',
+    'relationship_to_love_interest',
+    'world_context',
+    'knowledge_domain',
+  ];
+
   const systemPrompt = `You are a character profile writer. Your task is to create a comprehensive, high-fidelity character manifest from the provided character data.
 
 The manifest serves as a ready-to-use AI roleplay system prompt. It should include:
@@ -273,24 +301,47 @@ The manifest serves as a ready-to-use AI roleplay system prompt. It should inclu
 6. Relationships
 7. Behavioral guidelines
 
+IMPORTANT: Use context clues and your creativity to fill in any missing or empty fields. For personality-related fields (dere presets, traits, fears, desires, speech patterns, etc.), create rich, internally consistent details that complement the provided character information. If key identity details are missing, infer plausible choices based on the character's role, archetype, and backstory.
+
 Write in third person, past tense for backstory, present tense for behavioral instructions.
 Make the character feel three-dimensional with contradictions and depth.
-Include specific examples of how the character would react in certain situations.`;
+Include specific examples of how the character would react in certain situations.
 
-  const userMessage = `Create a character manifest from this data:
+Respond in JSON format with two fields:
+1. "enriched_data": The complete character object with all missing personality fields filled in
+2. "manifest": The prose character manifest`;
 
-${JSON.stringify(characterData, null, 2)}`;
+  const userMessage = `Create a character manifest from this data. Fill in any missing or empty personality fields using context clues and creativity:
+
+${JSON.stringify(characterData, null, 2)}
+
+Required fields that must be present: character_name, character_role, archetype, narrative_function, age, sex, gender_expression, species_or_race, nationality_or_origin, social_class, occupation_or_role, backstory_summary, formative_event, relationship_to_protagonist
+
+Personality fields to fill if missing: ${personalityFields.join(', ')}`;
 
   const data = await callEdgeFunction('anthropic-proxy', {
     _generation_type: 'character_manifest',
     model: 'claude-sonnet-4-5',
-    max_tokens: 4000,
+    max_tokens: 6000,
     temperature: 0.7,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
   });
 
-  return data.content?.[0]?.text || '';
+  const responseText = data.content?.[0]?.text || '';
+  
+  try {
+    const parsed = JSON.parse(responseText);
+    return {
+      manifest: parsed.manifest || responseText,
+      enrichedData: parsed.enriched_data || characterData,
+    };
+  } catch {
+    return {
+      manifest: responseText,
+      enrichedData: characterData,
+    };
+  }
 }
 
 // ─── Character Image Generation: fal.ai nanoBanana2 (text-to-image) ──────────────

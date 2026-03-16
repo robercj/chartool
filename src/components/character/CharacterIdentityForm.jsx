@@ -298,7 +298,7 @@ export default function CharacterIdentityForm({
             </p>
           </div>
 
-          <input type="hidden" value={personalityMode} onChange={() => {}} />
+          <input type="hidden" value={personalityMode} readOnly />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <PillTagInput
