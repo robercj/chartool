@@ -1133,22 +1133,25 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
 
         <div>
           <Label theme={theme}>Images per Character</Label>
-          <div className="flex justify-center mb-2">
-            <span className="font-bold px-3 py-1 rounded-lg" style={{ color: theme.primary, background: theme.primaryGlow }}>{count}</span>
-          </div>
           <input
-            type="range"
+            type="number"
             min="1"
             max="20"
             value={count}
-            onChange={e => setCount(Number(e.target.value))}
-            className="w-full"
-            style={{ accentColor: theme.primary, color: theme.primary }}
+            onChange={e => {
+              const v = Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1))
+              setCount(v)
+            }}
+            className="w-full px-3 rounded-xl text-sm"
+            style={{
+              height: '44px',
+              background: theme.fieldBg,
+              border: `1px solid ${theme.fieldBorder}`,
+              color: theme.textBody,
+            }}
             aria-label="Images per character"
-            aria-valuemin={1}
-            aria-valuemax={20}
-            aria-valuenow={count}
           />
+          <p className="mt-1 text-xs" style={{ color: theme.textMuted }}>Enter a number between 1 and 20</p>
         </div>
 
         <div>
@@ -1363,14 +1366,25 @@ function Select({ label, value, options, onChange, theme }) {
 
 function Modal({ children, theme, onClose, title }) {
   const [dragOffset, setDragOffset] = useState(0)
-  const dragStart = { current: 0 }
+  const dragStart = useRef(0)
+  const dragging = useRef(false)
 
-  const handleTouchStart = e => { dragStart.current = e.touches[0].clientY }
-  const handleTouchMove  = e => {
+  // Only initiate drag-to-dismiss when the touch starts on the sheet itself,
+  // not on interactive children (inputs, selects, buttons, textareas).
+  const INTERACTIVE = ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A', 'LABEL']
+  const handleTouchStart = e => {
+    if (INTERACTIVE.includes(e.target.tagName)) return
+    dragStart.current = e.touches[0].clientY
+    dragging.current = true
+  }
+  const handleTouchMove = e => {
+    if (!dragging.current) return
     const dy = e.touches[0].clientY - dragStart.current
     if (dy > 0) setDragOffset(dy)
   }
   const handleTouchEnd = () => {
+    if (!dragging.current) return
+    dragging.current = false
     if (dragOffset > 80) { setDragOffset(0); onClose() }
     else setDragOffset(0)
   }
