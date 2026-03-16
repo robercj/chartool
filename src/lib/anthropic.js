@@ -66,7 +66,15 @@ SECTION C — AI REMINDERS
 // signal: optional AbortSignal — if provided, the request will be cancelled
 // when the signal fires (e.g. component unmount or user-triggered stop).
 async function callEdgeFunction(functionName, body, signal = null) {
+  // Explicitly attach the current session token so the edge function always
+  // receives a valid Bearer JWT — supabase.functions.invoke() can send the
+  // anon key instead of the user token if the session hasn't been fully
+  // restored from storage yet (race on first load).
+  const { data: { session } } = await supabase.auth.getSession();
   const invokeOptions = { body };
+  if (session?.access_token) {
+    invokeOptions.headers = { Authorization: `Bearer ${session.access_token}` };
+  }
   if (signal) invokeOptions.signal = signal;
 
   const { data, error } = await supabase.functions.invoke(functionName, invokeOptions);

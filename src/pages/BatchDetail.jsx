@@ -447,13 +447,13 @@ export default function BatchDetail() {
       {showAddVariationPanel && (
         <div className="mb-6 p-4 rounded-xl" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
           <h3 className="font-medium mb-3" style={{ color: theme.textBody }}>Add Variation</h3>
-          <div className="flex gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <input
               type="text"
               value={newPose}
               onChange={(e) => setNewPose(e.target.value)}
               placeholder="Pose (e.g., arms crossed)"
-              className="flex-1 px-3 py-2 rounded-lg text-sm"
+              className="w-full px-3 py-2 rounded-lg text-sm"
               style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
             />
             <input
@@ -461,14 +461,14 @@ export default function BatchDetail() {
               value={newEmotion}
               onChange={(e) => setNewEmotion(e.target.value)}
               placeholder="Emotion (e.g., happy)"
-              className="flex-1 px-3 py-2 rounded-lg text-sm"
+              className="w-full px-3 py-2 rounded-lg text-sm"
               style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
             />
-            <Button onClick={handleAddVariation} theme={theme} disabled={generating}>
-              {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-              Generate
-            </Button>
           </div>
+          <Button onClick={handleAddVariation} theme={theme} disabled={generating}>
+            {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+            +Generate
+          </Button>
         </div>
       )}
 

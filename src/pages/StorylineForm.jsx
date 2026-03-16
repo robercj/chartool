@@ -361,7 +361,7 @@ export default function StorylineForm() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     /* Outer wrapper: responsive container, max-width 720px on desktop */
-    <div className="w-full mx-auto py-6 md:py-8 px-4 md:px-6" style={{ maxWidth: '720px' }}>
+    <div className="w-full mx-auto py-6 md:py-8 px-4 md:px-6 min-w-0" style={{ maxWidth: '720px', overflowX: 'hidden' }}>
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-6 md:mb-8">
@@ -512,14 +512,9 @@ export default function StorylineForm() {
       </SectionCard>
 
       {/* ── SECTION A ── */}
-      {/*
-        Sticky heading: top = 64px (nav height).
-        Solid background so content scrolls cleanly beneath.
-      */}
       <SectionCard
         theme={theme}
         title="Section A — World & Protagonist Setup"
-        stickyTitle
       >
         {/* Genre & tone */}
         <FieldGroup
@@ -528,10 +523,8 @@ export default function StorylineForm() {
           required
           error={errors.genres}
           theme={theme}
-          groupRole="group"
-          groupAriaLabel="Genre & Tone selection"
         >
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Genre options">
+          <div className="flex flex-wrap gap-2 min-w-0" role="group" aria-label="Genre options">
             {GENRES.map(g => (
               <Chip
                 key={g}
@@ -792,7 +785,7 @@ export default function StorylineForm() {
       </SectionCard>
 
       {/* ── SECTION B ── */}
-      <SectionCard theme={theme} title="Section B — Narrative Physics Settings" className="mt-6" stickyTitle>
+      <SectionCard theme={theme} title="Section B — Narrative Physics Settings" className="mt-6">
 
         {/* Structural overlays */}
         <FieldGroup label="Structural Overlay(s)" theme={theme}>
@@ -957,19 +950,16 @@ export default function StorylineForm() {
         </button>
       </div>
 
-      {/* Mobile sticky submit bar */}
+      {/* Mobile sticky submit bar — fixed at bottom, full viewport width */}
       <div
-        className="md:hidden sticky bottom-0 left-0 right-0 z-20 px-4"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-20 px-4"
         style={{
           background:    theme.navBg,
           backdropFilter:'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
           borderTop:     `1px solid ${theme.navBorder}`,
           paddingTop:    '0.75rem',
-          paddingBottom: `calc(var(--safe-bottom) + 0.75rem)`,
-          minHeight:     '64px',
-          /* Offset for safe area bottom */
-          marginLeft:    'calc(-1 * var(--safe-left))',
-          marginRight:   'calc(-1 * var(--safe-right))',
+          paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + 0.75rem)`,
         }}
       >
         <button
@@ -986,8 +976,8 @@ export default function StorylineForm() {
         </button>
       </div>
 
-      {/* Bottom padding so last field isn't hidden under the sticky bar on mobile */}
-      <div className="md:hidden h-6" aria-hidden="true" />
+      {/* Spacer so the last card isn't hidden under the fixed submit bar on mobile */}
+      <div className="md:hidden h-24" aria-hidden="true" />
 
       {/* Confirmation modal / bottom sheet */}
       {showConfirmModal && (
@@ -1023,12 +1013,12 @@ function FieldLabel({ theme, required, children }) {
 }
 
 const FieldGroup = forwardRef(function FieldGroup(
-  { label, required, error, hint, children, theme, groupRole, groupAriaLabel },
+  { label, required, error, hint, children, theme },
   ref
 ) {
   return (
-    <div ref={ref} className="space-y-1.5">
-      <div className="flex items-center gap-1.5 flex-wrap">
+    <div ref={ref} className="space-y-1.5 min-w-0">
+      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
         <span
           className="uppercase tracking-widest font-medium"
           style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}
@@ -1057,25 +1047,22 @@ const FieldGroup = forwardRef(function FieldGroup(
   )
 })
 
-function SectionCard({ theme, title, children, className = '', stickyTitle = false }) {
+function SectionCard({ theme, title, children, className = '' }) {
   return (
+    /*
+      overflow-hidden is intentionally NOT applied to the outer wrapper —
+      it would clip position:sticky children and cause layout bleed on mobile.
+      Rounded corners are preserved via border-radius alone; inner elements
+      that need clipping (e.g. image thumbnails) handle it themselves.
+    */
     <div
-      className={`rounded-2xl overflow-hidden ${className}`}
+      className={`rounded-2xl ${className}`}
       style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
     >
-      {/* Section heading — sticky on mobile */}
-      <div
-        className={stickyTitle ? 'sticky z-10' : ''}
-        style={stickyTitle ? {
-          top:        '64px',  /* nav height */
-          background: theme.cardBg,
-          borderBottom: `1px solid ${theme.fieldBorder}`,
-        } : {
-          borderBottom: `1px solid ${theme.fieldBorder}`,
-        }}
-      >
+      {/* Section heading — scrolls naturally; no sticky on mobile */}
+      <div style={{ borderBottom: `1px solid ${theme.fieldBorder}` }}>
         <h2
-          className="font-bold px-6 py-4"
+          className="font-bold px-5 py-4 md:px-6"
           style={{ fontSize: 'var(--font-size-heading)', color: theme.textBody }}
         >
           {title}
@@ -1143,7 +1130,7 @@ function Chip({ label, selected, onClick, theme, role = 'checkbox', 'aria-checke
     <button
       type="button"
       onClick={onClick}
-      className="chip-btn rounded-full font-medium transition-all"
+      className="chip-btn rounded-full font-medium transition-all flex-shrink-0"
       style={{
         background:  selected ? theme.primary : theme.fieldBg,
         color:       selected ? 'white' : theme.textBody,
@@ -1199,11 +1186,10 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
+      className="rounded-xl"
       style={{
         background: theme.fieldBg,
         border:     `1px solid ${theme.fieldBorder}`,
-        contain:    'content',  /* CSS containment — prevents reflow propagation */
       }}
     >
       {/* Card header */}
@@ -1382,11 +1368,10 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
+      className="rounded-xl"
       style={{
         background: theme.fieldBg,
         border:     `1px solid ${theme.fieldBorder}`,
-        contain:    'content',
       }}
     >
       <div
