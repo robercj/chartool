@@ -4,11 +4,13 @@ import Gallery from './pages/Gallery'
 import StorylineDetail from './pages/StorylineDetail'
 import BatchDetail from './pages/BatchDetail'
 import Settings from './pages/Settings'
+import AuthCallback from './pages/AuthCallback'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/generate" replace />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/generate" element={<Generate />} />
       <Route path="/gallery" element={<Gallery />} />
       <Route path="/storyline" element={<StorylineDetail />} />
