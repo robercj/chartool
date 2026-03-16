@@ -293,21 +293,9 @@ ${JSON.stringify(characterData, null, 2)}`;
   return data.content?.[0]?.text || '';
 }
 
-// ─── Character Image Generation: fal.ai nanoBanana2 ────────────────────────────
+// ─── Character Image Generation: fal.ai nanoBanana2 (text-to-image) ──────────────
 export async function generateCharacterImage({ prompt, seed = null }, signal = null) {
-  const input = {
-    prompt,
-    aspect_ratio: '3:4',
-    num_images: 1,
-    output_format: 'png',
-    resolution: '1K',
-  };
-
-  if (seed !== null && seed !== undefined) {
-    input.seed = seed;
-  }
-
-  const result = await callEdgeFunction('fal-generate', { input }, signal);
+  const result = await callEdgeFunction('fal-generate-character', { prompt, seed }, signal);
 
   const images = result?.images;
   if (!images?.[0]) throw new Error('fal.ai returned no image');
