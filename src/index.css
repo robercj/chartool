@@ -1,16 +1,265 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   PHASE 1 — DESIGN TOKEN & BREAKPOINT FOUNDATION
+   Mobile-first: sm (320px) → md (768px) → lg (1024px) → xl (1280px)
+───────────────────────────────────────────────────────────────────────────── */
+
+/*
+  Tailwind v4 breakpoint overrides via @theme.
+  Default sm=640px is replaced with 320px so `sm:` targets mobile first.
+  All other breakpoints match the spec exactly.
+*/
+@theme {
+  /* Breakpoints — override Tailwind v4 defaults */
+  --breakpoint-xs: 20rem;    /* 320px  — very small phones  */
+  --breakpoint-sm: 20rem;    /* 320px  — mobile (PRIMARY)   */
+  --breakpoint-md: 48rem;    /* 768px  — tablet             */
+  --breakpoint-lg: 64rem;    /* 1024px — small desktop      */
+  --breakpoint-xl: 80rem;    /* 1280px — large desktop      */
+
+  /* Fluid typography scale — CSS custom properties */
+  --font-size-body:    clamp(0.9375rem, 2.5vw, 1rem);       /* 15px → 16px */
+  --font-size-label:   clamp(0.75rem, 2vw, 0.8125rem);      /* 12px → 13px */
+  --font-size-heading: clamp(1.125rem, 4vw, 1.5rem);        /* 18px → 24px */
+  --font-size-page:    clamp(1.375rem, 5vw, 2rem);          /* 22px → 32px */
+  --font-size-pre:     clamp(0.875rem, 2vw, 0.9375rem);     /* 14px → 15px */
+
+  /* Touch target minimum */
+  --touch-target-min: 2.75rem;   /* 44px */
+}
+
+/* ─── Root & Body ────────────────────────────────────────────────────────── */
 :root {
   font-family: system-ui, -apple-system, sans-serif;
+  font-size: var(--font-size-body);
+
+  /* Safe area insets — iOS notch + home indicator */
+  --safe-top:    env(safe-area-inset-top,    0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left,   0px);
+  --safe-right:  env(safe-area-inset-right,  0px);
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  /* Apply safe-area padding so content never hides under iOS chrome */
+  padding-left:  var(--safe-left);
+  padding-right: var(--safe-right);
+  /* Bottom safe area handled per-component for fixed/sticky elements */
 }
 
-/* Indeterminate progress bar scanning animation */
+/* ─── Touch Target Utility ───────────────────────────────────────────────── */
+/*
+  Apply .touch-target to any interactive element that needs the 44×44px minimum.
+  Uses padding compensation so the visual size stays unchanged while the
+  clickable area expands — no layout shifts.
+*/
+.touch-target {
+  position: relative;
+}
+.touch-target::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  min-width:  var(--touch-target-min);
+  min-height: var(--touch-target-min);
+}
+
+/* Direct min-size enforcement for block-level interactive elements */
+.touch-min {
+  min-height: var(--touch-target-min);
+  min-width:  var(--touch-target-min);
+}
+
+/* ─── Range Slider — Mobile Touch Override ───────────────────────────────── */
+/*
+  Override tiny default browser thumb (16px) to 28×28px on all browsers.
+  Track height raised to 6px for better touch accuracy.
+*/
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  cursor: pointer;
+  width: 100%;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: currentColor;
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  margin-top: -11px; /* (28 - 6) / 2 = 11px — centres thumb on track */
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: currentColor;
+  cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+}
+
+/* ─── Focus Indicators ───────────────────────────────────────────────────── */
+/*
+  Ensure all interactive elements show a visible focus ring.
+  Never remove outline without a replacement.
+*/
+:focus-visible {
+  outline: 2px solid;
+  outline-offset: 2px;
+}
+
+/* ─── Safe-area Helpers for Fixed/Sticky Elements ────────────────────────── */
+/*
+  Utility classes for elements pinned to viewport edges.
+  Used by: sticky submit bar, fixed nav, bottom sheets, FABs.
+*/
+.pb-safe {
+  padding-bottom: calc(var(--safe-bottom) + 1rem);
+}
+
+.bottom-safe {
+  bottom: var(--safe-bottom);
+}
+
+.sticky-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  padding-bottom: calc(var(--safe-bottom) + 0.75rem);
+  padding-top: 0.75rem;
+}
+
+/* ─── Scroll Anchoring ───────────────────────────────────────────────────── */
+/*
+  Prevents layout jump when NPC/Faction cards are added or removed
+  by anchoring the scroll position to content above the insertion point.
+*/
+main,
+.scroll-anchor {
+  overflow-anchor: auto;
+}
+
+/* ─── Reduced Motion ─────────────────────────────────────────────────────── */
+/*
+  Disable all transitions and animations for users who prefer reduced motion.
+  This must be global — applied before any component-level overrides.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Progress bar scanning animation ───────────────────────────────────── */
 @keyframes progressScan {
   0%   { transform: translateX(-150%); }
   100% { transform: translateX(350%); }
+}
+
+/* ─── Bottom Sheet / Mobile Nav Drawer — Performance ─────────────────────── */
+/*
+  will-change: transform applied ONLY to these two animation-heavy elements.
+  Do not apply broadly.
+*/
+.mobile-nav-drawer,
+.bottom-sheet {
+  will-change: transform;
+}
+
+/* ─── Responsive Container Utility ──────────────────────────────────────── */
+/*
+  .container-responsive: mobile-first responsive container with correct
+  horizontal padding at each breakpoint. Replaces hardcoded px padding.
+*/
+.container-responsive {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left:  1rem;   /* 16px — mobile */
+  padding-right: 1rem;
+}
+
+@media (min-width: 48rem) {   /* md — tablet */
+  .container-responsive {
+    padding-left:  1.5rem;   /* 24px */
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 64rem) {   /* lg — desktop */
+  .container-responsive {
+    padding-left:  2rem;     /* 32px */
+    padding-right: 2rem;
+  }
+}
+
+/* ─── Fluid Typography Utility Classes ──────────────────────────────────── */
+.text-fluid-body    { font-size: var(--font-size-body); }
+.text-fluid-label   { font-size: var(--font-size-label); }
+.text-fluid-heading { font-size: var(--font-size-heading); }
+.text-fluid-page    { font-size: var(--font-size-page); }
+.text-fluid-pre     { font-size: var(--font-size-pre); }
+
+/* ─── Pre / Code Block — Mobile Safe ────────────────────────────────────── */
+pre,
+.pre-block {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  font-size: var(--font-size-pre);
+}
+
+/* ─── Textarea Defaults — Mobile ─────────────────────────────────────────── */
+textarea {
+  min-height: 6rem;   /* 96px — mobile minimum */
+  resize: vertical;
+}
+
+/* ─── Chip / Badge Touch Target Compensation ────────────────────────────── */
+/*
+  Chips are visually small (36px tall) but get an expanded touch area via ::after.
+  Applied through the .chip-touch class added alongside chip button elements.
+*/
+.chip-btn {
+  min-height: 36px;
+  padding-left:  0.75rem;   /* 12px */
+  padding-right: 0.75rem;
+  font-size: 0.875rem;      /* 14px */
+  position: relative;
+}
+
+.chip-btn::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  min-width:  2.75rem;   /* 44px */
+  min-height: 2.75rem;
 }

@@ -135,18 +135,20 @@ export default function AuthModal({ onClose }) {
         onClick={onClose}
       />
 
-      {/* Modal */}
+      {/* Modal — responsive padding: tighter on mobile */}
       <div
-        className="relative w-full max-w-md rounded-2xl p-8 shadow-2xl"
+        className="relative w-full max-w-md rounded-2xl p-5 md:p-8 shadow-2xl"
         style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
       >
         {/* Close */}
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            className="absolute top-3 right-3 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
+            style={{ minWidth: '44px', minHeight: '44px' }}
+            aria-label="Close"
           >
-            <X className="w-4 h-4" style={{ color: theme.textMuted }} />
+            <X className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
           </button>
         )}
 

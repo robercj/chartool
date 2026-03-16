@@ -124,16 +124,16 @@ export default function Generate() {
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { theme, setGenreKey } = useTheme()
-  const { startProgress, updateProgress, clearProgress, isCancelled } = useProgress()
+  const { startProgress, updateProgress, clearProgress, isCancelled, generating, setGenerating, getAbortSignal } = useProgress()
   const { user } = useAuth()
   const userId = user?.id
+  const mountedRef = useRef(true)
 
   const [step, setStep] = useState(1)
   const [storylineConfig, setStorylineConfig] = useState(null)
   const [characters, setCharacters] = useState([createEmptyCharacter()])
   const [showNewStorylineModal, setShowNewStorylineModal] = useState(false)
   const [showExistingModal, setShowExistingModal] = useState(false)
-  const [generating, setGenerating] = useState(false)
   // Map<charId, Array<{index, label, prompt, referenceImageUrl, batchId, errorMsg}>>
   const [failedImages, setFailedImages] = useState({})
   // Live preview: charId → Array<{ url, label }> built up as each image completes
@@ -168,6 +168,11 @@ export default function Generate() {
     'Political intrigue': 'noir',
     'Cultivation': 'fantasy',
   }
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     const id = searchParams.get('storylineId')
@@ -229,6 +234,7 @@ export default function Generate() {
     setLiveImages({})
     let errors = []
     let successCount = 0
+    const signal = getAbortSignal()
 
     try {
       let storylineId = storylineConfig.storylineId
@@ -361,10 +367,15 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
               referenceImageUrls: charSourceImages,
               propImageUrl: charPropImage,
               aspectRatio: char.aspectRatio || '3:4',
-            })
+            }, signal)
 
             if (char.removeBackground !== false) {
-              imgUrl = await removeImageBackground(imgUrl)
+              try {
+                imgUrl = await removeImageBackground(imgUrl, signal)
+              } catch (rembgErr) {
+                console.warn('Background removal failed:', rembgErr)
+                toast.warning(`Background removal failed for image ${i + 1}: ${rembgErr.message}`)
+              }
             }
 
             await GeneratedImage.create(userId, {
@@ -447,11 +458,12 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
         navigate('/gallery')
       }
     } catch (err) {
+      if (!mountedRef.current) return
       console.error('Fatal generation error:', err)
       toast.error(err.message || 'Generation failed')
       clearProgress()
     } finally {
-      setGenerating(false)
+      if (mountedRef.current) setGenerating(false)
     }
   }
 
@@ -478,6 +490,7 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
     }))
     setCharacters(prev => prev.map(c => c.id === charId ? { ...c, status: 'generating' } : c))
     startProgress(`Retrying image ${failedItem.index}`, 1, '/generate')
+    const signal = getAbortSignal()
 
     try {
       let imgUrl = await generateImage({
@@ -486,10 +499,15 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
         propImageUrl: failedItem.propImageUrl,
         referenceImageUrl: failedItem.referenceImageUrl,  // legacy fallback
         aspectRatio: failedItem.aspectRatio || '3:4',
-      })
+      }, signal)
 
       if (failedItem.removeBackground) {
-        imgUrl = await removeImageBackground(imgUrl)
+        try {
+          imgUrl = await removeImageBackground(imgUrl, signal)
+        } catch (rembgErr) {
+          console.warn('Background removal failed on retry:', rembgErr)
+          toast.warning(`Background removal failed: ${rembgErr.message}`)
+        }
       }
 
       await GeneratedImage.create(userId, {
@@ -521,6 +539,7 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
       })
       clearProgress()
     } catch (err) {
+      if (!mountedRef.current) return
       console.error('Retry failed:', err)
       toast.error(`Retry failed: ${err.message}`)
       clearProgress()
@@ -534,13 +553,13 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
       }))
       setCharacters(prev => prev.map(c => c.id === charId ? { ...c, status: 'failed' } : c))
     } finally {
-      setGenerating(false)
+      if (mountedRef.current) setGenerating(false)
     }
   }
 
   if (step === 1) {
     return (
-      <div className="max-w-md mx-auto py-16 px-4">
+      <div className="max-w-md mx-auto py-8 md:py-16 px-4">
         <Card theme={theme}>
           <h2 className="text-2xl font-bold mb-6 text-center" style={{
             background: theme.titleGradient,
@@ -642,9 +661,9 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-4">
-      {/* Config badge */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+      {/* Config badge — wraps on narrow screens */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge theme={theme}>{storylineConfig.newStorylineName || 'Existing Storyline'}</Badge>
           <Badge theme={theme} variant="secondary">{storylineConfig.count} images/character</Badge>
           {storylineConfig.genre && <Badge theme={theme} variant="accent">{GENRES[storylineConfig.genre]?.label || storylineConfig.genre}</Badge>}
@@ -702,11 +721,11 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
   )
 }
 
-function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove, generating, failedImages, onRetry, liveImages, expectedTotal }) {
+function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove, generating, failedImages, onRetry, liveImages, expectedTotal, prefilled }) {
   const [expanded, setExpanded] = useState(true)
 
   return (
-    <Card theme={theme}>
+    <Card theme={theme} style={{ contain: 'content' }}>
       <div
         className="flex items-center gap-4 cursor-pointer p-4"
         onClick={() => setExpanded(!expanded)}
@@ -744,8 +763,13 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
         </div>
 
         {canRemove && !generating && (
-          <button onClick={(e) => { e.stopPropagation(); onRemove() }} className="p-2 rounded-lg hover:bg-red-500/20 text-red-400">
-            <X className="w-4 h-4" />
+          <button
+            onClick={e => { e.stopPropagation(); onRemove() }}
+            className="flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
+            style={{ minWidth: '44px', minHeight: '44px', color: theme.textMuted }}
+            aria-label={`Remove character ${index + 1}`}
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         )}
 
@@ -843,6 +867,22 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
 
       {expanded && (
         <div className="p-4 pt-0 space-y-4">
+          {/* Pre-fill badge — only shown when character was pre-filled from a storyline */}
+          {prefilled && (
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-lg"
+              style={{
+                background: `${theme.primary}15`,
+                border:     `1px solid ${theme.primary}40`,
+                fontSize:   'var(--font-size-label)',
+                color:      theme.primary,
+              }}
+              aria-label="This character has fields pre-filled from the linked storyline"
+            >
+              <BookOpen className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+              Pre-filled from storyline
+            </div>
+          )}
           <MultiUploadZone
             theme={theme}
             values={character.sourceImages || (character.imageUrl ? [character.imageUrl] : [])}
@@ -1014,17 +1054,19 @@ function TagInput({ label, presets, tags, onChange, theme }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${label} options`}>
         {presets.map(preset => (
           <button
             key={preset}
             onClick={() => togglePreset(preset)}
-            className="px-2 py-1 text-xs rounded-md transition-all"
+            className="chip-btn rounded-full transition-all"
             style={{
               background: tags.includes(preset) ? theme.primaryGlow : theme.fieldBg,
-              color: tags.includes(preset) ? theme.primary : theme.textMuted,
-              border: `1px solid ${tags.includes(preset) ? theme.primary : theme.fieldBorder}`
+              color:      tags.includes(preset) ? theme.primary : theme.textMuted,
+              border:     `1px solid ${tags.includes(preset) ? theme.primary : theme.fieldBorder}`,
             }}
+            role="checkbox"
+            aria-checked={tags.includes(preset)}
           >
             {preset}
           </button>
@@ -1034,14 +1076,15 @@ function TagInput({ label, presets, tags, onChange, theme }) {
         <input
           type="text"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && addTag(input)}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addTag(input)}
           placeholder={`Add custom ${label.toLowerCase()}...`}
-          className="flex-1 px-3 py-2 rounded-lg text-sm"
-          style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+          className="flex-1 px-3 rounded-lg text-sm"
+          style={{ height: '44px', background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+          autocorrect="on"
         />
         <Button onClick={() => addTag(input)} theme={theme} size="sm" variant="outline">
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4" aria-hidden="true" />
         </Button>
       </div>
       {tags.length > 0 && (
@@ -1090,16 +1133,22 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
 
         <div>
           <Label theme={theme}>Images per Character</Label>
+          <div className="flex justify-center mb-2">
+            <span className="font-bold px-3 py-1 rounded-lg" style={{ color: theme.primary, background: theme.primaryGlow }}>{count}</span>
+          </div>
           <input
             type="range"
             min="1"
             max="20"
             value={count}
-            onChange={(e) => setCount(Number(e.target.value))}
+            onChange={e => setCount(Number(e.target.value))}
             className="w-full"
-            style={{ accentColor: theme.primary }}
+            style={{ accentColor: theme.primary, color: theme.primary }}
+            aria-label="Images per character"
+            aria-valuemin={1}
+            aria-valuemax={20}
+            aria-valuenow={count}
           />
-          <div className="text-center text-sm" style={{ color: theme.textMuted }}>{count}</div>
         </div>
 
         <div>
@@ -1169,14 +1218,15 @@ function ExistingStorylineModal({ theme, storylines, onClose, onConfirm }) {
   )
 }
 
-function Card({ children, theme, className = '' }) {
+function Card({ children, theme, className = '', style = {} }) {
   return (
     <div
-      className={`rounded-2xl p-6 ${className}`}
+      className={`rounded-2xl p-4 md:p-6 ${className}`}
       style={{
-        background: theme.cardBg,
-        border: `1px solid ${theme.cardBorder}`,
-        backdropFilter: 'blur(12px)',
+        background:      theme.cardBg,
+        border:          `1px solid ${theme.cardBorder}`,
+        backdropFilter:  'blur(12px)',
+        ...style,
       }}
     >
       {children}
@@ -1184,41 +1234,21 @@ function Card({ children, theme, className = '' }) {
   )
 }
 
-function Button({ children, onClick, theme, variant = 'primary', className = '', disabled = false }) {
-  const baseStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '0.75rem 1.5rem',
-    borderRadius: '0.75rem',
-    fontWeight: 500,
-    transition: 'all 0.3s',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.5 : 1,
-  }
-
+function Button({ children, onClick, theme, variant = 'primary', className = '', disabled = false, size }) {
   let bg, color, border
-  if (variant === 'primary') {
-    bg = theme.buttonGradient
-    color = 'white'
-  } else if (variant === 'outline') {
-    bg = 'transparent'
-    color = theme.textBody
-    border = `1px solid ${theme.fieldBorder}`
-  } else if (variant === 'ghost') {
-    bg = 'transparent'
-    color = theme.textMuted
-  } else if (variant === 'secondary') {
-    bg = theme.fieldBg
-    color = theme.textBody
-  }
+  if (variant === 'primary')   { bg = theme.buttonGradient; color = 'white' }
+  else if (variant === 'outline') { bg = 'transparent'; color = theme.textBody; border = `1px solid ${theme.fieldBorder}` }
+  else if (variant === 'ghost')   { bg = 'transparent'; color = theme.textMuted }
+  else if (variant === 'secondary') { bg = theme.fieldBg; color = theme.textBody }
+
+  const h = size === 'sm' ? '36px' : '44px'
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={className}
-      style={{ ...baseStyle, background: bg, color, border }}
+      className={`inline-flex items-center justify-center px-4 rounded-xl font-medium transition-all ${className}`}
+      style={{ minHeight: h, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, background: bg, color, border }}
     >
       {children}
     </button>
@@ -1234,8 +1264,9 @@ function Input({ label, value, onChange, placeholder, theme, type = 'text' }) {
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-xl text-sm"
-        style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+        className="w-full px-3 rounded-xl text-sm"
+        style={{ height: '44px', background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+        autocorrect="on"
       />
     </div>
   )
@@ -1250,8 +1281,10 @@ function Textarea({ label, value, onChange, placeholder, theme }) {
         onChange={onChange}
         placeholder={placeholder}
         rows={3}
-        className="w-full px-3 py-2 rounded-xl text-sm resize-none"
-        style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+        className="w-full px-3 py-2 rounded-xl text-sm resize-y"
+        style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody, minHeight: '96px' }}
+        autocorrect="on"
+        spellCheck="true"
       />
     </div>
   )
@@ -1259,7 +1292,10 @@ function Textarea({ label, value, onChange, placeholder, theme }) {
 
 function Label({ theme, children }) {
   return (
-    <div className="text-xs uppercase tracking-widest font-medium mb-1" style={{ color: theme.labelColor }}>
+    <div
+      className="uppercase tracking-widest font-medium mb-1"
+      style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}
+    >
       {children}
     </div>
   )
@@ -1281,17 +1317,24 @@ function Badge({ children, theme, variant = 'default' }) {
 
 function Toggle({ label, checked, onChange, theme }) {
   return (
-    <label className="flex items-center justify-between cursor-pointer">
+    <label
+      className="flex items-center justify-between cursor-pointer"
+      style={{ minHeight: '44px' }}
+    >
       <span className="text-sm" style={{ color: theme.textBody }}>{label}</span>
       <button
         type="button"
+        role="switch"
+        aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className="relative w-11 h-6 rounded-full transition-colors"
+        className="relative w-11 h-6 rounded-full transition-colors flex-shrink-0"
         style={{ background: checked ? theme.primary : theme.fieldBg }}
+        aria-label={label}
       >
         <span
           className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
           style={{ transform: checked ? 'translateX(20px)' : 'translateX(0)' }}
+          aria-hidden="true"
         />
       </button>
     </label>
@@ -1304,9 +1347,9 @@ function Select({ label, value, options, onChange, theme }) {
       {label && <Label theme={theme}>{label}</Label>}
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl text-sm"
-        style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+        onChange={e => onChange(e.target.value)}
+        className="w-full px-3 rounded-xl text-sm"
+        style={{ height: '44px', background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
       >
         {options.map(opt => {
           const v = typeof opt === 'object' ? opt.value : opt
@@ -1319,18 +1362,63 @@ function Select({ label, value, options, onChange, theme }) {
 }
 
 function Modal({ children, theme, onClose, title }) {
+  const [dragOffset, setDragOffset] = useState(0)
+  const dragStart = { current: 0 }
+
+  const handleTouchStart = e => { dragStart.current = e.touches[0].clientY }
+  const handleTouchMove  = e => {
+    const dy = e.touches[0].clientY - dragStart.current
+    if (dy > 0) setDragOffset(dy)
+  }
+  const handleTouchEnd = () => {
+    if (dragOffset > 80) { setDragOffset(0); onClose() }
+    else setDragOffset(0)
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+
+      {/* Mobile bottom sheet */}
       <div
-        className="relative w-full max-w-md rounded-2xl p-6"
-        style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+        className="bottom-sheet md:hidden absolute bottom-0 left-0 right-0 rounded-t-2xl"
+        style={{
+          background:    theme.cardBg,
+          border:        `1px solid ${theme.cardBorder}`,
+          borderBottom:  'none',
+          transform:     `translateY(${dragOffset}px)`,
+          transition:    dragOffset === 0 ? 'transform 0.3s cubic-bezier(0.32,0.72,0,1)' : 'none',
+          paddingBottom: `calc(var(--safe-bottom) + 1rem)`,
+          maxHeight:     '85vh',
+          overflowY:     'auto',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
-        <button onClick={onClose} className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10">
-          <X className="w-5 h-5" style={{ color: theme.textMuted }} />
-        </button>
-        <h3 className="text-lg font-bold mb-4" style={{ color: theme.textBody }}>{title}</h3>
-        {children}
+        <div className="flex justify-center pt-3 pb-2" aria-hidden="true">
+          <div className="w-10 h-1 rounded-full" style={{ background: theme.fieldBorder }} />
+        </div>
+        <div className="px-5 pb-2">
+          <h3 className="font-bold mb-4" style={{ fontSize: 'var(--font-size-heading)', color: theme.textBody }}>{title}</h3>
+          {children}
+        </div>
+      </div>
+
+      {/* Desktop centered dialog */}
+      <div className="hidden md:flex absolute inset-0 items-center justify-center p-4">
+        <div className="relative w-full max-w-md rounded-2xl p-6" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 flex items-center justify-center rounded-lg hover:bg-white/10"
+            style={{ minWidth: '44px', minHeight: '44px' }}
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" style={{ color: theme.textMuted }} aria-hidden="true" />
+          </button>
+          <h3 className="font-bold mb-4" style={{ fontSize: 'var(--font-size-heading)', color: theme.textBody }}>{title}</h3>
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -1400,13 +1488,16 @@ function MultiUploadZone({ theme, values, onChange, required = false }) {
       {hasImages && (
         <div className="flex flex-wrap gap-2 mb-2">
           {values.map((src, idx) => (
-            <div key={idx} className="relative group w-20 h-20 rounded-lg overflow-hidden flex-shrink-0" style={{ border: `1px solid ${theme.fieldBorder}` }}>
-              <img src={src} alt={`ref ${idx + 1}`} className="w-full h-full object-cover" />
+            <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0" style={{ border: `1px solid ${theme.fieldBorder}` }}>
+              <img src={src} alt={`Reference ${idx + 1}`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+              {/* Remove button — always visible, top-right corner, 36×36px */}
               <button
-                onClick={(e) => { e.stopPropagation(); removeImage(idx) }}
-                className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={e => { e.stopPropagation(); removeImage(idx) }}
+                className="absolute top-1 right-1 flex items-center justify-center rounded-full bg-black/70 hover:bg-black/90 transition-colors"
+                style={{ width: '28px', height: '28px' }}
+                aria-label={`Remove reference image ${idx + 1}`}
               >
-                <X className="w-4 h-4 text-white" />
+                <X className="w-3.5 h-3.5 text-white" aria-hidden="true" />
               </button>
               {idx === 0 && (
                 <div className="absolute bottom-0 left-0 right-0 text-center text-xs py-0.5" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}>
@@ -1501,28 +1592,28 @@ function SingleUploadZone({ theme, value, onChange, label, hint, icon: Icon = Up
 
 function ArchetypePicker({ selected, onChange, theme }) {
   return (
-    <div className="flex flex-wrap gap-1">
-      {ARCHETYPES.map(arch => (
-        <button
-          key={arch.id}
-          onClick={() => {
-            if (selected.includes(arch.id)) {
-              onChange(selected.filter(a => a !== arch.id))
-            } else {
-              onChange([...selected, arch.id])
-            }
-          }}
-          className="px-2 py-1 text-xs rounded-md transition-all"
-          style={{
-            background: selected.includes(arch.id) ? theme.primaryGlow : theme.fieldBg,
-            color: selected.includes(arch.id) ? theme.primary : theme.textMuted,
-            border: `1px solid ${selected.includes(arch.id) ? theme.primary : theme.fieldBorder}`
-          }}
-          title={arch.desc}
-        >
-          {arch.label}
-        </button>
-      ))}
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Character archetypes">
+      {ARCHETYPES.map(arch => {
+        const isSelected = selected.includes(arch.id)
+        return (
+          <button
+            key={arch.id}
+            onClick={() => isSelected ? onChange(selected.filter(a => a !== arch.id)) : onChange([...selected, arch.id])}
+            className="chip-btn rounded-full transition-all"
+            style={{
+              background: isSelected ? theme.primaryGlow : theme.fieldBg,
+              color:      isSelected ? theme.primary : theme.textMuted,
+              border:     `1px solid ${isSelected ? theme.primary : theme.fieldBorder}`,
+            }}
+            title={arch.desc}
+            role="checkbox"
+            aria-checked={isSelected}
+            aria-label={`${arch.label}: ${arch.desc}`}
+          >
+            {arch.label}
+          </button>
+        )
+      })}
     </div>
   )
 }

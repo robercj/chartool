@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useProgress } from '../contexts/ProgressContext'
 import { Storyline, CharacterBatch, GeneratedImage } from '../lib/storage'
 import { generateImage } from '../lib/anthropic'
 
@@ -17,7 +18,8 @@ export default function StorylineDetail() {
   const { theme } = useTheme()
   const { user } = useAuth()
   const userId = user?.id
-  const { startProgress, updateProgress, clearProgress, isCancelled } = useProgress()
+  const { startProgress, updateProgress, clearProgress, isCancelled, getAbortSignal } = useProgress()
+  const mountedRef = useRef(true)
 
   const storylineId = searchParams.get('id')
 
@@ -36,6 +38,11 @@ export default function StorylineDetail() {
   const [showMovePanel, setShowMovePanel] = useState(false)
   const [showGroupShotModal, setShowGroupShotModal] = useState(false)
   const [groupShotCount, setGroupShotCount] = useState(3)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   if (!storyline && storylineId) {
     return (
@@ -87,13 +94,16 @@ COMPOSITION RULES:
 - Maintain each character's distinct appearance, clothing, and art style as described`
 
     const images = []
+    const signal = getAbortSignal()
     for (let i = 0; i < groupShotCount; i++) {
       if (isCancelled()) break
       startProgress(`Generating group shot ${i + 1}/${groupShotCount}`, groupShotCount, `/storyline?id=${storylineId}`)
-      const url = await generateImage({ prompt, referenceImageUrl: batches[0].reference_image_url })
+      const url = await generateImage({ prompt, referenceImageUrl: batches[0].reference_image_url }, signal)
       images.push(url)
       updateProgress(i + 1)
     }
+
+    if (!mountedRef.current) return
 
     const batch = await CharacterBatch.create(userId, {
       name: `Group Shot — ${storyline.name}`,
@@ -113,6 +123,7 @@ COMPOSITION RULES:
       })
     }
 
+    if (!mountedRef.current) return
     queryClient.invalidateQueries({ queryKey: ['storylines', userId] })
     queryClient.invalidateQueries({ queryKey: ['batches', userId] })
     queryClient.invalidateQueries({ queryKey: ['storyline-batches', storylineId] })
@@ -122,29 +133,42 @@ COMPOSITION RULES:
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={() => navigate('/gallery')}
-          className="p-2 rounded-lg hover:bg-white/10"
-        >
-          <ArrowLeft className="w-5 h-5" style={{ color: theme.textMuted }} />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold" style={{ color: theme.textBody }}>{storyline.name}</h1>
-          <p className="text-sm" style={{ color: theme.textMuted }}>
-            {batches.length} character{batches.length !== 1 ? 's' : ''} • Created {new Date(storyline.created_at).toLocaleDateString()}
-          </p>
+    <div className="max-w-6xl mx-auto py-6 md:py-8 px-4">
+
+      {/* ── Header — two rows on mobile, one row on desktop ── */}
+      <div className="mb-6 md:mb-8">
+        {/* Top row: back + title */}
+        <div className="flex items-start gap-3 mb-3">
+          <button
+            onClick={() => navigate('/gallery')}
+            className="flex items-center justify-center rounded-lg hover:bg-white/10 flex-shrink-0 mt-0.5"
+            style={{ minWidth: '44px', minHeight: '44px' }}
+            aria-label="Back to gallery"
+          >
+            <ArrowLeft className="w-5 h-5" style={{ color: theme.textMuted }} aria-hidden="true" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1
+              className="font-bold truncate"
+              style={{ fontSize: 'var(--font-size-page)', color: theme.textBody }}
+            >
+              {storyline.name}
+            </h1>
+            <p style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>
+              {batches.length} character{batches.length !== 1 ? 's' : ''} • Created {new Date(storyline.created_at).toLocaleDateString()}
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
+
+        {/* Actions row — wraps on mobile */}
+        <div className="flex flex-wrap gap-2 pl-0 md:pl-14">
           {storyline.storyline_prompt_id && (
             <Button
               onClick={() => navigate(`/storyline/result/${storyline.storyline_prompt_id}`)}
               theme={theme}
               variant="outline"
             >
-              <BookMarked className="w-4 h-4 mr-2" />
+              <BookMarked className="w-4 h-4 mr-2" aria-hidden="true" />
               View Generated Prompt
             </Button>
           )}
@@ -154,28 +178,70 @@ COMPOSITION RULES:
             </Button>
           )}
           <Button onClick={() => navigate(`/generate?storylineId=${storylineId}`)} theme={theme}>
-            <ImagePlus className="w-4 h-4 mr-2" />
+            <ImagePlus className="w-4 h-4 mr-2" aria-hidden="true" />
             Add Characters
           </Button>
-          <Button onClick={handleDelete} theme={theme} variant="ghost" className="text-red-400">
-            <Trash2 className="w-4 h-4" />
+          <Button
+            onClick={handleDelete}
+            theme={theme}
+            variant="ghost"
+            className="text-red-400"
+            aria-label="Delete storyline"
+          >
+            <Trash2 className="w-4 h-4" aria-hidden="true" />
           </Button>
         </div>
       </div>
 
-      {/* Batches */}
+      {/*
+        "View Generated Prompt" — distinct full-width card on mobile,
+        shown above the character grid when a prompt exists.
+        On desktop it's already visible in the header button row.
+      */}
+      {storyline.storyline_prompt_id && (
+        <div
+          className="md:hidden mb-4 rounded-2xl p-4 cursor-pointer transition-all hover:opacity-90"
+          style={{
+            background: theme.primaryGlow,
+            border:     `1px solid ${theme.primary}`,
+          }}
+          onClick={() => navigate(`/storyline/result/${storyline.storyline_prompt_id}`)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && navigate(`/storyline/result/${storyline.storyline_prompt_id}`)}
+          aria-label="View generated storyline prompt"
+        >
+          <div className="flex items-center gap-3">
+            <BookMarked className="w-5 h-5 flex-shrink-0" style={{ color: theme.primary }} aria-hidden="true" />
+            <div>
+              <div className="font-semibold text-sm" style={{ color: theme.primary }}>
+                View Generated Prompt
+              </div>
+              <div style={{ fontSize: 'var(--font-size-label)', color: theme.primary, opacity: 0.8 }}>
+                Storyline prompt is attached to this folder
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Character Grid ── */}
       {batches.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <BookOpen className="w-16 h-16 mb-4" style={{ color: theme.textMuted, opacity: 0.5 }} />
+        <div className="flex flex-col items-center justify-center py-16 md:py-20 text-center">
+          <BookOpen className="w-16 h-16 mb-4" style={{ color: theme.textMuted, opacity: 0.5 }} aria-hidden="true" />
           <h3 className="text-xl font-medium mb-2" style={{ color: theme.textBody }}>No characters yet</h3>
           <p className="text-sm mb-4" style={{ color: theme.textMuted }}>Add characters to this storyline</p>
           <Button onClick={() => navigate(`/generate?storylineId=${storylineId}`)} theme={theme}>
-            <ImagePlus className="w-4 h-4 mr-2" />
+            <ImagePlus className="w-4 h-4 mr-2" aria-hidden="true" />
             Add Characters
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        /* CSS Grid auto-fill — 1 col mobile → 2 col sm → 3+ on wider */
+        <div
+          className="grid gap-4"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))' }}
+        >
           {batches.map(batch => (
             <BatchCard
               key={batch.id}
@@ -192,16 +258,28 @@ COMPOSITION RULES:
           <div className="space-y-4">
             <div>
               <Label theme={theme}>Number of shots</Label>
+              {/* Value display above slider */}
+              <div className="text-center mb-2">
+                <span
+                  className="font-bold px-3 py-1 rounded-lg"
+                  style={{ color: theme.primary, background: theme.primaryGlow }}
+                >
+                  {groupShotCount}
+                </span>
+              </div>
               <input
                 type="range"
                 min="1"
                 max="5"
                 value={groupShotCount}
-                onChange={(e) => setGroupShotCount(Number(e.target.value))}
+                onChange={e => setGroupShotCount(Number(e.target.value))}
                 className="w-full"
-                style={{ accentColor: theme.primary }}
+                style={{ accentColor: theme.primary, color: theme.primary }}
+                aria-label="Number of group shots"
+                aria-valuemin={1}
+                aria-valuemax={5}
+                aria-valuenow={groupShotCount}
               />
-              <div className="text-center text-sm" style={{ color: theme.textMuted }}>{groupShotCount}</div>
             </div>
             <Button onClick={handleGroupShot} theme={theme} className="w-full">
               Generate Group Shot{groupShotCount > 1 ? 's' : ''}
@@ -229,20 +307,31 @@ function BatchCard({ batch, theme, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="relative aspect-square rounded-2xl overflow-hidden cursor-pointer group"
-      style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+      className="relative rounded-2xl overflow-hidden cursor-pointer group"
+      style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}`, aspectRatio: '1 / 1' }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onClick()}
+      aria-label={`Open character: ${batch.name}`}
     >
       <div className="absolute inset-0 grid grid-cols-2 gap-0.5">
         {images.length > 0 ? (
           images.map((img, i) => (
-            <img key={i} src={img.url} alt="" className="w-full h-full object-cover" />
+            <img
+              key={i}
+              src={img.url}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover"
+            />
           ))
         ) : (
           <div className="col-span-2 w-full h-full flex items-center justify-center" style={{ background: theme.fieldBg }}>
             {batch.status === 'generating' || batch.status === 'analyzing' ? (
-              <Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.primary }} />
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.primary }} aria-hidden="true" />
             ) : (
-              <Images className="w-8 h-8" style={{ color: theme.textMuted, opacity: 0.3 }} />
+              <Images className="w-8 h-8" style={{ color: theme.textMuted, opacity: 0.3 }} aria-hidden="true" />
             )}
           </div>
         )}
@@ -252,8 +341,11 @@ function BatchCard({ batch, theme, onClick }) {
         <img
           src={batch.reference_image_url}
           alt=""
+          loading="lazy"
+          decoding="async"
           className="absolute bottom-2 right-2 w-10 h-10 rounded-lg object-cover border-2"
           style={{ borderColor: theme.cardBg }}
+          aria-hidden="true"
         />
       )}
 
@@ -274,45 +366,27 @@ function BatchCard({ batch, theme, onClick }) {
         </div>
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-        <ArrowRight className="w-12 h-12 text-white" />
+      {/* Hover arrow — desktop only */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none">
+        <ArrowRight className="w-10 h-10 text-white" aria-hidden="true" />
       </div>
     </div>
   )
 }
 
-function Button({ children, onClick, theme, variant = 'primary', className = '', disabled = false }) {
-  const baseStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '0.75rem 1.5rem',
-    borderRadius: '0.75rem',
-    fontWeight: 500,
-    transition: 'all 0.3s',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.5 : 1,
-  }
-
+function Button({ children, onClick, theme, variant = 'primary', className = '', disabled = false, 'aria-label': ariaLabel }) {
   let bg, color, border
-  if (variant === 'primary') {
-    bg = theme.buttonGradient
-    color = 'white'
-  } else if (variant === 'outline') {
-    bg = 'transparent'
-    color = theme.textBody
-    border = `1px solid ${theme.fieldBorder}`
-  } else if (variant === 'ghost') {
-    bg = 'transparent'
-    color = theme.textMuted
-  }
+  if (variant === 'primary') { bg = theme.buttonGradient; color = 'white' }
+  else if (variant === 'outline') { bg = 'transparent'; color = theme.textBody; border = `1px solid ${theme.fieldBorder}` }
+  else if (variant === 'ghost')   { bg = 'transparent'; color = theme.textMuted }
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={className}
-      style={{ ...baseStyle, background: bg, color, border }}
+      className={`inline-flex items-center justify-center px-4 rounded-xl font-medium transition-all ${className}`}
+      style={{ minHeight: '44px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, background: bg, color, border }}
+      aria-label={ariaLabel}
     >
       {children}
     </button>
@@ -346,6 +420,4 @@ function Modal({ children, theme, onClose, title }) {
     </div>
   )
 }
-
-import { useProgress } from '../contexts/ProgressContext'
 import { ArrowRight } from 'lucide-react'

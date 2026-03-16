@@ -38,20 +38,68 @@ Deno.serve(async (req) => {
 
     console.log('Calling rembg, image_url length:', image_url.length)
 
-    const falRes = await fetch('https://fal.run/fal-ai/imageutils/rembg', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Key ${falKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ image_url, sync_mode: true }),
-    })
+    // Retry up to 3 attempts with linear backoff + jitter for transient 5xx errors (e.g. 504).
+    // Delays: ~1s, ~2s (each ± up to 500ms of random jitter to reduce thundering-herd spikes).
+    // If fal.ai returns 429 with a Retry-After header, that duration is respected instead.
+    // Each attempt is independently capped at 90s via AbortController; platform timeout is 150s.
+    const MAX_ATTEMPTS = 3
+    const TIMEOUT_MS = 90_000
+    let falRes!: Response
+    let falText = ''
 
-    const falText = await falRes.text()
-    console.log('rembg response:', falRes.status, falText.slice(0, 300))
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const timeoutController = new AbortController()
+      const timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUT_MS)
 
-    if (!falRes.ok) {
-      return json({ error: `rembg error: ${falText}` }, falRes.status)
+      try {
+        falRes = await fetch('https://fal.run/fal-ai/imageutils/rembg', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Key ${falKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image_url, sync_mode: true }),
+          signal: timeoutController.signal,
+        })
+        clearTimeout(timeoutId)
+        falText = await falRes.text()
+        console.log(`rembg response (attempt ${attempt}/${MAX_ATTEMPTS}):`, falRes.status, falText.slice(0, 300))
+
+        // Stop immediately on success or permanent client errors (4xx), except 429 which may be retried
+        if (falRes.ok) break
+        if (falRes.status >= 400 && falRes.status < 500 && falRes.status !== 429) break
+
+        if (attempt < MAX_ATTEMPTS) {
+          let delay: number
+          if (falRes.status === 429) {
+            // Respect Retry-After header if present, otherwise fall back to linear backoff
+            const retryAfter = falRes.headers.get('Retry-After')
+            delay = retryAfter ? parseFloat(retryAfter) * 1000 : 1000 * attempt + Math.random() * 500
+            console.log(`rembg rate limited (429), retrying in ${Math.round(delay)}ms…`)
+          } else {
+            delay = 1000 * attempt + Math.random() * 500 // linear backoff with jitter
+            console.log(`rembg ${falRes.status}, retrying in ${Math.round(delay)}ms…`)
+          }
+          await new Promise(r => setTimeout(r, delay))
+        }
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId)
+        if (fetchErr.name === 'AbortError') {
+          console.error(`rembg timed out after ${TIMEOUT_MS}ms (attempt ${attempt}/${MAX_ATTEMPTS})`)
+          if (attempt === MAX_ATTEMPTS) {
+            return json({ error: 'Background removal timed out — please try again' }, 504)
+          }
+          const delay = 1000 * attempt + Math.random() * 500
+          console.log(`Timeout, retrying in ${Math.round(delay)}ms…`)
+          await new Promise(r => setTimeout(r, delay))
+          continue
+        }
+        throw fetchErr
+      }
+    }
+
+    if (!falRes!.ok) {
+      return json({ error: `rembg error: ${falText}` }, falRes!.status)
     }
 
     let falData: any

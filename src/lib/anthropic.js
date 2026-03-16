@@ -63,10 +63,25 @@ SECTION C — AI REMINDERS
 - Maintain the firewall between Section A (world/character facts) and Section B (narrator instructions) — no mechanical rules in A, no in-world lore in B`;
 
 // ─── Helper: call an edge function via the Supabase client ───────────────────
-async function callEdgeFunction(functionName, body) {
-  const { data, error } = await supabase.functions.invoke(functionName, { body });
+// signal: optional AbortSignal — if provided, the request will be cancelled
+// when the signal fires (e.g. component unmount or user-triggered stop).
+async function callEdgeFunction(functionName, body, signal = null) {
+  const invokeOptions = { body };
+  if (signal) invokeOptions.signal = signal;
+
+  const { data, error } = await supabase.functions.invoke(functionName, invokeOptions);
 
   if (error) {
+    // Detect abort/cancellation — don't treat as a user-visible error
+    if (
+      error.name === 'AbortError' ||
+      error.message?.includes('aborted') ||
+      error.message?.includes('cancelled') ||
+      signal?.aborted
+    ) {
+      throw new Error('Request cancelled');
+    }
+
     // supabase.functions.invoke wraps the real HTTP response in error.context
     // Try every known way to extract the actual error message from the body
     let message = null;
@@ -165,8 +180,9 @@ export async function callLLM({ prompt, imageUrls = [], responseSchema = null, g
 
 // ─── Image Generation: fal.ai ─────────────────────────────────────────────────
 // Uses sync_mode on fal.run (not queue.fal.run) — result comes back in one
-// HTTP response, no polling, no CORS issues, no timeout risk.
-export async function generateImage({ prompt, referenceImageUrl, referenceImageUrls, propImageUrl, aspectRatio = '3:4' }) {
+// HTTP response, no polling. The edge function enforces a 90s per-attempt
+// timeout server-side; the signal allows client-side cancellation on unmount.
+export async function generateImage({ prompt, referenceImageUrl, referenceImageUrls, propImageUrl, aspectRatio = '3:4' }, signal = null) {
   const sourceImages = [];
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     sourceImages.push(...referenceImageUrls.filter(Boolean));
@@ -184,7 +200,7 @@ export async function generateImage({ prompt, referenceImageUrl, referenceImageU
     image_urls: sourceImages,
   };
 
-  const result = await callEdgeFunction('fal-generate', { input });
+  const result = await callEdgeFunction('fal-generate', { input }, signal);
 
   const images = result?.images;
   if (!images?.[0]) throw new Error('fal.ai returned no image');
@@ -192,14 +208,11 @@ export async function generateImage({ prompt, referenceImageUrl, referenceImageU
 }
 
 // ─── Background Removal: fal.ai (rembg) ──────────────────────────────────────
-export async function removeImageBackground(imageUrl) {
-  try {
-    const result = await callEdgeFunction('fal-rembg', { image_url: imageUrl });
-    const outputUrl = result?.image?.url;
-    if (!outputUrl) throw new Error('rembg returned no image');
-    return outputUrl;
-  } catch (err) {
-    console.error('rembg error:', err);
-    throw new Error(`Background removal failed: ${err.message}`);
-  }
+// Throws on failure — callers are responsible for deciding whether to surface
+// the error or fall back to the original image. Do NOT wrap in a silent catch.
+export async function removeImageBackground(imageUrl, signal = null) {
+  const result = await callEdgeFunction('fal-rembg', { image_url: imageUrl }, signal);
+  const outputUrl = result?.image?.url;
+  if (!outputUrl) throw new Error('Background removal returned no image');
+  return outputUrl;
 }

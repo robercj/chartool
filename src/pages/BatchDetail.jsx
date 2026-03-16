@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useProgress } from '../contexts/ProgressContext'
 import { CharacterBatch, GeneratedImage, Storyline } from '../lib/storage'
 import { generateImage, removeImageBackground } from '../lib/anthropic'
 
@@ -69,7 +70,9 @@ export default function BatchDetail() {
   const queryClient = useQueryClient()
   const { theme } = useTheme()
   const { user } = useAuth()
+  const { generating, setGenerating, getAbortSignal } = useProgress()
   const userId = user?.id
+  const mountedRef = useRef(true)
 
   const batchId = searchParams.get('id')
 
@@ -85,7 +88,6 @@ export default function BatchDetail() {
   const [newEmotion, setNewEmotion] = useState('')
   const [propDesc, setPropDesc] = useState('')
   const [propImageUrl, setPropImageUrl] = useState(null)
-  const [generating, setGenerating] = useState(false)
 
   const { data: batch } = useQuery({
     queryKey: ['batch', batchId],
@@ -106,6 +108,11 @@ export default function BatchDetail() {
   })
 
   const currentStoryline = storylines.find(sl => sl.batch_ids?.includes(batchId))
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   if (batchId && !batch) {
     return (
@@ -147,14 +154,21 @@ export default function BatchDetail() {
     if (!style) return
 
     setGenerating(true)
+    const signal = getAbortSignal()
     try {
       for (const img of images) {
         const prompt = `${batch.character_description}\n\nLabel: ${img.label}\n\nCOMPLETELY REIMAGINE in ${style.label} style. Keep the same pose but transform the art style entirely.`
-        let newUrl = await generateImage({ prompt, referenceImageUrl: batch.reference_image_url, aspectRatio: batch.aspect_ratio || '3:4' })
-        // Apply background removal if original batch had it (heuristic: check if existing images look transparent)
+        let newUrl = await generateImage({ prompt, referenceImageUrl: batch.reference_image_url, aspectRatio: batch.aspect_ratio || '3:4' }, signal)
+        // Apply background removal — surface failure as a warning so user knows
         if (batch.remove_background !== false) {
-          try { newUrl = await removeImageBackground(newUrl) } catch {}
+          try {
+            newUrl = await removeImageBackground(newUrl, signal)
+          } catch (rembgErr) {
+            console.warn('Background removal failed:', rembgErr)
+            toast.warning(`Background removal failed for "${img.label}": ${rembgErr.message}`)
+          }
         }
+        if (!mountedRef.current) return
         // Create new image record instead of overwriting
         await GeneratedImage.create(userId, {
           batch_id: batchId,
@@ -163,14 +177,16 @@ export default function BatchDetail() {
           category: img.category || 'restyle',
         })
       }
+      if (!mountedRef.current) return
       await CharacterBatch.update(batchId, { image_count: images.length * 2 })
       queryClient.invalidateQueries({ queryKey: ['images', batchId] })
       toast.success('Restyled images added to gallery!')
       setShowRestylePanel(false)
     } catch (err) {
+      if (!mountedRef.current) return
       toast.error(err.message)
     } finally {
-      setGenerating(false)
+      if (mountedRef.current) setGenerating(false)
     }
   }
 
@@ -178,6 +194,7 @@ export default function BatchDetail() {
     if (!newPose && !newEmotion) return
 
     setGenerating(true)
+    const signal = getAbortSignal()
     try {
       const prompt = `${batch.character_description}\n\nPOSE: ${newPose || 'Neutral'}\nEMOTION: ${newEmotion || 'Neutral'}`
       const refUrls = batch.reference_image_urls?.length ? batch.reference_image_urls : undefined
@@ -186,10 +203,16 @@ export default function BatchDetail() {
         referenceImageUrls: refUrls,
         referenceImageUrl: batch.reference_image_url,
         aspectRatio: batch.aspect_ratio || '3:4'
-      })
+      }, signal)
       if (batch.remove_background !== false) {
-        try { url = await removeImageBackground(url) } catch {}
+        try {
+          url = await removeImageBackground(url, signal)
+        } catch (rembgErr) {
+          console.warn('Background removal failed:', rembgErr)
+          toast.warning(`Background removal failed: ${rembgErr.message}`)
+        }
       }
+      if (!mountedRef.current) return
       await GeneratedImage.create(userId, {
         batch_id: batchId,
         url,
@@ -203,9 +226,10 @@ export default function BatchDetail() {
       setNewPose('')
       setNewEmotion('')
     } catch (err) {
+      if (!mountedRef.current) return
       toast.error(err.message)
     } finally {
-      setGenerating(false)
+      if (mountedRef.current) setGenerating(false)
     }
   }
 
@@ -213,6 +237,7 @@ export default function BatchDetail() {
     if (!propDesc.trim() && !propImageUrl) return
 
     setGenerating(true)
+    const signal = getAbortSignal()
     try {
       const propSection = propDesc.trim()
         ? `\n\nPROP ADDITION: The character is now holding/carrying the following item — replicate it faithfully in their hand:\n${propDesc.trim()}`
@@ -229,11 +254,17 @@ export default function BatchDetail() {
         referenceImageUrl: batch.reference_image_url,
         propImageUrl: propImageUrl || null,
         aspectRatio: batch.aspect_ratio || '3:4',
-      })
+      }, signal)
       if (batch.remove_background !== false) {
-        try { url = await removeImageBackground(url) } catch {}
+        try {
+          url = await removeImageBackground(url, signal)
+        } catch (rembgErr) {
+          console.warn('Background removal failed:', rembgErr)
+          toast.warning(`Background removal failed: ${rembgErr.message}`)
+        }
       }
 
+      if (!mountedRef.current) return
       await GeneratedImage.create(userId, {
         batch_id: batchId,
         url,
@@ -247,9 +278,10 @@ export default function BatchDetail() {
       setPropDesc('')
       setPropImageUrl(null)
     } catch (err) {
+      if (!mountedRef.current) return
       toast.error(err.message)
     } finally {
-      setGenerating(false)
+      if (mountedRef.current) setGenerating(false)
     }
   }
 
@@ -292,26 +324,35 @@ export default function BatchDetail() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg hover:bg-white/10">
-          <ArrowLeft className="w-5 h-5" style={{ color: theme.textMuted }} />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold" style={{ color: theme.textBody }}>{batch.name}</h1>
-          <div className="flex items-center gap-3 text-sm" style={{ color: theme.textMuted }}>
-            <span>{images.length} images</span>
-            {batch.status && batch.status !== 'completed' && (
-              <span style={{ color: statusColors[batch.status] }} className="flex items-center gap-1">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                {batch.status}
-              </span>
-            )}
-            <span>• {new Date(batch.created_at).toLocaleDateString()}</span>
+    <div className="max-w-6xl mx-auto py-6 md:py-8 px-4">
+      {/* ── Header — two rows on mobile ── */}
+      <div className="mb-6">
+        {/* Row 1: back + name */}
+        <div className="flex items-start gap-3 mb-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center justify-center rounded-lg hover:bg-white/10 flex-shrink-0 mt-0.5"
+            style={{ minWidth: '44px', minHeight: '44px' }}
+            aria-label="Go back"
+          >
+            <ArrowLeft className="w-5 h-5" style={{ color: theme.textMuted }} aria-hidden="true" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-bold truncate" style={{ fontSize: 'var(--font-size-page)', color: theme.textBody }}>{batch.name}</h1>
+            <div className="flex items-center gap-3 text-sm flex-wrap" style={{ color: theme.textMuted }}>
+              <span>{images.length} images</span>
+              {batch.status && batch.status !== 'completed' && (
+                <span style={{ color: statusColors[batch.status] }} className="flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                  {batch.status}
+                </span>
+              )}
+              <span>• {new Date(batch.created_at).toLocaleDateString()}</span>
+            </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        {/* Row 2: action buttons — wrap on mobile */}
+        <div className="flex flex-wrap gap-2">
           {bulkMode ? (
             <>
               <Button onClick={selectAll} theme={theme} variant="outline" size="sm">Select All</Button>
@@ -327,31 +368,24 @@ export default function BatchDetail() {
             </>
           ) : (
             <>
-              <Button onClick={() => setBulkMode(true)} theme={theme} variant="outline">
-                Select
+              <Button onClick={() => setBulkMode(true)} theme={theme} variant="outline" size="sm">Select</Button>
+              <Button onClick={() => setShowMovePanel(!showMovePanel)} theme={theme} variant="outline" size="sm">
+                <FolderInput className="w-4 h-4 mr-1.5" aria-hidden="true" />Move
               </Button>
-              <Button onClick={() => setShowMovePanel(!showMovePanel)} theme={theme} variant="outline">
-                <FolderInput className="w-4 h-4 mr-2" />
-                Move
+              <Button onClick={handleExportAll} theme={theme} variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-1.5" aria-hidden="true" />Export
               </Button>
-              <Button onClick={handleExportAll} theme={theme} variant="outline">
-                <Download className="w-4 h-4 mr-2" />
-                Export
+              <Button onClick={() => setShowRestylePanel(!showRestylePanel)} theme={theme} variant="outline" size="sm">
+                <RefreshCw className="w-4 h-4 mr-1.5" aria-hidden="true" />Restyle
               </Button>
-              <Button onClick={() => setShowRestylePanel(!showRestylePanel)} theme={theme} variant="outline">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Restyle
+              <Button onClick={() => setShowAddVariationPanel(!showAddVariationPanel)} theme={theme} variant="outline" size="sm">
+                <Plus className="w-4 h-4 mr-1.5" aria-hidden="true" />Add
               </Button>
-              <Button onClick={() => setShowAddVariationPanel(!showAddVariationPanel)} theme={theme} variant="outline">
-                <Plus className="w-4 h-4 mr-2" />
-                Add
+              <Button onClick={() => { setShowAddPropPanel(!showAddPropPanel); setShowAddVariationPanel(false) }} theme={theme} size="sm">
+                <Package className="w-4 h-4 mr-1.5" aria-hidden="true" />Prop
               </Button>
-              <Button onClick={() => { setShowAddPropPanel(!showAddPropPanel); setShowAddVariationPanel(false) }} theme={theme}>
-                <Package className="w-4 h-4 mr-2" />
-                Add Prop
-              </Button>
-              <Button onClick={handleDelete} theme={theme} variant="ghost" className="text-red-400">
-                <Trash2 className="w-4 h-4" />
+              <Button onClick={handleDelete} theme={theme} variant="ghost" size="sm" className="text-red-400" aria-label="Delete character">
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
               </Button>
             </>
           )}
@@ -519,6 +553,8 @@ export default function BatchDetail() {
               <img
                 src={img.url}
                 alt={img.label}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-auto block transition-transform duration-500 group-hover:scale-105"
                 style={{ objectFit: 'contain' }}
               />
@@ -562,6 +598,7 @@ export default function BatchDetail() {
             setShowEditModal({ ...showEditModal, ...data })
           }}
           onRegenerate={async (changeDescription) => {
+            const signal = getAbortSignal()
             const prompt = `${batch.character_description}\n\nLabel: ${showEditModal.label}\n\nModify: ${changeDescription}`
             const refUrls = batch.reference_image_urls?.length ? batch.reference_image_urls : undefined
             let newUrl = await generateImage({
@@ -569,10 +606,16 @@ export default function BatchDetail() {
               referenceImageUrls: refUrls,
               referenceImageUrl: batch.reference_image_url,
               aspectRatio: batch.aspect_ratio || '3:4'
-            })
+            }, signal)
             if (batch.remove_background !== false) {
-              try { newUrl = await removeImageBackground(newUrl) } catch {}
+              try {
+                newUrl = await removeImageBackground(newUrl, signal)
+              } catch (rembgErr) {
+                console.warn('Background removal failed:', rembgErr)
+                toast.warning(`Background removal failed: ${rembgErr.message}`)
+              }
             }
+            if (!mountedRef.current) return
             // Create a new image record — preserve the original
             const newImg = await GeneratedImage.create(userId, {
               batch_id: batchId,
@@ -634,12 +677,19 @@ function AnalysisPanel({ batch, theme }) {
   )
 }
 
-function ImageEditModal({ image, theme, onClose, onUpdate, onRegenerate, batch }) {
+function ImageEditModal({ image, theme, onClose, onUpdate, onRegenerate }) {
   const [label, setLabel] = useState(image.label)
   const [category, setCategory] = useState(image.category)
   const [changeDesc, setChangeDesc] = useState('')
-  const [regenerating, setRegenerating] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  // Share the global generating lock — prevents concurrent generation from modal + parent
+  const { generating, setGenerating } = useProgress()
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const handleSave = () => {
     onUpdate({ label, category })
@@ -648,15 +698,17 @@ function ImageEditModal({ image, theme, onClose, onUpdate, onRegenerate, batch }
 
   const handleRegenerate = async () => {
     if (!changeDesc.trim()) return
-    setRegenerating(true)
+    setGenerating(true)
     try {
       await onRegenerate(changeDesc)
+      if (!mountedRef.current) return
       toast.success('New image generated and added to gallery')
       setChangeDesc('')
     } catch (err) {
+      if (!mountedRef.current) return
       toast.error(err.message)
     } finally {
-      setRegenerating(false)
+      if (mountedRef.current) setGenerating(false)
     }
   }
 
@@ -705,14 +757,16 @@ function ImageEditModal({ image, theme, onClose, onUpdate, onRegenerate, batch }
                   onChange={(e) => setChangeDesc(e.target.value)}
                   placeholder="Make them smile, change pose to..."
                   rows={3}
-                  className="w-full px-3 py-2 rounded-xl text-sm resize-none"
-                  style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+                  className="w-full px-3 py-2 rounded-xl text-sm resize-y"
+                  style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody, minHeight: '96px' }}
+                  autocorrect="on"
+                  spellCheck="true"
                 />
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={handleRegenerate} theme={theme} disabled={!changeDesc.trim() || regenerating} className="flex-1">
-                  {regenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                <Button onClick={handleRegenerate} theme={theme} disabled={!changeDesc.trim() || generating} className="flex-1">
+                  {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                   Regenerate
                 </Button>
                 <Button onClick={handleDownload} theme={theme} variant="outline">
@@ -826,38 +880,21 @@ async function exportZip(files, prefix) {
   a.click()
 }
 
-function Button({ children, onClick, theme, variant = 'primary', className = '', disabled = false, size = 'md' }) {
-  const baseStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: size === 'sm' ? '0.5rem 1rem' : '0.75rem 1.5rem',
-    borderRadius: '0.75rem',
-    fontWeight: 500,
-    transition: 'all 0.3s',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.5 : 1,
-  }
-
+function Button({ children, onClick, theme, variant = 'primary', className = '', disabled = false, size = 'md', 'aria-label': ariaLabel }) {
   let bg, color, border
-  if (variant === 'primary') {
-    bg = theme.buttonGradient
-    color = 'white'
-  } else if (variant === 'outline') {
-    bg = 'transparent'
-    color = theme.textBody
-    border = `1px solid ${theme.fieldBorder}`
-  } else if (variant === 'ghost') {
-    bg = 'transparent'
-    color = theme.textMuted
-  }
+  if (variant === 'primary')  { bg = theme.buttonGradient; color = 'white' }
+  else if (variant === 'outline') { bg = 'transparent'; color = theme.textBody; border = `1px solid ${theme.fieldBorder}` }
+  else if (variant === 'ghost')   { bg = 'transparent'; color = theme.textMuted }
+
+  const h = size === 'sm' ? '36px' : '44px'
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={className}
-      style={{ ...baseStyle, background: bg, color, border }}
+      className={`inline-flex items-center justify-center px-3 rounded-xl font-medium transition-all ${className}`}
+      style={{ minHeight: h, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, background: bg, color, border }}
+      aria-label={ariaLabel}
     >
       {children}
     </button>

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Plus, Trash2, ArrowLeft, BookMarked, ChevronDown, ChevronUp,
-  Loader2, FolderPlus, FolderOpen
+  Loader2, FolderPlus, FolderOpen, X as XIcon,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProgress } from '../contexts/ProgressContext'
@@ -112,7 +112,6 @@ export default function StorylineForm() {
   const userId = user?.id
 
   // ── Folder assignment state ────────────────────────────────────────────────
-  // 'new' = user types a folder name; 'existing' = user picks from list
   const [folderMode, setFolderMode] = useState('new')
   const [newFolderName, setNewFolderName] = useState('')
   const [selectedFolderId, setSelectedFolderId] = useState('')
@@ -157,38 +156,29 @@ export default function StorylineForm() {
 
   // Refs for scroll-to-error
   const fieldRefs = {
-    folder: useRef(null),
-    genres: useRef(null),
-    openingSituation: useRef(null),
+    folder:            useRef(null),
+    genres:            useRef(null),
+    openingSituation:  useRef(null),
     protagonistStatus: useRef(null),
-    abilitiesCurrent: useRef(null),
-    npcs: useRef(null),
-    factions: useRef(null),
+    abilitiesCurrent:  useRef(null),
+    npcs:              useRef(null),
+    factions:          useRef(null),
   }
 
   // ─── NPC helpers ──────────────────────────────────────────────────────────
-  const updateNPC = (id, patch) =>
-    setNpcs(prev => prev.map(n => n.id === id ? { ...n, ...patch } : n))
-  const addNPC = () => setNpcs(prev => [...prev, createNPC()])
-  const removeNPC = (id) => {
-    if (npcs.length <= 1) return
-    setNpcs(prev => prev.filter(n => n.id !== id))
-  }
+  const updateNPC   = (id, patch) => setNpcs(prev => prev.map(n => n.id === id ? { ...n, ...patch } : n))
+  const addNPC      = () => setNpcs(prev => [...prev, createNPC()])
+  const removeNPC   = (id) => { if (npcs.length > 1) setNpcs(prev => prev.filter(n => n.id !== id)) }
 
   // ─── Faction helpers ──────────────────────────────────────────────────────
-  const updateFaction = (id, patch) =>
-    setFactions(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f))
-  const addFaction = () => setFactions(prev => [...prev, createFaction()])
-  const removeFaction = (id) => {
-    if (factions.length <= 1) return
-    setFactions(prev => prev.filter(f => f.id !== id))
-  }
+  const updateFaction = (id, patch) => setFactions(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f))
+  const addFaction    = () => setFactions(prev => [...prev, createFaction()])
+  const removeFaction = (id) => { if (factions.length > 1) setFactions(prev => prev.filter(f => f.id !== id)) }
 
   // ─── Validation ───────────────────────────────────────────────────────────
   const validate = () => {
     const errs = {}
 
-    // Folder
     if (folderMode === 'new' && !newFolderName.trim()) {
       errs.folder = 'Enter a story name to create a folder.'
     } else if (folderMode === 'existing' && !selectedFolderId) {
@@ -249,40 +239,40 @@ export default function StorylineForm() {
     section_a: {
       opening_situation: openingSituation,
       protagonist: {
-        name: protagonistName || null,
-        status: protagonistStatus,
-        appearance_mask: appearanceMask || null,
+        name:                protagonistName || null,
+        status:              protagonistStatus,
+        appearance_mask:     appearanceMask || null,
         appearance_true_form: appearanceTrueForm || null,
-        abilities_current: abilitiesCurrent,
-        growth_mechanism: growthMechanism === 'Other' ? growthOther || 'Other' : growthMechanism || null,
-        unknown_to_self: unknownToSelf || null,
+        abilities_current:   abilitiesCurrent,
+        growth_mechanism:    growthMechanism === 'Other' ? growthOther || 'Other' : growthMechanism || null,
+        unknown_to_self:     unknownToSelf || null,
       },
       npcs: npcs.map(n => ({
-        name: n.name,
-        role: n.role,
+        name:                n.name,
+        role:                n.role,
         surface_vs_internal: n.surface_vs_internal,
         relationship_vector: n.relationship_vector || null,
-        cross_connection: n.cross_connection || null,
-        bond_type: n.bond_type || null,
+        cross_connection:    n.cross_connection || null,
+        bond_type:           n.bond_type || null,
       })),
       factions: factions.map(f => ({
-        name: f.name,
-        purpose: f.purpose,
+        name:                      f.name,
+        purpose:                   f.purpose,
         stance_toward_protagonist: f.stance_toward_protagonist || null,
-        moral_complexity: f.moral_complexity || null,
+        moral_complexity:          f.moral_complexity || null,
       })),
-      power_hierarchy: powerHierarchy || null,
-      forbidden_power: forbiddenPower || null,
+      power_hierarchy:  powerHierarchy || null,
+      forbidden_power:  forbiddenPower || null,
       world_equilibrium: worldEquilibrium || null,
     },
     section_b: {
       genres,
-      structural_overlays: overlays,
-      power_fantasy_ratio: powerFantasyRatio,
-      first_hook_type: firstHookType || null,
+      structural_overlays:    overlays,
+      power_fantasy_ratio:    powerFantasyRatio,
+      first_hook_type:        firstHookType || null,
       moral_complexity_level: MORAL_COMPLEXITY_LABELS[moralComplexityLevel],
       additional_prohibitions: additionalProhibitions || null,
-      additional_context: additionalContext || null,
+      additional_context:     additionalContext || null,
     },
   })
 
@@ -294,7 +284,6 @@ export default function StorylineForm() {
     const tier = TOKEN_TIERS.find(t => t.id === tokenTier)
     const payload = buildPayload()
 
-    // Resolve folder name for display in progress bar
     let folderDisplayName = ''
     if (folderMode === 'new') {
       folderDisplayName = newFolderName.trim()
@@ -302,55 +291,49 @@ export default function StorylineForm() {
       folderDisplayName = storylines.find(sl => sl.id === selectedFolderId)?.name || 'Selected Folder'
     }
 
-    // Start indeterminate progress bar
     startProgress('Analyzing form data…', null, '/storyline/new')
 
     try {
-      // Stage 1 — kick off the API call
       setProgressLabel('Generating Prompt Plot…')
       const rawText = await callStorylineAPI({ formPayload: payload, maxTokens: tier.tokens })
 
-      // Stage 2 — parse
       setProgressLabel('Generating Prompt Guidelines…')
       const parsed = parseModelSections(rawText)
 
-      // Stage 3 — save the prompt record
       setProgressLabel('Generating AI Reminders…')
       const saved = await StorylinePrompt.create(userId, {
         raw_response: rawText,
-        section_a: parsed.sectionA,
-        section_b: parsed.sectionB,
-        section_c: parsed.sectionC,
+        section_a:    parsed.sectionA,
+        section_b:    parsed.sectionB,
+        section_c:    parsed.sectionC,
         form_payload: payload,
-        token_tier: tokenTier,
+        token_tier:   tokenTier,
       })
 
-      // Stage 4 — resolve or create folder, then link
       setProgressLabel(`Saving to ${folderDisplayName} in Storyline Gallery…`)
 
       let storylineId
       if (folderMode === 'new') {
         const newSl = await Storyline.create(userId, {
-          name: folderDisplayName,
-          storyline_art_style: null,
-          storyline_prompt_id: saved.id,
-          storyline_metadata: {
+          name:                  folderDisplayName,
+          storyline_art_style:   null,
+          storyline_prompt_id:   saved.id,
+          storyline_metadata:    {
             genres,
             protagonist_status: protagonistStatus || null,
             overlays,
-            token_tier: tokenTier,
+            token_tier:         tokenTier,
           },
         })
         storylineId = newSl.id
       } else {
-        // Link prompt to the existing folder
         await Storyline.update(selectedFolderId, {
           storyline_prompt_id: saved.id,
           storyline_metadata: {
             genres,
             protagonist_status: protagonistStatus || null,
             overlays,
-            token_tier: tokenTier,
+            token_tier:        tokenTier,
           },
         })
         storylineId = selectedFolderId
@@ -358,10 +341,7 @@ export default function StorylineForm() {
 
       queryClient.invalidateQueries({ queryKey: ['storylines', userId] })
 
-      // Stage 5 — done
-      setProgressLabel(`Completed`)
-
-      // Brief pause so the user sees "Completed" before the bar vanishes
+      setProgressLabel('Completed')
       await new Promise(r => setTimeout(r, 800))
       clearProgress()
 
@@ -380,33 +360,37 @@ export default function StorylineForm() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    /* Outer wrapper: responsive container, max-width 720px on desktop */
+    <div className="w-full mx-auto py-6 md:py-8 px-4 md:px-6" style={{ maxWidth: '720px' }}>
 
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
+      <div className="flex items-center gap-3 mb-6 md:mb-8">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+          className="p-2 rounded-lg hover:bg-white/10 transition-colors touch-min flex-shrink-0"
+          aria-label="Go back"
+          style={{ minWidth: '44px', minHeight: '44px' }}
         >
           <ArrowLeft className="w-5 h-5" style={{ color: theme.textMuted }} />
         </button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h1
-            className="text-3xl font-bold mb-1"
+            className="font-bold mb-1"
             style={{
-              background: theme.titleGradient,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
+              fontSize:               'var(--font-size-page)',
+              background:             theme.titleGradient,
+              WebkitBackgroundClip:   'text',
+              WebkitTextFillColor:    'transparent',
+              backgroundClip:         'text',
             }}
           >
             Generate Storyline
           </h1>
-          <p className="text-sm" style={{ color: theme.textMuted }}>
+          <p style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>
             Build a structured roleplay prompt from your world premise
           </p>
         </div>
-        <BookMarked className="w-8 h-8" style={{ color: theme.primary, opacity: 0.6 }} />
+        <BookMarked className="w-7 h-7 flex-shrink-0" style={{ color: theme.primary, opacity: 0.6 }} />
       </div>
 
       {/* ── Folder Assignment ── */}
@@ -420,30 +404,36 @@ export default function StorylineForm() {
           ref={fieldRefs.folder}
           className="flex rounded-xl overflow-hidden mb-4"
           style={{ border: `1px solid ${theme.fieldBorder}` }}
+          role="group"
+          aria-label="Folder mode"
         >
           <button
             type="button"
             onClick={() => setFolderMode('new')}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all"
+            className="flex-1 flex items-center justify-center gap-2 text-sm font-medium transition-all touch-min"
             style={{
-              background: folderMode === 'new' ? theme.primaryGlow : theme.fieldBg,
-              color: folderMode === 'new' ? theme.primary : theme.textMuted,
+              minHeight:   '44px',
+              background:  folderMode === 'new' ? theme.primaryGlow : theme.fieldBg,
+              color:       folderMode === 'new' ? theme.primary : theme.textMuted,
               borderRight: `1px solid ${theme.fieldBorder}`,
             }}
+            aria-pressed={folderMode === 'new'}
           >
-            <FolderPlus className="w-4 h-4" />
+            <FolderPlus className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             New Folder
           </button>
           <button
             type="button"
             onClick={() => setFolderMode('existing')}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all"
+            className="flex-1 flex items-center justify-center gap-2 text-sm font-medium transition-all touch-min"
             style={{
+              minHeight:  '44px',
               background: folderMode === 'existing' ? theme.primaryGlow : theme.fieldBg,
-              color: folderMode === 'existing' ? theme.primary : theme.textMuted,
+              color:      folderMode === 'existing' ? theme.primary : theme.textMuted,
             }}
+            aria-pressed={folderMode === 'existing'}
           >
-            <FolderOpen className="w-4 h-4" />
+            <FolderOpen className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             Existing Folder
           </button>
         </div>
@@ -459,12 +449,15 @@ export default function StorylineForm() {
                 if (errors.folder) setErrors(ev => ({ ...ev, folder: undefined }))
               }}
               placeholder="e.g. The Ashen Crown Chronicles"
-              className="w-full px-3 py-2 rounded-xl text-sm"
+              className="w-full px-3 rounded-xl text-sm"
               style={{
+                height:     '44px',
                 background: theme.fieldBg,
-                border: `1px solid ${errors.folder ? '#ef4444' : theme.fieldBorder}`,
-                color: theme.textBody,
+                border:     `1px solid ${errors.folder ? '#ef4444' : theme.fieldBorder}`,
+                color:      theme.textBody,
               }}
+              aria-invalid={!!errors.folder}
+              aria-describedby={errors.folder ? 'folder-error' : undefined}
             />
           </div>
         ) : (
@@ -484,10 +477,11 @@ export default function StorylineForm() {
                       setSelectedFolderId(sl.id)
                       if (errors.folder) setErrors(ev => ({ ...ev, folder: undefined }))
                     }}
-                    className="w-full flex items-center justify-between p-3 rounded-xl text-left transition-all"
+                    className="w-full flex items-center justify-between p-3 rounded-xl text-left transition-all touch-min"
                     style={{
+                      minHeight:  '44px',
                       background: selectedFolderId === sl.id ? theme.primaryGlow : theme.fieldBg,
-                      border: `1px solid ${selectedFolderId === sl.id ? theme.primary : theme.fieldBorder}`,
+                      border:     `1px solid ${selectedFolderId === sl.id ? theme.primary : theme.fieldBorder}`,
                     }}
                   >
                     <span className="text-sm font-medium" style={{ color: theme.textBody }}>
@@ -511,13 +505,22 @@ export default function StorylineForm() {
         )}
 
         {errors.folder && (
-          <p className="text-xs mt-2" style={{ color: '#ef4444' }}>{errors.folder}</p>
+          <p id="folder-error" className="text-xs mt-2" style={{ color: '#ef4444' }} role="alert">
+            {errors.folder}
+          </p>
         )}
       </SectionCard>
 
       {/* ── SECTION A ── */}
-      <SectionCard theme={theme} title="Section A — World & Protagonist Setup">
-
+      {/*
+        Sticky heading: top = 64px (nav height).
+        Solid background so content scrolls cleanly beneath.
+      */}
+      <SectionCard
+        theme={theme}
+        title="Section A — World & Protagonist Setup"
+        stickyTitle
+      >
         {/* Genre & tone */}
         <FieldGroup
           ref={fieldRefs.genres}
@@ -525,8 +528,10 @@ export default function StorylineForm() {
           required
           error={errors.genres}
           theme={theme}
+          groupRole="group"
+          groupAriaLabel="Genre & Tone selection"
         >
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Genre options">
             {GENRES.map(g => (
               <Chip
                 key={g}
@@ -537,6 +542,8 @@ export default function StorylineForm() {
                   if (errors.genres) setErrors(e => ({ ...e, genres: undefined }))
                 }}
                 theme={theme}
+                role="checkbox"
+                aria-checked={genres.includes(g)}
               />
             ))}
           </div>
@@ -560,39 +567,43 @@ export default function StorylineForm() {
             hint="Min 2 sentences recommended"
             rows={4}
             theme={theme}
+            aria-invalid={!!errors.openingSituation}
+            aria-describedby={errors.openingSituation ? 'openingSituation-error' : undefined}
           />
         </FieldGroup>
 
-        {/* Protagonist name */}
-        <FieldGroup label="Protagonist Name / Title" theme={theme}>
-          <TextInput
-            value={protagonistName}
-            onChange={e => setProtagonistName(e.target.value)}
-            placeholder="Leave blank to let the AI generate one"
+        {/* Protagonist name + status — single col on mobile, 2-col on md+ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FieldGroup label="Protagonist Name / Title" theme={theme}>
+            <TextInput
+              value={protagonistName}
+              onChange={e => setProtagonistName(e.target.value)}
+              placeholder="Leave blank to let the AI generate one"
+              theme={theme}
+            />
+          </FieldGroup>
+
+          <FieldGroup
+            ref={fieldRefs.protagonistStatus}
+            label="Protagonist Status"
+            required
+            error={errors.protagonistStatus}
             theme={theme}
-          />
-        </FieldGroup>
+          >
+            <TextInput
+              value={protagonistStatus}
+              onChange={e => {
+                setProtagonistStatus(e.target.value)
+                if (errors.protagonistStatus) setErrors(ev => ({ ...ev, protagonistStatus: undefined }))
+              }}
+              placeholder="Their role in the world hierarchy"
+              theme={theme}
+              aria-invalid={!!errors.protagonistStatus}
+            />
+          </FieldGroup>
+        </div>
 
-        {/* Protagonist status */}
-        <FieldGroup
-          ref={fieldRefs.protagonistStatus}
-          label="Protagonist Status"
-          required
-          error={errors.protagonistStatus}
-          theme={theme}
-        >
-          <TextInput
-            value={protagonistStatus}
-            onChange={e => {
-              setProtagonistStatus(e.target.value)
-              if (errors.protagonistStatus) setErrors(ev => ({ ...ev, protagonistStatus: undefined }))
-            }}
-            placeholder="Their role in the world hierarchy — hidden, contested, or feared"
-            theme={theme}
-          />
-        </FieldGroup>
-
-        {/* Appearance */}
+        {/* Appearance — 2-col on md+ */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FieldGroup label="Appearance — Default Form (Social Mask)" theme={theme}>
             <TextInput
@@ -630,12 +641,14 @@ export default function StorylineForm() {
             hint="One ability must be unique to origin; one must carry a cost or stigma"
             rows={5}
             theme={theme}
+            aria-invalid={!!errors.abilitiesCurrent}
           />
         </FieldGroup>
 
         {/* Growth mechanism */}
         <FieldGroup label="Growth Mechanism" theme={theme}>
-          <div className="flex flex-wrap gap-2">
+          {/* Mobile: vertical list of full-width tap targets; md+: flex-wrap chips */}
+          <div className="flex flex-col md:flex-row md:flex-wrap gap-2" role="group" aria-label="Growth mechanism options">
             {GROWTH_MECHANISMS.map(g => (
               <RadioChip
                 key={g}
@@ -677,7 +690,8 @@ export default function StorylineForm() {
           theme={theme}
           hint="Minimum 3 required"
         >
-          <div className="space-y-3">
+          {/* Mobile: single col; md+: 2-col grid when multiple cards */}
+          <div className={`gap-3 ${npcs.length >= 2 ? 'grid grid-cols-1 md:grid-cols-2' : 'flex flex-col'}`}>
             {npcs.map((npc, idx) => (
               <NPCCard
                 key={npc.id}
@@ -692,14 +706,16 @@ export default function StorylineForm() {
           </div>
           <button
             onClick={addNPC}
-            className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all hover:opacity-80"
+            className="mt-3 w-full flex items-center justify-center gap-2 px-4 rounded-xl text-sm transition-all hover:opacity-80 touch-min"
             style={{
+              minHeight:  '44px',
               background: theme.fieldBg,
-              border: `1px solid ${theme.fieldBorder}`,
-              color: theme.textBody,
+              border:     `1px solid ${theme.fieldBorder}`,
+              color:      theme.textBody,
             }}
+            aria-label="Add NPC"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" aria-hidden="true" />
             Add NPC
           </button>
         </FieldGroup>
@@ -713,7 +729,7 @@ export default function StorylineForm() {
           theme={theme}
           hint="Minimum 2 required"
         >
-          <div className="space-y-3">
+          <div className={`gap-3 ${factions.length >= 2 ? 'grid grid-cols-1 md:grid-cols-2' : 'flex flex-col'}`}>
             {factions.map((faction, idx) => (
               <FactionCard
                 key={faction.id}
@@ -728,14 +744,16 @@ export default function StorylineForm() {
           </div>
           <button
             onClick={addFaction}
-            className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all hover:opacity-80"
+            className="mt-3 w-full flex items-center justify-center gap-2 px-4 rounded-xl text-sm transition-all hover:opacity-80 touch-min"
             style={{
+              minHeight:  '44px',
               background: theme.fieldBg,
-              border: `1px solid ${theme.fieldBorder}`,
-              color: theme.textBody,
+              border:     `1px solid ${theme.fieldBorder}`,
+              color:      theme.textBody,
             }}
+            aria-label="Add Faction"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4" aria-hidden="true" />
             Add Faction
           </button>
         </FieldGroup>
@@ -774,11 +792,11 @@ export default function StorylineForm() {
       </SectionCard>
 
       {/* ── SECTION B ── */}
-      <SectionCard theme={theme} title="Section B — Narrative Physics Settings" className="mt-6">
+      <SectionCard theme={theme} title="Section B — Narrative Physics Settings" className="mt-6" stickyTitle>
 
         {/* Structural overlays */}
         <FieldGroup label="Structural Overlay(s)" theme={theme}>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Structural overlay options">
             {STRUCTURAL_OVERLAYS.map(o => (
               <Chip
                 key={o}
@@ -786,6 +804,8 @@ export default function StorylineForm() {
                 selected={overlays.includes(o)}
                 onClick={() => toggleMulti(setOverlays, o)}
                 theme={theme}
+                role="checkbox"
+                aria-checked={overlays.includes(o)}
               />
             ))}
           </div>
@@ -793,27 +813,43 @@ export default function StorylineForm() {
 
         {/* Power fantasy ratio */}
         <FieldGroup label="Power Fantasy Ratio" theme={theme}>
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs" style={{ color: theme.textMuted }}>
-              <span>More tension</span>
-              <span className="font-semibold text-sm" style={{ color: theme.primary }}>
+          <div className="space-y-3">
+            {/* Value display — always visible, not just on hover */}
+            <div className="flex justify-between items-center">
+              <span style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>More tension</span>
+              <span
+                className="font-bold px-3 py-1 rounded-lg"
+                style={{
+                  fontSize:   '1rem',
+                  color:      theme.primary,
+                  background: theme.primaryGlow,
+                }}
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 {powerFantasyRatio}%
               </span>
-              <span>More dominance</span>
+              <span style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>More dominance</span>
             </div>
             <input
-              type="range" min={40} max={80} step={5}
+              type="range"
+              min={40} max={80} step={5}
               value={powerFantasyRatio}
               onChange={e => setPowerFantasyRatio(Number(e.target.value))}
               className="w-full"
-              style={{ accentColor: theme.primary }}
+              style={{ accentColor: theme.primary, color: theme.primary }}
+              aria-label="Power Fantasy Ratio"
+              aria-valuemin={40}
+              aria-valuemax={80}
+              aria-valuenow={powerFantasyRatio}
+              aria-valuetext={`${powerFantasyRatio}%`}
             />
           </div>
         </FieldGroup>
 
         {/* First hook type */}
         <FieldGroup label="Preferred First Hook Type" theme={theme}>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col md:flex-row md:flex-wrap gap-2" role="group" aria-label="First hook type options">
             {FIRST_HOOK_TYPES.map(h => (
               <RadioChip
                 key={h}
@@ -828,25 +864,52 @@ export default function StorylineForm() {
 
         {/* Moral complexity level */}
         <FieldGroup label="Moral Complexity Level" theme={theme}>
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs" style={{ color: theme.textMuted }}>
+          <div className="space-y-3">
+            {/* Active label display */}
+            <div className="flex justify-center">
+              <span
+                className="font-semibold px-3 py-1 rounded-lg"
+                style={{
+                  fontSize:   '0.9375rem',
+                  color:      theme.primary,
+                  background: theme.primaryGlow,
+                }}
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                {MORAL_COMPLEXITY_LABELS[moralComplexityLevel]}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={1} max={5} step={1}
+              value={moralComplexityLevel}
+              onChange={e => setMoralComplexityLevel(Number(e.target.value))}
+              className="w-full"
+              style={{ accentColor: theme.primary, color: theme.primary }}
+              aria-label="Moral Complexity Level"
+              aria-valuemin={1}
+              aria-valuemax={5}
+              aria-valuenow={moralComplexityLevel}
+              aria-valuetext={MORAL_COMPLEXITY_LABELS[moralComplexityLevel]}
+            />
+            {/* Tick labels — hide on very narrow screens to prevent overlap */}
+            <div className="hidden xs:flex justify-between" aria-hidden="true">
               {Object.entries(MORAL_COMPLEXITY_LABELS).map(([k, v]) => (
                 <span
                   key={k}
-                  className={Number(k) === moralComplexityLevel ? 'font-semibold' : ''}
-                  style={{ color: Number(k) === moralComplexityLevel ? theme.primary : theme.textMuted }}
+                  style={{
+                    fontSize: 'var(--font-size-label)',
+                    color:    Number(k) === moralComplexityLevel ? theme.primary : theme.textMuted,
+                    fontWeight: Number(k) === moralComplexityLevel ? 600 : 400,
+                    textAlign: 'center',
+                    flex: 1,
+                  }}
                 >
                   {v}
                 </span>
               ))}
             </div>
-            <input
-              type="range" min={1} max={5} step={1}
-              value={moralComplexityLevel}
-              onChange={e => setMoralComplexityLevel(Number(e.target.value))}
-              className="w-full"
-              style={{ accentColor: theme.primary }}
-            />
           </div>
         </FieldGroup>
 
@@ -873,29 +936,60 @@ export default function StorylineForm() {
         </FieldGroup>
       </SectionCard>
 
-      {/* Submit */}
-      <div className="mt-8 flex justify-end">
+      {/*
+        ── Sticky Submit Button (mobile) / Inline (tablet/desktop) ──
+        On mobile: sticky bottom bar with safe-area-inset padding.
+        On md+: regular inline button, right-aligned.
+      */}
+      {/* Desktop / tablet inline submit */}
+      <div className="hidden md:flex justify-end mt-8 mb-4">
         <button
           onClick={handleReviewGenerate}
           disabled={generating}
-          className="flex items-center gap-2 px-8 py-3 rounded-xl font-semibold text-base transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: theme.buttonGradient, color: 'white' }}
+          className="flex items-center gap-2 px-8 rounded-xl font-semibold text-base transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ height: '48px', background: theme.buttonGradient, color: 'white' }}
         >
           {generating ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Generating…
-            </>
+            <><Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />Generating…</>
           ) : (
-            <>
-              <BookMarked className="w-5 h-5" />
-              Review & Generate
-            </>
+            <><BookMarked className="w-5 h-5" aria-hidden="true" />Review & Generate</>
           )}
         </button>
       </div>
 
-      {/* Confirmation modal */}
+      {/* Mobile sticky submit bar */}
+      <div
+        className="md:hidden sticky bottom-0 left-0 right-0 z-20 px-4"
+        style={{
+          background:    theme.navBg,
+          backdropFilter:'blur(16px)',
+          borderTop:     `1px solid ${theme.navBorder}`,
+          paddingTop:    '0.75rem',
+          paddingBottom: `calc(var(--safe-bottom) + 0.75rem)`,
+          minHeight:     '64px',
+          /* Offset for safe area bottom */
+          marginLeft:    'calc(-1 * var(--safe-left))',
+          marginRight:   'calc(-1 * var(--safe-right))',
+        }}
+      >
+        <button
+          onClick={handleReviewGenerate}
+          disabled={generating}
+          className="w-full flex items-center justify-center gap-2 rounded-xl font-semibold text-base transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ height: '48px', background: theme.buttonGradient, color: 'white' }}
+        >
+          {generating ? (
+            <><Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />Generating…</>
+          ) : (
+            <><BookMarked className="w-5 h-5" aria-hidden="true" />Review & Generate</>
+          )}
+        </button>
+      </div>
+
+      {/* Bottom padding so last field isn't hidden under the sticky bar on mobile */}
+      <div className="md:hidden h-6" aria-hidden="true" />
+
+      {/* Confirmation modal / bottom sheet */}
       {showConfirmModal && (
         <ConfirmationModal
           theme={theme}
@@ -903,7 +997,11 @@ export default function StorylineForm() {
           onTierChange={setTokenTier}
           onGenerate={handleGenerate}
           onBack={() => setShowConfirmModal(false)}
-          folderName={folderMode === 'new' ? newFolderName.trim() : (storylines.find(sl => sl.id === selectedFolderId)?.name || 'Selected Folder')}
+          folderName={
+            folderMode === 'new'
+              ? newFolderName.trim()
+              : (storylines.find(sl => sl.id === selectedFolderId)?.name || 'Selected Folder')
+          }
         />
       )}
     </div>
@@ -912,73 +1010,106 @@ export default function StorylineForm() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-// Small label used inside sub-cards
 function FieldLabel({ theme, required, children }) {
   return (
-    <div className="text-xs uppercase tracking-widest font-medium mb-1.5 flex items-center gap-1" style={{ color: theme.labelColor }}>
+    <div
+      className="uppercase tracking-widest font-medium mb-1.5 flex items-center gap-1"
+      style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}
+    >
       {children}
       {required && <span style={{ color: theme.primary }}>*</span>}
     </div>
   )
 }
 
-const FieldGroup = forwardRef(function FieldGroup({ label, required, error, hint, children, theme }, ref) {
+const FieldGroup = forwardRef(function FieldGroup(
+  { label, required, error, hint, children, theme, groupRole, groupAriaLabel },
+  ref
+) {
   return (
     <div ref={ref} className="space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs uppercase tracking-widest font-medium" style={{ color: theme.labelColor }}>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span
+          className="uppercase tracking-widest font-medium"
+          style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}
+        >
           {label}
         </span>
         {required && (
-          <span className="text-xs" style={{ color: theme.primary }}>*</span>
+          <span style={{ fontSize: 'var(--font-size-label)', color: theme.primary }}>*</span>
         )}
         {hint && (
-          <span className="text-xs" style={{ color: theme.textMuted }}>— {hint}</span>
+          <span style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>— {hint}</span>
         )}
       </div>
       {children}
       {error && (
-        <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{error}</p>
+        <p
+          className="mt-1"
+          style={{ fontSize: 'var(--font-size-label)', color: '#ef4444' }}
+          role="alert"
+          aria-live="polite"
+        >
+          {error}
+        </p>
       )}
     </div>
   )
 })
 
-function SectionCard({ theme, title, children, className = '' }) {
+function SectionCard({ theme, title, children, className = '', stickyTitle = false }) {
   return (
     <div
-      className={`rounded-2xl p-6 space-y-5 ${className}`}
+      className={`rounded-2xl overflow-hidden ${className}`}
       style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
     >
-      <h2
-        className="text-lg font-bold pb-3 mb-1"
-        style={{ color: theme.textBody, borderBottom: `1px solid ${theme.fieldBorder}` }}
+      {/* Section heading — sticky on mobile */}
+      <div
+        className={stickyTitle ? 'sticky z-10' : ''}
+        style={stickyTitle ? {
+          top:        '64px',  /* nav height */
+          background: theme.cardBg,
+          borderBottom: `1px solid ${theme.fieldBorder}`,
+        } : {
+          borderBottom: `1px solid ${theme.fieldBorder}`,
+        }}
       >
-        {title}
-      </h2>
-      {children}
+        <h2
+          className="font-bold px-6 py-4"
+          style={{ fontSize: 'var(--font-size-heading)', color: theme.textBody }}
+        >
+          {title}
+        </h2>
+      </div>
+      <div className="p-4 md:p-6 space-y-5">
+        {children}
+      </div>
     </div>
   )
 }
 
-function TextInput({ value, onChange, placeholder, theme, className = '' }) {
+function TextInput({ value, onChange, placeholder, theme, className = '', 'aria-invalid': ariaInvalid }) {
   return (
     <input
       type="text"
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className={`w-full px-3 py-2 rounded-xl text-sm transition-colors ${className}`}
+      className={`w-full px-3 rounded-xl text-sm transition-colors ${className}`}
       style={{
+        height:     '44px',
         background: theme.fieldBg,
-        border: `1px solid ${theme.fieldBorder}`,
-        color: theme.textBody,
+        border:     `1px solid ${theme.fieldBorder}`,
+        color:      theme.textBody,
       }}
+      aria-invalid={ariaInvalid}
+      autocorrect="on"
+      spellCheck="true"
     />
   )
 }
 
-function Textarea({ value, onChange, placeholder, hint, rows = 3, theme }) {
+function Textarea({ value, onChange, placeholder, hint, rows = 3, theme, 'aria-invalid': ariaInvalid, 'aria-describedby': ariaDescribedBy }) {
   return (
     <div>
       <textarea
@@ -989,38 +1120,78 @@ function Textarea({ value, onChange, placeholder, hint, rows = 3, theme }) {
         className="w-full px-3 py-2 rounded-xl text-sm resize-y transition-colors"
         style={{
           background: theme.fieldBg,
-          border: `1px solid ${theme.fieldBorder}`,
-          color: theme.textBody,
-          minHeight: `${rows * 1.6}rem`,
+          border:     `1px solid ${theme.fieldBorder}`,
+          color:      theme.textBody,
+          minHeight:  '96px',   /* 96px mobile minimum per spec */
         }}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        autocorrect="on"
+        spellCheck="true"
       />
       {hint && (
-        <p className="text-xs mt-1" style={{ color: theme.textMuted }}>{hint}</p>
+        <p className="mt-1" style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>
+          {hint}
+        </p>
       )}
     </div>
   )
 }
 
-function Chip({ label, selected, onClick, theme }) {
+function Chip({ label, selected, onClick, theme, role = 'checkbox', 'aria-checked': ariaChecked }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+      className="chip-btn rounded-full font-medium transition-all"
       style={{
-        background: selected ? theme.primary : theme.fieldBg,
-        color: selected ? 'white' : theme.textBody,
-        border: `1px solid ${selected ? theme.primary : theme.fieldBorder}`,
-        boxShadow: selected ? `0 0 8px ${theme.primaryGlow}` : 'none',
+        background:  selected ? theme.primary : theme.fieldBg,
+        color:       selected ? 'white' : theme.textBody,
+        border:      `1px solid ${selected ? theme.primary : theme.fieldBorder}`,
+        boxShadow:   selected ? `0 0 8px ${theme.primaryGlow}` : 'none',
       }}
+      role={role}
+      aria-checked={ariaChecked ?? selected}
     >
       {label}
     </button>
   )
 }
 
+/*
+  RadioChip on mobile renders as a full-width list item (flex-col context).
+  On md+ it reverts to chip appearance inside a flex-wrap row.
+  Both use the same component — layout is controlled by the parent flex direction.
+*/
 function RadioChip({ label, selected, onClick, theme }) {
-  return <Chip label={label} selected={selected} onClick={onClick} theme={theme} />
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="chip-btn md:rounded-full rounded-xl font-medium transition-all text-left md:text-center w-full md:w-auto flex items-center md:justify-center gap-2"
+      style={{
+        minHeight:   '44px',
+        background:  selected ? theme.primary : theme.fieldBg,
+        color:       selected ? 'white' : theme.textBody,
+        border:      `1px solid ${selected ? theme.primary : theme.fieldBorder}`,
+        boxShadow:   selected ? `0 0 8px ${theme.primaryGlow}` : 'none',
+        paddingLeft:  '0.75rem',
+        paddingRight: '0.75rem',
+      }}
+      role="radio"
+      aria-checked={selected}
+    >
+      {/* Radio indicator dot — visible on mobile vertical layout */}
+      <span
+        className="md:hidden flex-shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center"
+        style={{ borderColor: selected ? 'white' : theme.fieldBorder }}
+        aria-hidden="true"
+      >
+        {selected && <span className="w-2 h-2 rounded-full bg-white" />}
+      </span>
+      {label}
+    </button>
+  )
 }
 
 function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
@@ -1029,36 +1200,52 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
   return (
     <div
       className="rounded-xl overflow-hidden"
-      style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
+      style={{
+        background: theme.fieldBg,
+        border:     `1px solid ${theme.fieldBorder}`,
+        contain:    'content',  /* CSS containment — prevents reflow propagation */
+      }}
     >
+      {/* Card header */}
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer"
+        className="flex items-center justify-between px-4 cursor-pointer"
         onClick={() => setExpanded(e => !e)}
-        style={{ borderBottom: expanded ? `1px solid ${theme.fieldBorder}` : 'none' }}
+        style={{
+          minHeight:    '52px',
+          borderBottom: expanded ? `1px solid ${theme.fieldBorder}` : 'none',
+        }}
       >
         <span className="text-sm font-medium" style={{ color: theme.textBody }}>
           NPC {index + 1}{npc.name ? ` — ${npc.name}` : ''}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {onRemove && (
             <button
               type="button"
               onClick={e => { e.stopPropagation(); onRemove() }}
-              className="p-1 rounded-lg hover:bg-red-500/20 transition-colors"
+              className="flex items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+              style={{
+                /* Muted style, NOT red — less alarming per spec */
+                color:     theme.textMuted,
+                minWidth:  '44px',
+                minHeight: '44px',
+              }}
+              aria-label={`Remove NPC ${index + 1}`}
             >
-              <Trash2 className="w-3.5 h-3.5" style={{ color: '#ef4444' }} />
+              <XIcon className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
           {expanded
-            ? <ChevronUp className="w-4 h-4" style={{ color: theme.textMuted }} />
-            : <ChevronDown className="w-4 h-4" style={{ color: theme.textMuted }} />
+            ? <ChevronUp   className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
+            : <ChevronDown className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
           }
         </div>
       </div>
 
       {expanded && (
         <div className="p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Name + Role — single col (inner card fields always single-col per spec) */}
+          <div className="grid grid-cols-1 gap-3">
             <div>
               <SubLabel theme={theme}>Name <span style={{ color: theme.primary }}>*</span></SubLabel>
               <input
@@ -1066,14 +1253,19 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                 value={npc.name}
                 onChange={e => onUpdate({ name: e.target.value })}
                 placeholder="NPC name"
-                className="w-full px-3 py-2 rounded-lg text-sm"
+                className="w-full px-3 rounded-lg text-sm"
                 style={{
+                  height:     '44px',
                   background: theme.cardBg,
-                  border: `1px solid ${fieldErrors.name ? '#ef4444' : theme.fieldBorder}`,
-                  color: theme.textBody,
+                  border:     `1px solid ${fieldErrors.name ? '#ef4444' : theme.fieldBorder}`,
+                  color:      theme.textBody,
                 }}
+                aria-invalid={!!fieldErrors.name}
+                autocorrect="on"
               />
-              {fieldErrors.name && <p className="text-xs mt-0.5" style={{ color: '#ef4444' }}>{fieldErrors.name}</p>}
+              {fieldErrors.name && (
+                <p className="text-xs mt-0.5" style={{ color: '#ef4444' }} role="alert">{fieldErrors.name}</p>
+              )}
             </div>
             <div>
               <SubLabel theme={theme}>Role <span style={{ color: theme.primary }}>*</span></SubLabel>
@@ -1082,14 +1274,19 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                 value={npc.role}
                 onChange={e => onUpdate({ role: e.target.value })}
                 placeholder="e.g. rival general, reluctant healer"
-                className="w-full px-3 py-2 rounded-lg text-sm"
+                className="w-full px-3 rounded-lg text-sm"
                 style={{
+                  height:     '44px',
                   background: theme.cardBg,
-                  border: `1px solid ${fieldErrors.role ? '#ef4444' : theme.fieldBorder}`,
-                  color: theme.textBody,
+                  border:     `1px solid ${fieldErrors.role ? '#ef4444' : theme.fieldBorder}`,
+                  color:      theme.textBody,
                 }}
+                aria-invalid={!!fieldErrors.role}
+                autocorrect="on"
               />
-              {fieldErrors.role && <p className="text-xs mt-0.5" style={{ color: '#ef4444' }}>{fieldErrors.role}</p>}
+              {fieldErrors.role && (
+                <p className="text-xs mt-0.5" style={{ color: '#ef4444' }} role="alert">{fieldErrors.role}</p>
+              )}
             </div>
           </div>
 
@@ -1101,11 +1298,18 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
               placeholder="How they appear vs. what they truly feel or want"
               rows={2}
               className="w-full px-3 py-2 rounded-lg text-sm resize-y"
-              style={{ background: theme.cardBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+              style={{
+                background: theme.cardBg,
+                border:     `1px solid ${theme.fieldBorder}`,
+                color:      theme.textBody,
+                minHeight:  '96px',
+              }}
+              autocorrect="on"
+              spellCheck="true"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div>
               <SubLabel theme={theme}>Relationship Vector (start → destination)</SubLabel>
               <input
@@ -1113,8 +1317,13 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                 value={npc.relationship_vector}
                 onChange={e => onUpdate({ relationship_vector: e.target.value })}
                 placeholder="e.g. Antagonist → Reluctant ally"
-                className="w-full px-3 py-2 rounded-lg text-sm"
-                style={{ background: theme.cardBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+                className="w-full px-3 rounded-lg text-sm"
+                style={{
+                  height:     '44px',
+                  background: theme.cardBg,
+                  border:     `1px solid ${theme.fieldBorder}`,
+                  color:      theme.textBody,
+                }}
               />
             </div>
             <div>
@@ -1124,26 +1333,38 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                 value={npc.cross_connection}
                 onChange={e => onUpdate({ cross_connection: e.target.value })}
                 placeholder="e.g. Secretly loyal to Faction Leader"
-                className="w-full px-3 py-2 rounded-lg text-sm"
-                style={{ background: theme.cardBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+                className="w-full px-3 rounded-lg text-sm"
+                style={{
+                  height:     '44px',
+                  background: theme.cardBg,
+                  border:     `1px solid ${theme.fieldBorder}`,
+                  color:      theme.textBody,
+                }}
               />
             </div>
           </div>
 
+          {/* Bond type — single-select chips per card, independent of other cards */}
           <div>
             <SubLabel theme={theme}>Bond Type</SubLabel>
-            <div className="flex flex-wrap gap-1.5 mt-1">
+            <div
+              className="flex flex-wrap gap-1.5 mt-1"
+              role="group"
+              aria-label={`Bond type for NPC ${index + 1}`}
+            >
               {BOND_TYPES.map(bt => (
                 <button
                   key={bt}
                   type="button"
                   onClick={() => onUpdate({ bond_type: npc.bond_type === bt ? null : bt })}
-                  className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                  className="chip-btn rounded-full font-medium transition-all"
                   style={{
                     background: npc.bond_type === bt ? theme.primary : theme.cardBg,
-                    color: npc.bond_type === bt ? 'white' : theme.textBody,
-                    border: `1px solid ${npc.bond_type === bt ? theme.primary : theme.fieldBorder}`,
+                    color:      npc.bond_type === bt ? 'white' : theme.textBody,
+                    border:     `1px solid ${npc.bond_type === bt ? theme.primary : theme.fieldBorder}`,
                   }}
+                  role="radio"
+                  aria-checked={npc.bond_type === bt}
                 >
                   {bt}
                 </button>
@@ -1162,36 +1383,49 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
   return (
     <div
       className="rounded-xl overflow-hidden"
-      style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
+      style={{
+        background: theme.fieldBg,
+        border:     `1px solid ${theme.fieldBorder}`,
+        contain:    'content',
+      }}
     >
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer"
+        className="flex items-center justify-between px-4 cursor-pointer"
         onClick={() => setExpanded(e => !e)}
-        style={{ borderBottom: expanded ? `1px solid ${theme.fieldBorder}` : 'none' }}
+        style={{
+          minHeight:    '52px',
+          borderBottom: expanded ? `1px solid ${theme.fieldBorder}` : 'none',
+        }}
       >
         <span className="text-sm font-medium" style={{ color: theme.textBody }}>
           Faction {index + 1}{faction.name ? ` — ${faction.name}` : ''}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {onRemove && (
             <button
               type="button"
               onClick={e => { e.stopPropagation(); onRemove() }}
-              className="p-1 rounded-lg hover:bg-red-500/20 transition-colors"
+              className="flex items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+              style={{
+                color:     theme.textMuted,
+                minWidth:  '44px',
+                minHeight: '44px',
+              }}
+              aria-label={`Remove Faction ${index + 1}`}
             >
-              <Trash2 className="w-3.5 h-3.5" style={{ color: '#ef4444' }} />
+              <XIcon className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
           {expanded
-            ? <ChevronUp className="w-4 h-4" style={{ color: theme.textMuted }} />
-            : <ChevronDown className="w-4 h-4" style={{ color: theme.textMuted }} />
+            ? <ChevronUp   className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
+            : <ChevronDown className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
           }
         </div>
       </div>
 
       {expanded && (
         <div className="p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div>
               <SubLabel theme={theme}>Faction Name <span style={{ color: theme.primary }}>*</span></SubLabel>
               <input
@@ -1199,14 +1433,19 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
                 value={faction.name}
                 onChange={e => onUpdate({ name: e.target.value })}
                 placeholder="Faction name"
-                className="w-full px-3 py-2 rounded-lg text-sm"
+                className="w-full px-3 rounded-lg text-sm"
                 style={{
+                  height:     '44px',
                   background: theme.cardBg,
-                  border: `1px solid ${fieldErrors.name ? '#ef4444' : theme.fieldBorder}`,
-                  color: theme.textBody,
+                  border:     `1px solid ${fieldErrors.name ? '#ef4444' : theme.fieldBorder}`,
+                  color:      theme.textBody,
                 }}
+                aria-invalid={!!fieldErrors.name}
+                autocorrect="on"
               />
-              {fieldErrors.name && <p className="text-xs mt-0.5" style={{ color: '#ef4444' }}>{fieldErrors.name}</p>}
+              {fieldErrors.name && (
+                <p className="text-xs mt-0.5" style={{ color: '#ef4444' }} role="alert">{fieldErrors.name}</p>
+              )}
             </div>
             <div>
               <SubLabel theme={theme}>Purpose / Why They Exist</SubLabel>
@@ -1215,13 +1454,18 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
                 value={faction.purpose}
                 onChange={e => onUpdate({ purpose: e.target.value })}
                 placeholder="Their driving goal or reason for existing"
-                className="w-full px-3 py-2 rounded-lg text-sm"
-                style={{ background: theme.cardBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+                className="w-full px-3 rounded-lg text-sm"
+                style={{
+                  height:     '44px',
+                  background: theme.cardBg,
+                  border:     `1px solid ${theme.fieldBorder}`,
+                  color:      theme.textBody,
+                }}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div>
               <SubLabel theme={theme}>Initial Stance Toward Protagonist</SubLabel>
               <input
@@ -1229,8 +1473,13 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
                 value={faction.stance_toward_protagonist}
                 onChange={e => onUpdate({ stance_toward_protagonist: e.target.value })}
                 placeholder="e.g. Hostile, Neutral, Cautiously interested"
-                className="w-full px-3 py-2 rounded-lg text-sm"
-                style={{ background: theme.cardBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+                className="w-full px-3 rounded-lg text-sm"
+                style={{
+                  height:     '44px',
+                  background: theme.cardBg,
+                  border:     `1px solid ${theme.fieldBorder}`,
+                  color:      theme.textBody,
+                }}
               />
             </div>
             <div>
@@ -1240,8 +1489,13 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
                 value={faction.moral_complexity}
                 onChange={e => onUpdate({ moral_complexity: e.target.value })}
                 placeholder="Their grey area — what makes them not purely good or evil"
-                className="w-full px-3 py-2 rounded-lg text-sm"
-                style={{ background: theme.cardBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+                className="w-full px-3 rounded-lg text-sm"
+                style={{
+                  height:     '44px',
+                  background: theme.cardBg,
+                  border:     `1px solid ${theme.fieldBorder}`,
+                  color:      theme.textBody,
+                }}
               />
             </div>
           </div>
@@ -1253,76 +1507,204 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
 
 function SubLabel({ theme, children }) {
   return (
-    <div className="text-xs uppercase tracking-wider font-medium mb-1" style={{ color: theme.labelColor }}>
+    <div
+      className="uppercase tracking-wider font-medium mb-1"
+      style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}
+    >
       {children}
     </div>
   )
 }
 
+// ─── Phase 4: Confirmation Modal / Bottom Sheet ───────────────────────────────
+/*
+  Mobile (< md = 768px): renders as a bottom sheet sliding up from the bottom.
+  Desktop (md+):         centered dialog (original behaviour).
+
+  NOTE: This modal contains no text inputs, so soft keyboard avoidance is not
+  needed. If a text input is ever added here, the bottom sheet will need
+  viewport/scroll adjustment (e.g. adding window.visualViewport resize listener).
+*/
 function ConfirmationModal({ theme, tokenTier, onTierChange, onGenerate, onBack, folderName }) {
+  const sheetRef     = useRef(null)
+  const firstFocusRef = useRef(null)
+
+  // Focus trap + escape key
+  useState(() => {
+    const t = setTimeout(() => firstFocusRef.current?.focus(), 60)
+    return () => clearTimeout(t)
+  })
+
+  // Touch drag-to-dismiss state
+  const dragState = useRef({ startY: 0, dragging: false })
+  const [dragOffset, setDragOffset] = useState(0)
+
+  const handleTouchStart = (e) => {
+    dragState.current = { startY: e.touches[0].clientY, dragging: true }
+  }
+  const handleTouchMove = (e) => {
+    if (!dragState.current.dragging) return
+    const dy = e.touches[0].clientY - dragState.current.startY
+    if (dy > 0) setDragOffset(dy)  // only allow dragging DOWN
+  }
+  const handleTouchEnd = () => {
+    dragState.current.dragging = false
+    if (dragOffset > 80) {
+      // Dragged down past threshold — dismiss
+      setDragOffset(0)
+      onBack()
+    } else {
+      setDragOffset(0)
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50" aria-modal="true" role="dialog" aria-labelledby="confirm-modal-title">
+      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60" onClick={onBack} />
+
+      {/*
+        MOBILE BOTTOM SHEET — shown below md breakpoint via CSS.
+        Desktop CENTERED DIALOG — shown at md+ breakpoint via CSS.
+        We render both and toggle visibility with CSS breakpoints.
+      */}
+
+      {/* ── Mobile Bottom Sheet ── */}
       <div
-        className="relative w-full max-w-md rounded-2xl p-6 space-y-5"
-        style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+        ref={sheetRef}
+        className="bottom-sheet md:hidden absolute bottom-0 left-0 right-0 rounded-t-2xl"
+        style={{
+          background:       theme.cardBg,
+          border:           `1px solid ${theme.cardBorder}`,
+          borderBottom:     'none',
+          transform:        `translateY(${dragOffset}px)`,
+          transition:       dragOffset === 0 ? 'transform 0.3s cubic-bezier(0.32,0.72,0,1)' : 'none',
+          paddingBottom:    `calc(var(--safe-bottom) + 1rem)`,
+          maxHeight:        '75vh',
+          overflowY:        'auto',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
-        <div>
-          <h3 className="text-lg font-bold mb-1" style={{ color: theme.textBody }}>
-            Choose output depth
-          </h3>
-          <p className="text-sm" style={{ color: theme.textMuted }}>
-            This controls how detailed the generated prompt will be.
-            {folderName && (
-              <> Result will be saved to <span style={{ color: theme.primary }}>"{folderName}"</span>.</>
-            )}
-          </p>
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-2" aria-hidden="true">
+          <div className="w-10 h-1 rounded-full" style={{ background: theme.fieldBorder }} />
         </div>
 
-        <div className="space-y-2">
-          {TOKEN_TIERS.map(tier => (
-            <button
-              key={tier.id}
-              type="button"
-              onClick={() => onTierChange(tier.id)}
-              className="w-full flex items-start gap-3 p-3 rounded-xl text-left transition-all"
-              style={{
-                background: tokenTier === tier.id ? theme.primaryGlow : theme.fieldBg,
-                border: `1px solid ${tokenTier === tier.id ? theme.primary : theme.fieldBorder}`,
-              }}
+        <ConfirmModalContent
+          theme={theme}
+          tokenTier={tokenTier}
+          onTierChange={onTierChange}
+          onGenerate={onGenerate}
+          onBack={onBack}
+          folderName={folderName}
+          firstFocusRef={firstFocusRef}
+          mobile
+        />
+      </div>
+
+      {/* ── Desktop Centered Dialog ── */}
+      <div className="hidden md:flex absolute inset-0 items-center justify-center p-4">
+        <div
+          className="relative w-full max-w-md rounded-2xl p-6 space-y-5"
+          style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+        >
+          <ConfirmModalContent
+            theme={theme}
+            tokenTier={tokenTier}
+            onTierChange={onTierChange}
+            onGenerate={onGenerate}
+            onBack={onBack}
+            folderName={folderName}
+            firstFocusRef={firstFocusRef}
+            mobile={false}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConfirmModalContent({ theme, tokenTier, onTierChange, onGenerate, onBack, folderName, firstFocusRef, mobile }) {
+  return (
+    <div className={mobile ? 'px-5 pb-2 space-y-5' : 'space-y-5'}>
+      <div>
+        <h3
+          id="confirm-modal-title"
+          className="font-bold mb-1"
+          style={{ fontSize: 'var(--font-size-heading)', color: theme.textBody }}
+        >
+          Choose output depth
+        </h3>
+        <p className="text-sm" style={{ color: theme.textMuted }}>
+          This controls how detailed the generated prompt will be.
+          {folderName && (
+            <> Result will be saved to <span style={{ color: theme.primary }}>"{folderName}"</span>.</>
+          )}
+        </p>
+      </div>
+
+      {/* Token tier options — full-width tappable rows, ≥52px tall */}
+      <div className="space-y-2" role="radiogroup" aria-label="Output depth">
+        {TOKEN_TIERS.map((tier, idx) => (
+          <button
+            key={tier.id}
+            ref={idx === 0 ? firstFocusRef : undefined}
+            type="button"
+            onClick={() => onTierChange(tier.id)}
+            className="w-full flex items-center gap-3 px-4 rounded-xl text-left transition-all"
+            style={{
+              minHeight:  '52px',
+              background: tokenTier === tier.id ? theme.primaryGlow : theme.fieldBg,
+              border:     `1px solid ${tokenTier === tier.id ? theme.primary : theme.fieldBorder}`,
+            }}
+            role="radio"
+            aria-checked={tokenTier === tier.id}
+          >
+            {/* Radio indicator */}
+            <div
+              className="w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center"
+              style={{ borderColor: tokenTier === tier.id ? theme.primary : theme.fieldBorder }}
+              aria-hidden="true"
             >
-              <div
-                className="mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center"
-                style={{ borderColor: tokenTier === tier.id ? theme.primary : theme.fieldBorder }}
-              >
-                {tokenTier === tier.id && (
-                  <div className="w-2 h-2 rounded-full" style={{ background: theme.primary }} />
-                )}
-              </div>
-              <div>
-                <div className="text-sm font-semibold" style={{ color: theme.textBody }}>{tier.label}</div>
-                <div className="text-xs mt-0.5" style={{ color: theme.textMuted }}>{tier.subtitle}</div>
-              </div>
-            </button>
-          ))}
-        </div>
+              {tokenTier === tier.id && (
+                <div className="w-2 h-2 rounded-full" style={{ background: theme.primary }} />
+              )}
+            </div>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: theme.textBody }}>{tier.label}</div>
+              <div style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>{tier.subtitle}</div>
+            </div>
+          </button>
+        ))}
+      </div>
 
-        <div className="flex gap-3 pt-1">
-          <button
-            onClick={onBack}
-            className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all hover:opacity-80"
-            style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
-          >
-            Back
-          </button>
-          <button
-            onClick={onGenerate}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
-            style={{ background: theme.buttonGradient, color: 'white' }}
-          >
-            Generate
-          </button>
-        </div>
+      {/*
+        Buttons:
+        - Mobile: stacked vertically, full-width. Generate first, Back below.
+        - Desktop: side by side.
+      */}
+      <div className="flex flex-col md:flex-row gap-3 pt-1">
+        <button
+          onClick={onGenerate}
+          className="w-full md:flex-1 rounded-xl text-sm font-semibold transition-all hover:opacity-90 flex items-center justify-center"
+          style={{ height: '48px', background: theme.buttonGradient, color: 'white' }}
+        >
+          Generate
+        </button>
+        <button
+          onClick={onBack}
+          className="w-full md:flex-1 rounded-xl text-sm font-medium transition-all hover:opacity-80 flex items-center justify-center"
+          style={{
+            height:     '48px',
+            background: theme.fieldBg,
+            border:     `1px solid ${theme.fieldBorder}`,
+            color:      theme.textBody,
+          }}
+        >
+          Back
+        </button>
       </div>
     </div>
   )
