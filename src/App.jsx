@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Generate from './pages/Generate'
+import GenerateCharacter from './pages/GenerateCharacter'
 import Gallery from './pages/Gallery'
 import StorylineDetail from './pages/StorylineDetail'
 import BatchDetail from './pages/BatchDetail'
@@ -12,6 +13,10 @@ export default function App() {
       <Route path="/" element={<Navigate to="/generate" replace />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/generate" element={<Generate />} />
+      <Route path="/characters/generate" element={<GenerateCharacter />} />
+      <Route path="/characters/generate/:draftId" element={<GenerateCharacter />} />
+      <Route path="/characters/:characterId" element={<GenerateCharacter />} />
+      <Route path="/characters" element={<Navigate to="/characters/generate" replace />} />
       <Route path="/gallery" element={<Gallery />} />
       <Route path="/storyline" element={<StorylineDetail />} />
       <Route path="/batch" element={<BatchDetail />} />

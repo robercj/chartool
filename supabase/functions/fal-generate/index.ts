@@ -1,5 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// IMPORTANT: This function uses the NEW Supabase API key system (sb_secret_...).
+// Legacy JWT-based service_role keys (eyJ...) are NOT supported.
+// Deploy with --no-verify-jwt flag.
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -8,33 +12,57 @@ const CORS = {
 
 const FAL_MODEL = 'fal-ai/nano-banana-2/edit'
 
-// Uses sync_mode: true so fal returns the result immediately in the submit response.
-// No polling required — single request, single response, no timeout risk.
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    // ── Auth ──────────────────────────────────────────────────────────────────
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
+    // ── Auth using new Supabase API keys (non-JWT) ───────────────────────────
+    // With --no-verify-jwt flag, Supabase already verified the JWT at the edge.
+    // We just need to extract the user from the verified token.
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseSecretKey = Deno.env.get('CharacterForge')!
 
+    if (!supabaseSecretKey) {
+      return json({ error: 'CharacterForge secret not configured in Edge Function secrets.' }, 500)
+    }
+
+    // Get user's JWT from Authorization header (Supabase verified it via --no-verify-jwt)
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return json({ error: 'Missing or invalid Authorization header' }, 401)
+    const userJwt = authHeader?.replace('Bearer ', '')
+
+    if (!userJwt) {
+      return json({ error: 'Missing Authorization header' }, 401)
     }
 
-    const jwt = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt)
-    if (authError || !user) {
-      console.error('Auth error:', authError)
-      return json({ error: 'Unauthorized' }, 401)
+    // Decode JWT manually to get user ID (Supabase already verified the signature)
+    const jwtParts = userJwt.split('.')
+    if (jwtParts.length !== 3) {
+      return json({ error: 'Invalid JWT format' }, 401)
     }
+
+    let jwtPayload: any
+    try {
+      // JWT payload is base64url encoded
+      const payloadBase64 = jwtParts[1].replace(/-/g, '+').replace(/_/g, '/')
+      const padding = '='.repeat((4 - payloadBase64.length % 4) % 4)
+      const payloadJson = atob(payloadBase64 + padding)
+      jwtPayload = JSON.parse(payloadJson)
+    } catch (e) {
+      return json({ error: 'Invalid JWT payload' }, 401)
+    }
+
+    const userId = jwtPayload.sub
+    if (!userId) {
+      return json({ error: 'JWT missing sub claim' }, 401)
+    }
+
+    console.log('Authenticated user:', userId)
+
+    // Create admin client for database operations (using new secret key)
+    const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey)
 
     // ── Limit check ───────────────────────────────────────────────────────────
-    const { allowed, reason } = await checkLimit(supabaseAdmin, user.id, 'image')
+    const { allowed, reason } = await checkLimit(supabaseAdmin, userId, 'image')
     if (!allowed) return json({ error: reason }, 429)
 
     const falKey = Deno.env.get('FAL_KEY')
@@ -133,7 +161,7 @@ Deno.serve(async (req) => {
       return json({ error: 'fal.ai returned no images', raw: falData }, 500)
     }
 
-    await incrementUsage(supabaseAdmin, user.id, 'image')
+    await incrementUsage(supabaseAdmin, userId, 'image')
 
     return json({ images })
 

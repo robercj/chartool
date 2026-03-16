@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Sparkles, ImagePlus, Images, Settings as SettingsIconLucide,
-  BookMarked, LogOut, User, ChevronDown, Menu, X,
+  BookMarked, LogOut, User, ChevronDown, Menu, X, Users,
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useProgress } from '../contexts/ProgressContext';
@@ -30,6 +30,7 @@ function solidOptionBg(cardBg) {
 // ─── Nav items definition ─────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { to: '/generate',      icon: ImagePlus,          label: 'Generate Images',   matchFn: (p) => p === '/generate' },
+  { to: '/characters/generate', icon: Sparkles,      label: 'Generate Character', matchFn: (p) => p.startsWith('/characters') },
   { to: '/storyline/new', icon: BookMarked,          label: 'Generate Storyline',matchFn: (p) => p.startsWith('/storyline/new') || p.startsWith('/storyline/result') },
   { to: '/gallery',       icon: Images,              label: 'Gallery',           matchFn: (p) => p === '/gallery' || p.startsWith('/storyline?') || p.startsWith('/batch?') },
   { to: '/settings',      icon: SettingsIconLucide,  label: 'Settings',          matchFn: (p) => p === '/settings' },

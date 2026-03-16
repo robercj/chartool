@@ -1,4 +1,8 @@
 // ─── anthropic.js ─────────────────────────────────────────────────────────────
+// IMPORTANT: This codebase uses the NEW Supabase API key system (sb_publishable_
+// and sb_secret_ keys). Legacy JWT-based keys (anon/service_role with eyJ...
+// format) are NOT supported and MUST NOT be used.
+//
 // All AI calls are now routed through Supabase Edge Functions.
 // API keys (Anthropic + fal.ai) live exclusively in Supabase secrets — never
 // in the browser bundle.
@@ -66,10 +70,6 @@ SECTION C — AI REMINDERS
 // signal: optional AbortSignal — if provided, the request will be cancelled
 // when the signal fires (e.g. component unmount or user-triggered stop).
 async function callEdgeFunction(functionName, body, signal = null) {
-  // Wait for the auth client to finish restoring the session from storage.
-  // Without this, invoking an edge function immediately on page load can fire
-  // before the session is available, causing the request to go out with no
-  // bearer token (or the anon key) and the edge function returns "Invalid JWT".
   await supabase.auth.initialize();
 
   const invokeOptions = { body };
@@ -89,12 +89,10 @@ async function callEdgeFunction(functionName, body, signal = null) {
     }
 
     // supabase.functions.invoke wraps the real HTTP response in error.context
-    // Try every known way to extract the actual error message from the body
     let message = null;
     let status = null;
 
     try {
-      // FunctionsHttpError: the raw Response is at error.context
       const ctx = error.context;
       if (ctx instanceof Response) {
         status = ctx.status;
@@ -107,7 +105,6 @@ async function callEdgeFunction(functionName, body, signal = null) {
           message = text;
         }
       } else if (ctx) {
-        // Some versions expose it differently
         status = ctx.status;
         message = ctx.body ?? error.message;
         console.error(`[${functionName}] error context:`, ctx);
@@ -221,4 +218,102 @@ export async function removeImageBackground(imageUrl, signal = null) {
   const outputUrl = result?.image?.url;
   if (!outputUrl) throw new Error('Background removal returned no image');
   return outputUrl;
+}
+
+// ─── Character Prompt Synthesis: Claude ───────────────────────────────────────
+// Synthesizes a fal.ai image prompt from the full character JSON
+export async function synthesizeCharacterImagePrompt(characterData) {
+  const systemPrompt = `You are a character visual design specialist. Your task is to create a detailed, vivid image generation prompt for an AI image generator (fal.ai nanoBanana2/FLUX model).
+
+Based on the character description provided, create a single paragraph prompt that includes:
+1. Subject description (full body or portrait as appropriate)
+2. Pose or composition
+3. Background/setting
+4. Mood and lighting
+5. Art style reference if specified
+
+Requirements:
+- The prompt should be in English, descriptive and detailed
+- Include specific visual details: hair color/style, eye color, clothing, accessories, body type
+- Specify pose and expression
+- Include appropriate art style tags (anime, manga, etc.)
+- Do NOT includeNSFW or inappropriate content
+- Focus on creating a visually appealing character portrait
+- Keep the prompt under 500 words
+
+Output ONLY the prompt text, no explanations or additional content.`;
+
+  const userMessage = `Create an image generation prompt for this character:
+
+${JSON.stringify(characterData, null, 2)}`;
+
+  const data = await callEdgeFunction('anthropic-proxy', {
+    _generation_type: 'character_image_prompt',
+    model: 'claude-sonnet-4-5',
+    max_tokens: 2000,
+    temperature: 0.8,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+
+  return data.content?.[0]?.text || '';
+}
+
+// ─── Character Manifest Generation: Claude ──────────────────────────────────
+// Generates a prose character manifest usable as a system prompt
+export async function generateCharacterManifest(characterData) {
+  const systemPrompt = `You are a character profile writer. Your task is to create a comprehensive, high-fidelity character manifest from the provided character data.
+
+The manifest serves as a ready-to-use AI roleplay system prompt. It should include:
+1. Core identity (name, role, archetype)
+2. Personality breakdown (surface traits, hidden traits, dere type if applicable)
+3. Psychological profile (desires, fears, internal conflict)
+4. Speech and voice patterns
+5. Backstory summary
+6. Relationships
+7. Behavioral guidelines
+
+Write in third person, past tense for backstory, present tense for behavioral instructions.
+Make the character feel three-dimensional with contradictions and depth.
+Include specific examples of how the character would react in certain situations.`;
+
+  const userMessage = `Create a character manifest from this data:
+
+${JSON.stringify(characterData, null, 2)}`;
+
+  const data = await callEdgeFunction('anthropic-proxy', {
+    _generation_type: 'character_manifest',
+    model: 'claude-sonnet-4-5',
+    max_tokens: 4000,
+    temperature: 0.7,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+
+  return data.content?.[0]?.text || '';
+}
+
+// ─── Character Image Generation: fal.ai nanoBanana2 ────────────────────────────
+export async function generateCharacterImage({ prompt, seed = null }, signal = null) {
+  const input = {
+    prompt,
+    aspect_ratio: '3:4',
+    num_images: 1,
+    output_format: 'png',
+    resolution: '1K',
+  };
+
+  if (seed !== null && seed !== undefined) {
+    input.seed = seed;
+  }
+
+  const result = await callEdgeFunction('fal-generate', { input }, signal);
+
+  const images = result?.images;
+  if (!images?.[0]) throw new Error('fal.ai returned no image');
+  return {
+    url: images[0].url,
+    seed: images[0].seed || seed,
+    jobId: result?.request_id,
+  };
 }

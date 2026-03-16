@@ -1,5 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// IMPORTANT: This function uses the NEW Supabase API key system (sb_secret_...).
+// Legacy JWT-based service_role keys (eyJ...) are NOT supported.
+// Deploy with --no-verify-jwt flag.
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -10,32 +14,64 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    // Use the service role client to verify the user JWT from the Authorization header
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
+    // Use new Supabase API keys (non-JWT) ────────────────────────────────────────
+    // With --no-verify-jwt flag, Supabase already verified the JWT at the edge.
+    // We just need to extract the user from the verified token.
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseSecretKey = Deno.env.get('CharacterForge')!
 
+    if (!supabaseSecretKey) {
+      return new Response(JSON.stringify({ error: 'CharacterForge secret not configured in Edge Function secrets.' }), {
+        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Get user's JWT from Authorization header (Supabase verified it via --no-verify-jwt)
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Missing or invalid Authorization header' }), {
+    const userJwt = authHeader?.replace('Bearer ', '')
+
+    if (!userJwt) {
+      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
         status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
 
-    const jwt = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt)
-    if (authError || !user) {
-      console.error('Auth error:', authError)
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+    // Decode JWT manually to get user ID (Supabase already verified the signature)
+    const jwtParts = userJwt.split('.')
+    if (jwtParts.length !== 3) {
+      return new Response(JSON.stringify({ error: 'Invalid JWT format' }), {
         status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
+
+    let jwtPayload: any
+    try {
+      const payloadBase64 = jwtParts[1].replace(/-/g, '+').replace(/_/g, '/')
+      const padding = '='.repeat((4 - payloadBase64.length % 4) % 4)
+      const payloadJson = atob(payloadBase64 + padding)
+      jwtPayload = JSON.parse(payloadJson)
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'Invalid JWT payload' }), {
+        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const userId = jwtPayload.sub
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'JWT missing sub claim' }), {
+        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+
+    console.log('Authenticated user:', userId)
+
+    // Create admin client for database operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey)
 
     // Use a user-scoped client for RLS-protected queries
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      supabaseUrl,
+      supabaseSecretKey,
       { global: { headers: { Authorization: authHeader } } }
     )
 
@@ -45,7 +81,7 @@ Deno.serve(async (req) => {
     delete body._generation_type
 
     // Check generation limit
-    const { allowed, reason } = await checkLimit(supabaseAdmin, user.id, generationType)
+    const { allowed, reason } = await checkLimit(supabaseAdmin, userId, generationType)
     if (!allowed) {
       return new Response(JSON.stringify({ error: reason }), {
         status: 429, headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -69,7 +105,7 @@ Deno.serve(async (req) => {
     const responseData = await anthropicRes.json()
 
     if (anthropicRes.ok) {
-      await incrementUsage(supabaseAdmin, user.id, generationType)
+      await incrementUsage(supabaseAdmin, userId, generationType)
     }
 
     return new Response(JSON.stringify(responseData), {

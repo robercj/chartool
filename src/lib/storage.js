@@ -299,3 +299,134 @@ export const Settings = {
   get: () => JSON.parse(localStorage.getItem('cf_settings') || '{}'),
   set: (data) => localStorage.setItem('cf_settings', JSON.stringify(data)),
 };
+
+// ─── CharacterDraft ──────────────────────────────────────────────────────────
+// DB table: public.character_drafts
+export const CharacterDraft = {
+  async list(userId) {
+    const { data, error } = await supabase
+      .from('character_drafts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('last_modified_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async get(id) {
+    const { data, error } = await supabase
+      .from('character_drafts')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async create(userId, data) {
+    const { data: created, error } = await supabase
+      .from('character_drafts')
+      .insert({ ...data, user_id: userId })
+      .select()
+      .single();
+    if (error) throw error;
+    return created;
+  },
+
+  async update(id, data) {
+    const { error } = await supabase
+      .from('character_drafts')
+      .update({ ...data, last_modified_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  async delete(id) {
+    const { error } = await supabase
+      .from('character_drafts')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  async forStoryline(storylineId) {
+    const { data, error } = await supabase
+      .from('character_drafts')
+      .select('*')
+      .eq('assigned_story_id', storylineId)
+      .order('last_modified_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+};
+
+// ─── Character ───────────────────────────────────────────────────────────────
+// DB table: public.characters (finalized, immutable records)
+export const Character = {
+  async list(userId) {
+    const { data, error } = await supabase
+      .from('characters')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async get(id) {
+    const { data, error } = await supabase
+      .from('characters')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async create(userId, data) {
+    const { data: created, error } = await supabase
+      .from('characters')
+      .insert({ ...data, user_id: userId })
+      .select()
+      .single();
+    if (error) throw error;
+    return created;
+  },
+
+  async update(id, data) {
+    const { error } = await supabase
+      .from('characters')
+      .update(data)
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  async delete(id) {
+    const { error } = await supabase
+      .from('characters')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  async forStoryline(storylineId) {
+    const { data, error } = await supabase
+      .from('characters')
+      .select('*')
+      .eq('assigned_story_id', storylineId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async unassigned(userId) {
+    const { data, error } = await supabase
+      .from('characters')
+      .select('*')
+      .eq('user_id', userId)
+      .is('assigned_story_id', null)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+};
