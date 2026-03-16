@@ -192,7 +192,7 @@ export default function Layout({ children }) {
                 WebkitTextFillColor:    'transparent',
                 backgroundClip:         'text',
               }}
-              className="font-bold text-lg whitespace-nowrap"
+              className="hidden sm:block font-bold text-lg whitespace-nowrap"
             >
               Character Forge
             </span>
@@ -224,12 +224,13 @@ export default function Layout({ children }) {
                   <div className="relative">
                     <button
                       onClick={() => setShowUserMenu(v => !v)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl transition-all touch-min"
+                      className="flex items-center gap-2 p-1.5 md:px-3 md:py-2 rounded-xl transition-all touch-min"
                       style={{
                         background: theme.fieldBg,
                         border:     `1px solid ${theme.fieldBorder}`,
                         color:      theme.textBody,
                         minHeight:  '44px',
+                        minWidth:   '44px',
                       }}
                       aria-label="User menu"
                       aria-expanded={showUserMenu}
@@ -240,20 +241,20 @@ export default function Layout({ children }) {
                         <img
                           src={profile.avatar_url}
                           alt=""
-                          className="w-6 h-6 rounded-full object-cover"
+                          className="w-7 h-7 rounded-full object-cover"
                         />
                       ) : (
                         <div
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                           style={{ background: theme.primaryGlow, color: theme.primary }}
                         >
                           {(profile?.display_name || user.email || '?')[0].toUpperCase()}
                         </div>
                       )}
 
-                      {/* Tier badge — hidden on very small screens */}
+                      {/* Tier badge + chevron — desktop only */}
                       <span
-                        className="hidden xs:inline-block text-xs px-1.5 py-0.5 rounded-md font-medium uppercase tracking-wide"
+                        className="hidden md:inline-block text-xs px-1.5 py-0.5 rounded-md font-medium uppercase tracking-wide"
                         style={{
                           background: tierColors.bg,
                           color:      tierColors.text,
@@ -263,14 +264,14 @@ export default function Layout({ children }) {
                         {tier?.display_name || 'Free'}
                       </span>
 
-                      <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: theme.textMuted }} />
+                      <ChevronDown className="hidden md:block w-3 h-3 flex-shrink-0" style={{ color: theme.textMuted }} />
                     </button>
 
                     {showUserMenu && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
                         <div
-                          className="absolute right-0 top-full mt-2 w-72 rounded-2xl p-4 z-50 shadow-2xl"
+                          className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-2xl p-4 z-50 shadow-2xl"
                           style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
                         >
                           {/* User info */}
@@ -435,6 +436,44 @@ export default function Layout({ children }) {
         aria-hidden={!mobileMenuOpen}
       >
         <div className="px-4 py-3 space-y-1">
+
+          {/* User identity row — shown in drawer when signed in (replaces hidden top-bar info) */}
+          {!loading && user && (
+            <div
+              className="flex items-center gap-3 px-4 py-3 mb-1 rounded-xl"
+              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
+            >
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                  style={{ background: theme.primaryGlow, color: theme.primary }}
+                >
+                  {(profile?.display_name || user.email || '?')[0].toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium truncate" style={{ color: theme.textBody }}>
+                  {profile?.display_name || 'User'}
+                </div>
+                <div className="text-xs truncate" style={{ color: theme.textMuted }}>
+                  {user.email}
+                </div>
+              </div>
+              <span
+                className="text-xs px-2 py-0.5 rounded-md font-medium uppercase tracking-wide flex-shrink-0"
+                style={{
+                  background: tierColors.bg,
+                  color:      tierColors.text,
+                  border:     `1px solid ${tierColors.border}`,
+                }}
+              >
+                {tier?.display_name || 'Free'}
+              </span>
+            </div>
+          )}
+
           {NAV_ITEMS.map((item, idx) => {
             const isActive = item.matchFn(location.pathname);
             const isGenerate = item.to === '/generate';
