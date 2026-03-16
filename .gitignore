@@ -6,6 +6,9 @@ nul.*
 .env
 .env.*.local
 
+# Local MCP / tool config — may contain API keys
+opencode.json
+
 # Logs
 logs
 *.log
