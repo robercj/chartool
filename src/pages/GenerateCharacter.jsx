@@ -82,7 +82,6 @@ export default function GenerateCharacterPage() {
   const [phase, setPhase] = useState(1);
   
   const abortControllerRef = useRef(null);
-  const navigateRef = useRef(navigate);
 
   const { draft, isDirty, lastSaved, updateState, saveNow } = useDraftPersistence(
     draftId,
@@ -119,7 +118,7 @@ export default function GenerateCharacterPage() {
             draft_saved_at: new Date().toISOString(),
             last_modified_at: new Date().toISOString(),
           });
-          navigateRef.current.replace(`/characters/generate/${newDraft.id}`);
+          navigate(`/characters/generate/${newDraft.id}`, { replace: true });
         } catch (error) {
           console.error('Failed to create draft:', error);
           toast.error('Failed to create character draft');
