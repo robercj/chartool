@@ -121,15 +121,11 @@ export default function StorylineResult() {
         {/* Skeleton loader cards */}
         <div className="w-full" style={{ maxWidth: '800px' }}>
           <div className="flex flex-col items-center gap-3 mb-8">
-            <Loader2
-              className="w-10 h-10 animate-spin"
-              style={{ color: theme.primary }}
-              aria-hidden="true"
-            />
-            <p className="text-base font-medium" style={{ color: theme.textBody }}>
+            <span className="loading loading-spinner loading-lg text-primary" aria-hidden="true" />
+            <p className="text-base font-medium text-base-content">
               Generating your storyline…
             </p>
-            <p style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>
+            <p className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>
               This may take 20–40 seconds for Rich tier
             </p>
           </div>
@@ -137,16 +133,15 @@ export default function StorylineResult() {
           {[1, 2, 3].map(i => (
             <div
               key={i}
-              className="rounded-2xl mb-4 overflow-hidden animate-pulse"
-              style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+              className="card bg-base-200 border border-base-300 mb-4 overflow-hidden"
             >
-              <div className="px-5 py-3" style={{ borderBottom: `1px solid ${theme.fieldBorder}` }}>
-                <div className="h-4 w-32 rounded" style={{ background: theme.fieldBg }} />
+              <div className="px-5 py-3 border-b border-base-300">
+                <div className="skeleton h-4 w-32 rounded" />
               </div>
-              <div className="px-5 py-4 space-y-2">
-                <div className="h-3 rounded" style={{ background: theme.fieldBg }} />
-                <div className="h-3 w-4/5 rounded" style={{ background: theme.fieldBg }} />
-                <div className="h-3 w-3/5 rounded" style={{ background: theme.fieldBg }} />
+              <div className="card-body py-4 space-y-2">
+                <div className="skeleton h-3 w-full rounded" />
+                <div className="skeleton h-3 w-4/5 rounded" />
+                <div className="skeleton h-3 w-3/5 rounded" />
               </div>
             </div>
           ))}
@@ -158,24 +153,21 @@ export default function StorylineResult() {
   if (!prompt) {
     return (
       <div className="w-full mx-auto py-8 px-4" style={{ maxWidth: '800px' }}>
-        <div
-          className="rounded-2xl p-8 text-center"
-          style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
-        >
-          <AlertTriangle className="w-12 h-12 mx-auto mb-4" style={{ color: theme.textMuted }} />
-          <h2 className="text-xl font-bold mb-2" style={{ color: theme.textBody }}>
-            Result not found
-          </h2>
-          <p className="text-sm mb-6" style={{ color: theme.textMuted }}>
-            This storyline result may have been cleared from local storage.
-          </p>
-          <button
-            onClick={() => navigate('/storyline/new')}
-            className="px-6 rounded-xl font-medium text-sm touch-min"
-            style={{ height: '44px', background: theme.buttonGradient, color: 'white' }}
-          >
-            Start Over
-          </button>
+        <div className="card bg-base-200 border border-base-300">
+          <div className="card-body items-center text-center">
+            <AlertTriangle className="w-12 h-12 mb-4 text-base-content/50" />
+            <h2 className="card-title text-base-content">Result not found</h2>
+            <p className="text-sm text-base-content/60 mb-6">
+              This storyline result may have been cleared from local storage.
+            </p>
+            <button
+              onClick={() => navigate('/storyline/new')}
+              className="btn btn-primary"
+              style={{ minHeight: '44px' }}
+            >
+              Start Over
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -264,7 +256,7 @@ export default function StorylineResult() {
       <div className="flex items-start gap-3 mb-5 md:mb-6">
         <button
           onClick={() => navigate('/storyline/new')}
-          className="p-2 rounded-lg hover:bg-white/10 transition-colors touch-min flex-shrink-0 mt-1"
+          className="btn btn-ghost btn-sm flex-shrink-0 mt-1"
           aria-label="Back to form"
           style={{ minWidth: '44px', minHeight: '44px' }}
         >
@@ -284,10 +276,10 @@ export default function StorylineResult() {
             Your Generated Storyline Prompt
           </h1>
           <div className="flex items-center gap-2 flex-wrap">
-            <p style={{ fontSize: 'var(--font-size-body)', color: theme.textMuted }}>{subTitle}</p>
+            <p className="text-base-content/60" style={{ fontSize: 'var(--font-size-body)' }}>{subTitle}</p>
             {linkedFolder && (
               <button
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity touch-min"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
                 style={{
                   fontSize:   'var(--font-size-label)',
                   background: theme.primaryGlow,
@@ -317,8 +309,8 @@ export default function StorylineResult() {
         <div className="flex flex-col gap-2 md:hidden">
           <button
             onClick={handleCopyAll}
-            className="w-full flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all hover:opacity-80 touch-min"
-            style={{ height: '48px', background: theme.buttonGradient, color: 'white' }}
+            className="btn btn-primary w-full"
+            style={{ minHeight: '48px' }}
           >
             {copiedKey === 'all'
               ? <><Check className="w-4 h-4" aria-hidden="true" /> Copied All</>
@@ -327,12 +319,12 @@ export default function StorylineResult() {
           </button>
           <button
             onClick={() => setShowSaveModal(true)}
-            className="w-full flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all hover:opacity-80 touch-min"
+            className="btn btn-outline w-full"
             style={{
-              height:     '48px',
-              background: linkedFolder ? theme.primaryGlow : theme.fieldBg,
-              border:     `1px solid ${linkedFolder ? theme.primary : theme.fieldBorder}`,
-              color:      linkedFolder ? theme.primary : theme.textBody,
+              minHeight:  '48px',
+              background: linkedFolder ? theme.primaryGlow : undefined,
+              borderColor: linkedFolder ? theme.primary : undefined,
+              color:      linkedFolder ? theme.primary : undefined,
             }}
           >
             <FolderInput className="w-4 h-4" aria-hidden="true" />
@@ -341,28 +333,18 @@ export default function StorylineResult() {
           <button
             onClick={handleRetry}
             disabled={retrying}
-            className="w-full flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all hover:opacity-80 disabled:opacity-50 touch-min"
-            style={{
-              height:     '48px',
-              background: theme.fieldBg,
-              border:     `1px solid ${theme.fieldBorder}`,
-              color:      theme.textBody,
-            }}
+            className="btn btn-outline w-full"
+            style={{ minHeight: '48px' }}
           >
             {retrying
-              ? <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Retrying…</>
+              ? <><span className="loading loading-spinner loading-sm" aria-hidden="true" /> Retrying…</>
               : <><RefreshCw className="w-4 h-4" aria-hidden="true" /> Retry Generation</>
             }
           </button>
           <button
             onClick={() => navigate('/storyline/new')}
-            className="w-full flex items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all hover:opacity-80 touch-min"
-            style={{
-              height:     '48px',
-              background: theme.fieldBg,
-              border:     `1px solid ${theme.fieldBorder}`,
-              color:      theme.textMuted,
-            }}
+            className="btn btn-ghost w-full text-base-content/60"
+            style={{ minHeight: '48px' }}
           >
             <RotateCcw className="w-4 h-4" aria-hidden="true" />
             Start Over
@@ -373,8 +355,8 @@ export default function StorylineResult() {
         <div className="hidden md:flex flex-wrap justify-end gap-2">
           <button
             onClick={handleCopyAll}
-            className="flex items-center gap-2 px-4 rounded-xl text-sm font-medium transition-all hover:opacity-80 touch-min"
-            style={{ height: '44px', background: theme.buttonGradient, color: 'white' }}
+            className="btn btn-primary"
+            style={{ minHeight: '44px' }}
           >
             {copiedKey === 'all'
               ? <><Check className="w-4 h-4" aria-hidden="true" /> Copied All</>
@@ -383,12 +365,12 @@ export default function StorylineResult() {
           </button>
           <button
             onClick={() => setShowSaveModal(true)}
-            className="flex items-center gap-2 px-4 rounded-xl text-sm font-medium transition-all hover:opacity-80 touch-min"
+            className="btn btn-outline"
             style={{
-              height:     '44px',
-              background: linkedFolder ? theme.primaryGlow : theme.fieldBg,
-              border:     `1px solid ${linkedFolder ? theme.primary : theme.fieldBorder}`,
-              color:      linkedFolder ? theme.primary : theme.textBody,
+              minHeight:   '44px',
+              background:  linkedFolder ? theme.primaryGlow : undefined,
+              borderColor: linkedFolder ? theme.primary : undefined,
+              color:       linkedFolder ? theme.primary : undefined,
             }}
           >
             <FolderInput className="w-4 h-4" aria-hidden="true" />
@@ -397,28 +379,18 @@ export default function StorylineResult() {
           <button
             onClick={handleRetry}
             disabled={retrying}
-            className="flex items-center gap-2 px-4 rounded-xl text-sm font-medium transition-all hover:opacity-80 disabled:opacity-50 touch-min"
-            style={{
-              height:     '44px',
-              background: theme.fieldBg,
-              border:     `1px solid ${theme.fieldBorder}`,
-              color:      theme.textBody,
-            }}
+            className="btn btn-outline"
+            style={{ minHeight: '44px' }}
           >
             {retrying
-              ? <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Retrying…</>
+              ? <><span className="loading loading-spinner loading-sm" aria-hidden="true" /> Retrying…</>
               : <><RefreshCw className="w-4 h-4" aria-hidden="true" /> Retry Generation</>
             }
           </button>
           <button
             onClick={() => navigate('/storyline/new')}
-            className="flex items-center gap-2 px-4 rounded-xl text-sm font-medium transition-all hover:opacity-80 touch-min"
-            style={{
-              height:     '44px',
-              background: theme.fieldBg,
-              border:     `1px solid ${theme.fieldBorder}`,
-              color:      theme.textMuted,
-            }}
+            className="btn btn-ghost text-base-content/60"
+            style={{ minHeight: '44px' }}
           >
             <RotateCcw className="w-4 h-4" aria-hidden="true" />
             Start Over
@@ -465,19 +437,18 @@ export default function StorylineResult() {
         </div>
       ) : (
         /* Malformed / unparseable response */
-        <div
-          className="rounded-2xl p-5"
-          style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" style={{ color: '#f59e0b' }} aria-hidden="true" />
-            <span className="text-sm font-medium" style={{ color: '#f59e0b' }}>
-              The output could not be parsed into sections. Full response shown below.
-            </span>
+        <div className="card bg-base-200 border border-base-300">
+          <div className="card-body">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 text-warning" aria-hidden="true" />
+              <span className="text-sm font-medium text-warning">
+                The output could not be parsed into sections. Full response shown below.
+              </span>
+            </div>
+            <pre className="pre-block leading-relaxed text-base-content" style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>
+              {prompt.raw_response}
+            </pre>
           </div>
-          <pre className="pre-block leading-relaxed" style={{ color: theme.textBody, fontFamily: 'Georgia, "Times New Roman", serif' }}>
-            {prompt.raw_response}
-          </pre>
         </div>
       )}
 
@@ -506,15 +477,9 @@ function ContentBlock({ title, content, blockKey, copy, copiedKey, theme, liveRe
   }
 
   return (
-    <div
-      className="rounded-2xl overflow-hidden"
-      style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
-    >
+    <div className="card bg-base-200 border border-base-300 overflow-hidden">
       {/* Block header — space-between, heading truncates rather than wrapping under copy btn */}
-      <div
-        className="flex items-center justify-between px-4 md:px-5 py-3 gap-3"
-        style={{ borderBottom: `1px solid ${theme.fieldBorder}` }}
-      >
+      <div className="flex items-center justify-between px-4 md:px-5 py-3 gap-3 border-b border-base-300">
         <span
           className="font-semibold uppercase tracking-widest truncate"
           style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}
@@ -524,16 +489,8 @@ function ContentBlock({ title, content, blockKey, copy, copiedKey, theme, liveRe
         {/* Copy button — labeled at all widths, meets 44×44px touch target */}
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 px-3 rounded-lg font-medium transition-all hover:opacity-80 touch-min flex-shrink-0"
-          style={{
-            height:     '36px',
-            minWidth:   '44px',
-            minHeight:  '44px',
-            background: isCopied ? '#10b981' : theme.fieldBg,
-            border:     `1px solid ${isCopied ? '#10b981' : theme.fieldBorder}`,
-            color:      isCopied ? 'white' : theme.textBody,
-            fontSize:   'var(--font-size-label)',
-          }}
+          className={`btn btn-sm flex-shrink-0 ${isCopied ? 'btn-success' : 'btn-ghost border border-base-300'}`}
+          style={{ minWidth: '44px', minHeight: '44px' }}
           aria-label={isCopied ? `${title} copied` : `Copy ${title}`}
         >
           {isCopied
@@ -546,9 +503,8 @@ function ContentBlock({ title, content, blockKey, copy, copiedKey, theme, liveRe
       {/* Block body — pre-wrap, word-break, no horizontal overflow */}
       <div className="px-4 md:px-5 py-4">
         <pre
-          className="pre-block leading-relaxed"
+          className="pre-block leading-relaxed text-base-content"
           style={{
-            color:      theme.textBody,
             fontFamily: 'Georgia, "Times New Roman", serif',
           }}
         >
@@ -583,16 +539,13 @@ function SaveToFolderModal({ theme, storylines, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Save to folder">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+    <dialog className="modal modal-bottom sm:modal-middle" open role="dialog" aria-modal="true" aria-label="Save to folder">
+      <div className="modal-backdrop" onClick={onClose} />
 
       {/* Mobile bottom sheet */}
       <div
-        className="bottom-sheet md:hidden absolute bottom-0 left-0 right-0 rounded-t-2xl"
+        className="modal-box bg-base-200 border border-base-300 md:hidden rounded-t-2xl rounded-b-none w-full max-w-full"
         style={{
-          background:    theme.cardBg,
-          border:        `1px solid ${theme.cardBorder}`,
-          borderBottom:  'none',
           transform:     `translateY(${dragOffset}px)`,
           transition:    dragOffset === 0 ? 'transform 0.3s cubic-bezier(0.32,0.72,0,1)' : 'none',
           paddingBottom: `calc(var(--safe-bottom) + 1rem)`,
@@ -603,49 +556,41 @@ function SaveToFolderModal({ theme, storylines, onClose, onSave }) {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="flex justify-center pt-3 pb-2" aria-hidden="true">
-          <div className="w-10 h-1 rounded-full" style={{ background: theme.fieldBorder }} />
+        <div className="flex justify-center pt-1 pb-2" aria-hidden="true">
+          <div className="w-10 h-1 rounded-full bg-base-300" />
         </div>
-        <SaveToFolderContent theme={theme} storylines={storylines} onClose={onClose} onSave={onSave} />
+        <SaveToFolderContent theme={theme} storylines={storylines} onSave={onSave} />
       </div>
 
       {/* Desktop centered dialog */}
-      <div className="hidden md:flex absolute inset-0 items-center justify-center p-4">
-        <div
-          className="relative w-full max-w-md rounded-2xl p-6"
-          style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+      <div className="modal-box hidden md:block bg-base-200 border border-base-300 relative">
+        <button
+          onClick={onClose}
+          className="btn btn-ghost btn-sm btn-circle absolute right-2 top-2"
+          aria-label="Close"
+          style={{ minWidth: '44px', minHeight: '44px' }}
         >
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-lg hover:bg-white/10 touch-min"
-            aria-label="Close"
-            style={{ minWidth: '44px', minHeight: '44px' }}
-          >
-            <XIcon className="w-5 h-5" style={{ color: theme.textMuted }} aria-hidden="true" />
-          </button>
-          <SaveToFolderContent theme={theme} storylines={storylines} onClose={onClose} onSave={onSave} />
-        </div>
+          <XIcon className="w-5 h-5 text-base-content/60" aria-hidden="true" />
+        </button>
+        <SaveToFolderContent theme={theme} storylines={storylines} onSave={onSave} />
       </div>
-    </div>
+    </dialog>
   )
 }
 
-function SaveToFolderContent({ theme, storylines, onClose, onSave }) {
+function SaveToFolderContent({ theme, storylines, onSave }) {
   return (
-    <div className="px-5 pb-2 md:px-0 md:pb-0">
-      <h3
-        className="font-bold mb-1"
-        style={{ fontSize: 'var(--font-size-heading)', color: theme.textBody }}
-      >
+    <div className="px-1 pb-2">
+      <h3 className="font-bold mb-1 text-base-content" style={{ fontSize: 'var(--font-size-heading)' }}>
         Save / Move to Folder
       </h3>
-      <p className="text-sm mb-4" style={{ color: theme.textMuted }}>
+      <p className="text-sm mb-4 text-base-content/60">
         Attach this prompt to a storyline folder. Selecting a new folder will move it.
       </p>
 
       {storylines.length === 0 ? (
         <div className="text-center py-6">
-          <p className="text-sm" style={{ color: theme.textMuted }}>
+          <p className="text-sm text-base-content/60">
             No storyline folders yet. Create one in Gallery first.
           </p>
         </div>
@@ -655,26 +600,20 @@ function SaveToFolderContent({ theme, storylines, onClose, onSave }) {
             <button
               key={sl.id}
               onClick={() => onSave(sl.id)}
-              className="w-full p-3 rounded-xl text-left transition-all hover:opacity-80 touch-min"
+              className="btn btn-ghost w-full justify-between text-left border border-base-300 hover:border-primary"
               style={{
-                minHeight:  '52px',
-                background: theme.fieldBg,
-                border:     `1px solid ${sl.storyline_prompt_id ? theme.primary : theme.fieldBorder}`,
+                minHeight:   '52px',
+                borderColor: sl.storyline_prompt_id ? theme.primary : undefined,
               }}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium" style={{ color: theme.textBody }}>
-                  {sl.name}
+              <span className="text-sm font-medium text-base-content">
+                {sl.name}
+              </span>
+              {sl.storyline_prompt_id && (
+                <span className="badge badge-primary badge-sm flex-shrink-0">
+                  Has prompt
                 </span>
-                {sl.storyline_prompt_id && (
-                  <span
-                    className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
-                    style={{ background: theme.primaryGlow, color: theme.primary }}
-                  >
-                    Has prompt
-                  </span>
-                )}
-              </div>
+              )}
             </button>
           ))}
         </div>

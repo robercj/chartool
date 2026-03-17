@@ -1,8 +1,20 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// ─── anthropic-proxy/index.ts ────────────────────────────────────────────────
+// Proxies requests to the Anthropic Messages API after verifying the user's
+// JWT and checking their monthly usage limit.
+//
+// Required Supabase secrets (set via `supabase secrets set`):
+//   CharacterForge   — Supabase service-role / admin API key (sb_secret_...)
+//   ANTHROPIC_KEY    — Anthropic API key (sk-ant-...)
+//
+// Deploy with: supabase functions deploy anthropic-proxy --no-verify-jwt
+//
+// NOTE: Uses the `CharacterForge` secret name (not the standard
+// SUPABASE_SERVICE_ROLE_KEY) to support the new sb_secret_ key format.
+// The JWT signature is verified by Supabase at the edge before this function
+// runs; we only decode the payload here to extract the user ID.
+// ─────────────────────────────────────────────────────────────────────────────
 
-// IMPORTANT: This function uses the NEW Supabase API key system (sb_secret_...).
-// Legacy JWT-based service_role keys (eyJ...) are NOT supported.
-// Deploy with --no-verify-jwt flag.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

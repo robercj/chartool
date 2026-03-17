@@ -66,6 +66,7 @@ export function ProgressProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useProgress() {
   const context = useContext(ProgressContext);
   if (!context) throw new Error('useProgress must be used within ProgressProvider');

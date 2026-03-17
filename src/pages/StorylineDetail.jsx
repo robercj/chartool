@@ -35,7 +35,6 @@ export default function StorylineDetail() {
     enabled: !!storylineId,
   })
 
-  const [showMovePanel, setShowMovePanel] = useState(false)
   const [showGroupShotModal, setShowGroupShotModal] = useState(false)
   const [groupShotCount, setGroupShotCount] = useState(3)
 
@@ -47,7 +46,7 @@ export default function StorylineDetail() {
   if (!storyline && storylineId) {
     return (
       <div className="max-w-6xl mx-auto py-8 px-4">
-        <p>Storyline not found</p>
+        <p className="text-base-content/70">Storyline not found</p>
       </div>
     )
   }
@@ -76,7 +75,7 @@ export default function StorylineDetail() {
       return
     }
 
-    const characterSummaries = batches.map((b, i) => 
+    const characterSummaries = batches.map((b, i) =>
       `Character ${i + 1} — ${b.name}: ${b.character_description?.slice(0, 200)}`
     ).join('\n\n')
 
@@ -141,7 +140,7 @@ COMPOSITION RULES:
         <div className="flex items-start gap-3 mb-3">
           <button
             onClick={() => navigate('/gallery')}
-            className="flex items-center justify-center rounded-lg hover:bg-white/10 flex-shrink-0 mt-0.5"
+            className="btn btn-ghost btn-sm flex items-center justify-center flex-shrink-0 mt-0.5"
             style={{ minWidth: '44px', minHeight: '44px' }}
             aria-label="Back to gallery"
           >
@@ -154,7 +153,7 @@ COMPOSITION RULES:
             >
               {storyline.name}
             </h1>
-            <p style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>
+            <p className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>
               {batches.length} character{batches.length !== 1 ? 's' : ''} • Created {new Date(storyline.created_at).toLocaleDateString()}
             </p>
           </div>
@@ -163,33 +162,40 @@ COMPOSITION RULES:
         {/* Actions row — wraps on mobile */}
         <div className="flex flex-wrap gap-2 pl-0 md:pl-14">
           {storyline.storyline_prompt_id && (
-            <Button
+            <button
               onClick={() => navigate(`/storyline/result/${storyline.storyline_prompt_id}`)}
-              theme={theme}
-              variant="outline"
+              className="btn btn-outline btn-sm"
+              style={{ minHeight: '44px' }}
             >
               <BookMarked className="w-4 h-4 mr-2" aria-hidden="true" />
               View Generated Prompt
-            </Button>
+            </button>
           )}
           {batches.length >= 2 && (
-            <Button onClick={() => setShowGroupShotModal(true)} theme={theme} variant="outline">
+            <button
+              onClick={() => setShowGroupShotModal(true)}
+              className="btn btn-outline btn-sm"
+              style={{ minHeight: '44px' }}
+            >
               Group Shot
-            </Button>
+            </button>
           )}
-          <Button onClick={() => navigate(`/generate?storylineId=${storylineId}`)} theme={theme}>
+          <button
+            onClick={() => navigate(`/generate?storylineId=${storylineId}`)}
+            className="btn btn-primary btn-sm"
+            style={{ minHeight: '44px' }}
+          >
             <ImagePlus className="w-4 h-4 mr-2" aria-hidden="true" />
             Add Characters
-          </Button>
-          <Button
+          </button>
+          <button
             onClick={handleDelete}
-            theme={theme}
-            variant="ghost"
-            className="text-red-400"
+            className="btn btn-ghost btn-sm text-error"
+            style={{ minHeight: '44px' }}
             aria-label="Delete storyline"
           >
             <Trash2 className="w-4 h-4" aria-hidden="true" />
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -228,13 +234,17 @@ COMPOSITION RULES:
       {/* ── Character Grid ── */}
       {batches.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 md:py-20 text-center">
-          <BookOpen className="w-16 h-16 mb-4" style={{ color: theme.textMuted, opacity: 0.5 }} aria-hidden="true" />
-          <h3 className="text-xl font-medium mb-2" style={{ color: theme.textBody }}>No characters yet</h3>
-          <p className="text-sm mb-4" style={{ color: theme.textMuted }}>Add characters to this storyline</p>
-          <Button onClick={() => navigate(`/generate?storylineId=${storylineId}`)} theme={theme}>
+          <BookOpen className="w-16 h-16 mb-4 text-base-content/30" aria-hidden="true" />
+          <h3 className="text-xl font-medium mb-2 text-base-content">No characters yet</h3>
+          <p className="text-sm mb-4 text-base-content/60">Add characters to this storyline</p>
+          <button
+            onClick={() => navigate(`/generate?storylineId=${storylineId}`)}
+            className="btn btn-primary btn-sm"
+            style={{ minHeight: '44px' }}
+          >
             <ImagePlus className="w-4 h-4 mr-2" aria-hidden="true" />
             Add Characters
-          </Button>
+          </button>
         </div>
       ) : (
         /* CSS Grid auto-fill — 1 col mobile → 2 col sm → 3+ on wider */
@@ -253,39 +263,58 @@ COMPOSITION RULES:
         </div>
       )}
 
+      {/* Group Shot Modal */}
       {showGroupShotModal && (
-        <Modal theme={theme} onClose={() => setShowGroupShotModal(false)} title="Group Shot">
-          <div className="space-y-4">
-            <div>
-              <Label theme={theme}>Number of shots</Label>
-              {/* Value display above slider */}
-              <div className="text-center mb-2">
-                <span
-                  className="font-bold px-3 py-1 rounded-lg"
-                  style={{ color: theme.primary, background: theme.primaryGlow }}
-                >
-                  {groupShotCount}
-                </span>
+        <dialog className="modal modal-bottom sm:modal-middle" open>
+          <div className="modal-backdrop" onClick={() => setShowGroupShotModal(false)} />
+          <div className="modal-box bg-base-200 border border-base-300">
+            <button
+              className="btn btn-ghost btn-sm btn-circle absolute right-2 top-2"
+              style={{ minHeight: '44px', minWidth: '44px' }}
+              onClick={() => setShowGroupShotModal(false)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+            <h3 className="font-bold text-lg text-base-content mb-4">Group Shot</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs uppercase tracking-widest font-medium mb-1" style={{ color: theme.labelColor }}>
+                  Number of shots
+                </div>
+                {/* Value display above slider */}
+                <div className="text-center mb-2">
+                  <span
+                    className="font-bold px-3 py-1 rounded-lg"
+                    style={{ color: theme.primary, background: theme.primaryGlow }}
+                  >
+                    {groupShotCount}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  value={groupShotCount}
+                  onChange={e => setGroupShotCount(Number(e.target.value))}
+                  className="range range-primary w-full"
+                  style={{ accentColor: theme.primary, color: theme.primary }}
+                  aria-label="Number of group shots"
+                  aria-valuemin={1}
+                  aria-valuemax={5}
+                  aria-valuenow={groupShotCount}
+                />
               </div>
-              <input
-                type="range"
-                min="1"
-                max="5"
-                value={groupShotCount}
-                onChange={e => setGroupShotCount(Number(e.target.value))}
-                className="w-full"
-                style={{ accentColor: theme.primary, color: theme.primary }}
-                aria-label="Number of group shots"
-                aria-valuemin={1}
-                aria-valuemax={5}
-                aria-valuenow={groupShotCount}
-              />
+              <button
+                onClick={handleGroupShot}
+                className="btn btn-primary w-full"
+                style={{ minHeight: '44px' }}
+              >
+                Generate Group Shot{groupShotCount > 1 ? 's' : ''}
+              </button>
             </div>
-            <Button onClick={handleGroupShot} theme={theme} className="w-full">
-              Generate Group Shot{groupShotCount > 1 ? 's' : ''}
-            </Button>
           </div>
-        </Modal>
+        </dialog>
       )}
     </div>
   )
@@ -327,11 +356,11 @@ function BatchCard({ batch, theme, onClick }) {
             />
           ))
         ) : (
-          <div className="col-span-2 w-full h-full flex items-center justify-center" style={{ background: theme.fieldBg }}>
+          <div className="col-span-2 w-full h-full flex items-center justify-center bg-base-300">
             {batch.status === 'generating' || batch.status === 'analyzing' ? (
-              <Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.primary }} aria-hidden="true" />
+              <span className="loading loading-spinner loading-sm" style={{ color: theme.primary }} aria-hidden="true" />
             ) : (
-              <Images className="w-8 h-8" style={{ color: theme.textMuted, opacity: 0.3 }} aria-hidden="true" />
+              <Images className="w-8 h-8 text-base-content/30" aria-hidden="true" />
             )}
           </div>
         )}
@@ -374,50 +403,4 @@ function BatchCard({ batch, theme, onClick }) {
   )
 }
 
-function Button({ children, onClick, theme, variant = 'primary', className = '', disabled = false, 'aria-label': ariaLabel }) {
-  let bg, color, border
-  if (variant === 'primary') { bg = theme.buttonGradient; color = 'white' }
-  else if (variant === 'outline') { bg = 'transparent'; color = theme.textBody; border = `1px solid ${theme.fieldBorder}` }
-  else if (variant === 'ghost')   { bg = 'transparent'; color = theme.textMuted }
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center justify-center px-4 rounded-xl font-medium transition-all ${className}`}
-      style={{ minHeight: '44px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, background: bg, color, border }}
-      aria-label={ariaLabel}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Label({ theme, children }) {
-  return (
-    <div className="text-xs uppercase tracking-widest font-medium mb-1" style={{ color: theme.labelColor }}>
-      {children}
-    </div>
-  )
-}
-
-function Modal({ children, theme, onClose, title }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div
-        className="relative w-full max-w-md rounded-2xl p-6"
-        style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
-      >
-        <button onClick={onClose} className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10">
-          <svg className="w-5 h-5" style={{ color: theme.textMuted }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-        <h3 className="text-lg font-bold mb-4" style={{ color: theme.textBody }}>{title}</h3>
-        {children}
-      </div>
-    </div>
-  )
-}
 import { ArrowRight } from 'lucide-react'

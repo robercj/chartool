@@ -16,7 +16,6 @@ export default function PillTagInput({
 
   const handleKeyDown = (e) => {
     if (disabled) return;
-    
     if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
       e.preventDefault();
       addPill();
@@ -27,17 +26,11 @@ export default function PillTagInput({
 
   const addPill = () => {
     const trimmed = inputValue.trim();
-    if (!trimmed) return;
-    
-    if (value.length >= maxPills) {
-      return;
-    }
-
+    if (!trimmed || value.length >= maxPills) return;
     if (!allowDuplicates && value.some(v => v.toLowerCase() === trimmed.toLowerCase())) {
       setInputValue('');
       return;
     }
-
     onChange([...value, trimmed]);
     setInputValue('');
   };
@@ -51,28 +44,27 @@ export default function PillTagInput({
   return (
     <div className="w-full">
       {label && (
-        <label 
-          htmlFor={id} 
-          className="block text-sm font-medium text-gray-300 mb-1.5"
-        >
+        <label htmlFor={id} className="label label-text font-medium pb-1">
           {label}
         </label>
       )}
-      <div 
-        className={`flex flex-wrap gap-1.5 p-2 bg-gray-900/50 border border-gray-700 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      {/* Pill container styled like an input */}
+      <div
+        className={`flex flex-wrap gap-1.5 p-2 min-h-[44px] rounded-lg border border-base-300 bg-base-300 focus-within:border-primary focus-within:outline focus-within:outline-2 focus-within:outline-primary/30 transition-all cursor-text ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         onClick={() => !disabled && inputRef.current?.focus()}
       >
         {value.map((pill, index) => (
           <span
             key={`${pill}-${index}`}
-            className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600/30 text-indigo-200 text-sm rounded-md border border-indigo-500/40"
+            className="badge badge-soft badge-primary gap-1 text-sm"
           >
             {pill}
             <button
               type="button"
               onClick={() => !disabled && removePill(index)}
               disabled={disabled}
-              className="hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400 rounded"
+              className="btn btn-ghost btn-circle"
+              style={{ width: '16px', height: '16px', minHeight: 'unset', padding: 0 }}
               aria-label={`Remove ${pill}`}
             >
               <X className="w-3 h-3" />
@@ -90,12 +82,12 @@ export default function PillTagInput({
             onBlur={addPill}
             placeholder={value.length === 0 ? placeholder : ''}
             disabled={disabled}
-            className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-sm text-gray-200 placeholder-gray-500"
+            className="flex-1 min-w-[120px] bg-transparent border-none outline-none text-sm text-base-content placeholder:opacity-40"
           />
         )}
       </div>
       {value.length >= maxPills && (
-        <p className="text-xs text-amber-400 mt-1">Maximum {maxPills} items reached</p>
+        <p className="text-xs text-warning mt-1">Maximum {maxPills} items reached</p>
       )}
     </div>
   );

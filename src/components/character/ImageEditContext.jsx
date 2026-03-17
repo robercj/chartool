@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { 
-  Download, RefreshCw, Lock, Unlock, Check, 
+import {
+  Download, RefreshCw, Lock, Unlock,
   ChevronLeft, ChevronRight, Sparkles, Save
 } from 'lucide-react';
 
@@ -25,7 +25,6 @@ export default function ImageEditContext({
 
   const handleDownload = useCallback(async () => {
     if (!generatedImageUrl) return;
-    
     try {
       const response = await fetch(generatedImageUrl);
       const blob = await response.blob();
@@ -37,9 +36,7 @@ export default function ImageEditContext({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Download failed:', error);
-    }
+    } catch (error) { console.error('Download failed:', error); }
   }, [generatedImageUrl]);
 
   const handleRegenerate = useCallback(() => {
@@ -47,20 +44,12 @@ export default function ImageEditContext({
     setRegenerationPrompt('');
   }, [regenerationPrompt, onRegenerate]);
 
-  const handleRegenerateWithoutInput = useCallback(() => {
-    onRegenerateWithoutInput();
-  }, [onRegenerateWithoutInput]);
-
   const goToPreviousImage = useCallback(() => {
-    if (currentHistoryIndex > 0) {
-      setCurrentHistoryIndex(currentHistoryIndex - 1);
-    }
+    if (currentHistoryIndex > 0) setCurrentHistoryIndex(currentHistoryIndex - 1);
   }, [currentHistoryIndex]);
 
   const goToNextImage = useCallback(() => {
-    if (currentHistoryIndex < imageHistory.length - 1) {
-      setCurrentHistoryIndex(currentHistoryIndex + 1);
-    }
+    if (currentHistoryIndex < imageHistory.length - 1) setCurrentHistoryIndex(currentHistoryIndex + 1);
   }, [currentHistoryIndex, imageHistory.length]);
 
   const currentImage = currentHistoryIndex >= 0 && currentHistoryIndex < imageHistory.length
@@ -69,55 +58,56 @@ export default function ImageEditContext({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 p-4 bg-indigo-900/20 border border-indigo-500/30 rounded-xl">
-        <Sparkles className="w-6 h-6 text-indigo-400" />
+      {/* Status banner */}
+      <div className="alert alert-info">
+        <Sparkles className="w-5 h-5 flex-shrink-0" />
         <div>
-          <h3 className="text-lg font-semibold text-white">Character Generated — Edit Mode</h3>
-          <p className="text-sm text-indigo-300/70">
+          <h3 className="font-semibold">Character Generated — Edit Mode</h3>
+          <p className="text-sm opacity-80">
             Refine the image with targeted changes or finalize the character
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Image Display */}
+        {/* ── Image display ─────────────────────────────────────────────── */}
         <div className="space-y-4">
-          <div className="relative rounded-xl overflow-hidden bg-gray-900 border border-gray-700">
+          <div className="card bg-base-300 border border-base-300 overflow-hidden">
             {currentImage ? (
-              <img
-                src={currentImage}
-                alt="Generated character"
-                className="w-full h-auto max-h-[500px] object-contain"
-              />
+              <figure className="relative">
+                <img
+                  src={currentImage}
+                  alt="Generated character"
+                  className="w-full h-auto max-h-[500px] object-contain"
+                />
+                {generatedImageUrl && (
+                  <button
+                    onClick={handleDownload}
+                    className="btn btn-sm btn-circle absolute top-3 right-3 bg-black/50 border-none text-white hover:bg-black/70"
+                    aria-label="Download image"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                )}
+              </figure>
             ) : (
-              <div className="w-full h-64 flex items-center justify-center text-gray-500">
+              <div className="card-body items-center justify-center h-64 opacity-40">
                 No image generated yet
               </div>
             )}
-            
-            {generatedImageUrl && (
-              <button
-                onClick={handleDownload}
-                className="absolute top-3 right-3 p-2 bg-black/50 hover:bg-black/70 text-white rounded-lg transition-colors"
-                aria-label="Download image"
-              >
-                <Download className="w-5 h-5" />
-              </button>
-            )}
           </div>
 
-          {/* Image History Strip */}
+          {/* Image history strip */}
           {imageHistory.length > 1 && (
             <div className="flex items-center gap-2">
               <button
                 onClick={goToPreviousImage}
                 disabled={currentHistoryIndex <= 0}
-                className="p-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                className="btn btn-ghost btn-sm btn-square"
                 aria-label="Previous image"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              
               <div className="flex-1 flex gap-2 overflow-x-auto py-1">
                 {imageHistory.map((url, index) => (
                   <button
@@ -125,23 +115,18 @@ export default function ImageEditContext({
                     onClick={() => setCurrentHistoryIndex(index)}
                     className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
                       index === currentHistoryIndex
-                        ? 'border-indigo-500'
-                        : 'border-transparent hover:border-gray-600'
+                        ? 'border-primary'
+                        : 'border-transparent hover:border-base-content/30'
                     }`}
                   >
-                    <img
-                      src={url}
-                      alt={`Generation ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={url} alt={`Generation ${index + 1}`} className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
-              
               <button
                 onClick={goToNextImage}
                 disabled={currentHistoryIndex >= imageHistory.length - 1}
-                className="p-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                className="btn btn-ghost btn-sm btn-square"
                 aria-label="Next image"
               >
                 <ChevronRight className="w-5 h-5" />
@@ -150,20 +135,21 @@ export default function ImageEditContext({
           )}
         </div>
 
-        {/* Edit Controls */}
+        {/* ── Edit controls ─────────────────────────────────────────────── */}
         <div className="space-y-4">
+          {/* Regen prompt */}
           <div>
-            <label htmlFor="regen-prompt" className="block text-sm font-medium text-gray-300 mb-1.5">
+            <label htmlFor="regen-prompt" className="label label-text font-medium pb-1">
               Regeneration Prompt
             </label>
             <textarea
               id="regen-prompt"
               value={regenerationPrompt}
               onChange={(e) => setRegenerationPrompt(e.target.value)}
-              placeholder="Describe changes you want: e.g., 'different hair color to red', 'more formal clothing', 'angry expression'..."
+              placeholder="Describe changes: e.g., 'different hair color to red', 'more formal clothing', 'angry expression'..."
               rows={4}
               disabled={disabled}
-              className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 resize-none"
+              className="textarea textarea-bordered w-full bg-base-300 resize-none"
             />
           </div>
 
@@ -171,37 +157,31 @@ export default function ImageEditContext({
             <button
               onClick={handleRegenerate}
               disabled={disabled || isGenerating || !regenerationPrompt.trim()}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:cursor-not-allowed"
+              className="btn btn-primary btn-block gap-2"
+              style={{ minHeight: '44px' }}
             >
               {isGenerating ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Regenerating...
-                </>
+                <><span className="loading loading-spinner loading-sm" />Regenerating...</>
               ) : (
-                <>
-                  <RefreshCw className="w-4 h-4" />
-                  Regenerate with Prompt
-                </>
+                <><RefreshCw className="w-4 h-4" />Regenerate with Prompt</>
               )}
             </button>
 
             <button
-              onClick={handleRegenerateWithoutInput}
+              onClick={onRegenerateWithoutInput}
               disabled={disabled || isGenerating}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-neutral btn-block gap-2"
+              style={{ minHeight: '44px' }}
             >
               <RefreshCw className="w-4 h-4" />
               Regenerate without new input
             </button>
           </div>
 
-          {/* Seed Control */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+          {/* Seed control */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 rounded-xl bg-base-200 border border-base-300">
             <div className="flex items-center gap-2">
-              <label htmlFor="edit-seed" className="text-sm text-gray-300">
-                Seed:
-              </label>
+              <label htmlFor="edit-seed" className="label-text text-sm">Seed:</label>
               <input
                 id="edit-seed"
                 type="number"
@@ -209,59 +189,39 @@ export default function ImageEditContext({
                 onChange={(e) => onSeedChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
                 placeholder="Random"
                 disabled={disabled}
-                className="w-24 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                className="input input-bordered input-sm w-24 bg-base-300"
               />
             </div>
-
             <button
               onClick={onSeedLockToggle}
               disabled={disabled}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded text-sm transition-colors ${
-                seedLocked
-                  ? 'bg-amber-600/20 border border-amber-500/50 text-amber-400'
-                  : 'bg-gray-700 border border-gray-600 text-gray-300 hover:bg-gray-600'
-              } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`btn btn-sm gap-1.5 ${seedLocked ? 'btn-warning btn-soft' : 'btn-ghost border border-base-300'}`}
             >
-              {seedLocked ? (
-                <>
-                  <Lock className="w-3.5 h-3.5" />
-                  Locked
-                </>
-              ) : (
-                <>
-                  <Unlock className="w-3.5 h-3.5" />
-                  Unlocked
-                </>
-              )}
+              {seedLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              {seedLocked ? 'Locked' : 'Unlocked'}
             </button>
-
-            <span className="text-xs text-gray-400 sm:ml-auto">
+            <span className="text-xs opacity-60 sm:ml-auto">
               {seedLocked
                 ? 'Composition preserved — only prompt changes affect output'
                 : 'Each regeneration creates a unique variation'}
             </span>
           </div>
 
-          {/* Finalize Button */}
-          <div className="pt-4 border-t border-gray-700">
+          {/* Finalize */}
+          <div className="pt-4 border-t border-base-300">
             <button
               onClick={onFinalize}
               disabled={disabled || isFinalizing}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:cursor-not-allowed"
+              className="btn btn-success btn-block gap-2"
+              style={{ minHeight: '48px' }}
             >
               {isFinalizing ? (
-                <>
-                  <RefreshCw className="w-5 h-5 animate-spin" />
-                  Finalizing Character...
-                </>
+                <><span className="loading loading-spinner loading-sm" />Finalizing Character...</>
               ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  Save Final Character
-                </>
+                <><Save className="w-5 h-5" />Save Final Character</>
               )}
             </button>
-            <p className="text-xs text-gray-500 text-center mt-2">
+            <p className="text-xs opacity-50 text-center mt-2">
               This will create an immutable character record with all data and the AI-generated manifest
             </p>
           </div>

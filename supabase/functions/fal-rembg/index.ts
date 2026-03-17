@@ -1,8 +1,16 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// ─── fal-rembg/index.ts ──────────────────────────────────────────────────────
+// Background removal via fal-ai/imageutils/rembg.
+// No usage increment — background removal is not counted against the user's
+// generation quota.
+//
+// Required Supabase secrets:
+//   CharacterForge  — Supabase admin key (sb_secret_...)
+//   FAL_KEY         — fal.ai API key
+//
+// Deploy with: supabase functions deploy fal-rembg --no-verify-jwt
+// ─────────────────────────────────────────────────────────────────────────────
 
-// IMPORTANT: This function uses the NEW Supabase API key system (sb_secret_...).
-// Legacy JWT-based service_role keys (eyJ...) are NOT supported.
-// Deploy with --no-verify-jwt flag.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

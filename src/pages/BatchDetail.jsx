@@ -331,8 +331,8 @@ export default function BatchDetail() {
         <div className="flex items-start gap-3 mb-3">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center justify-center rounded-lg hover:bg-white/10 flex-shrink-0 mt-0.5"
-            style={{ minWidth: '44px', minHeight: '44px' }}
+            className="btn btn-ghost btn-circle flex-shrink-0 mt-0.5"
+            style={{ minHeight: '44px' }}
             aria-label="Go back"
           >
             <ArrowLeft className="w-5 h-5" style={{ color: theme.textMuted }} aria-hidden="true" />
@@ -343,7 +343,7 @@ export default function BatchDetail() {
               <span>{images.length} images</span>
               {batch.status && batch.status !== 'completed' && (
                 <span style={{ color: statusColors[batch.status] }} className="flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                  <span className="loading loading-spinner loading-xs" aria-hidden="true" />
                   {batch.status}
                 </span>
               )}
@@ -358,9 +358,14 @@ export default function BatchDetail() {
               <Button onClick={selectAll} theme={theme} variant="outline" size="sm">Select All</Button>
               <Button onClick={deselectAll} theme={theme} variant="outline" size="sm">Deselect All</Button>
               {selectedImages.size > 0 && (
-                <Button onClick={handleBulkDelete} theme={theme} variant="outline" size="sm" className="text-red-400">
-                  Delete ({selectedImages.size})
-                </Button>
+                <>
+                  <Button onClick={handleExportSelected} theme={theme} variant="outline" size="sm">
+                    <Download className="w-4 h-4 mr-1.5" aria-hidden="true" />Export ({selectedImages.size})
+                  </Button>
+                  <Button onClick={handleBulkDelete} theme={theme} variant="outline" size="sm" className="text-error">
+                    Delete ({selectedImages.size})
+                  </Button>
+                </>
               )}
               <Button onClick={() => { setBulkMode(false); setSelectedImages(new Set()) }} theme={theme} variant="ghost" size="sm">
                 Cancel
@@ -384,7 +389,7 @@ export default function BatchDetail() {
               <Button onClick={() => { setShowAddPropPanel(!showAddPropPanel); setShowAddVariationPanel(false) }} theme={theme} size="sm">
                 <Package className="w-4 h-4 mr-1.5" aria-hidden="true" />Prop
               </Button>
-              <Button onClick={handleDelete} theme={theme} variant="ghost" size="sm" className="text-red-400" aria-label="Delete character">
+              <Button onClick={handleDelete} theme={theme} variant="ghost" size="sm" className="text-error" aria-label="Delete character">
                 <Trash2 className="w-4 h-4" aria-hidden="true" />
               </Button>
             </>
@@ -394,7 +399,7 @@ export default function BatchDetail() {
 
       {/* Move panel */}
       {showMovePanel && (
-        <div className="mb-6 p-4 rounded-xl" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+        <div className="card bg-base-200 border border-base-300 mb-6 p-4 rounded-xl">
           <div className="flex flex-wrap gap-2">
             {storylines.map(sl => (
               <Button
@@ -417,14 +422,14 @@ export default function BatchDetail() {
 
       {/* Restyle panel */}
       {showRestylePanel && (
-        <div className="mb-6 p-4 rounded-xl" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+        <div className="card bg-base-200 border border-base-300 mb-6 p-4 rounded-xl">
           <h3 className="font-medium mb-3" style={{ color: theme.textBody }}>Restyle All Images</h3>
           <div className="flex gap-3">
             <select
               value={restyleStyle}
               onChange={(e) => setRestyleStyle(e.target.value)}
-              className="flex-1 px-3 py-2 rounded-lg text-sm"
-              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+              className="select select-bordered bg-base-300 flex-1 text-sm"
+              style={{ color: theme.textBody, minHeight: '44px' }}
             >
               <option value="">Select art style...</option>
               {ART_STYLES.map(cat => (
@@ -436,7 +441,7 @@ export default function BatchDetail() {
               ))}
             </select>
             <Button onClick={handleRestyle} theme={theme} disabled={!restyleStyle || generating}>
-              {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+              {generating ? <span className="loading loading-spinner loading-sm mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
               Restyle All
             </Button>
           </div>
@@ -445,7 +450,7 @@ export default function BatchDetail() {
 
       {/* Add variation panel */}
       {showAddVariationPanel && (
-        <div className="mb-6 p-4 rounded-xl w-full min-w-0" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+        <div className="card bg-base-200 border border-base-300 mb-6 p-4 rounded-xl w-full min-w-0">
           <h3 className="font-medium mb-3" style={{ color: theme.textBody }}>Add Variation</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 min-w-0">
             <input
@@ -453,20 +458,20 @@ export default function BatchDetail() {
               value={newPose}
               onChange={(e) => setNewPose(e.target.value)}
               placeholder="Pose (e.g., arms crossed)"
-              className="w-full min-w-0 px-3 py-2 rounded-lg text-sm"
-              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+              className="input input-bordered bg-base-300 w-full min-w-0 text-sm"
+              style={{ color: theme.textBody, minHeight: '44px' }}
             />
             <input
               type="text"
               value={newEmotion}
               onChange={(e) => setNewEmotion(e.target.value)}
               placeholder="Emotion"
-              className="w-full min-w-0 px-3 py-2 rounded-lg text-sm"
-              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+              className="input input-bordered bg-base-300 w-full min-w-0 text-sm"
+              style={{ color: theme.textBody, minHeight: '44px' }}
             />
           </div>
           <Button onClick={handleAddVariation} theme={theme} disabled={generating}>
-            {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+            {generating ? <span className="loading loading-spinner loading-sm mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
             +Generate
           </Button>
         </div>
@@ -474,9 +479,9 @@ export default function BatchDetail() {
 
       {/* Add prop panel */}
       {showAddPropPanel && (
-        <div className="mb-6 p-4 rounded-xl space-y-3" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+        <div className="card bg-base-200 border border-base-300 mb-6 p-4 rounded-xl space-y-3">
           <h3 className="font-medium" style={{ color: theme.textBody }}>Add Prop</h3>
-          <p className="text-xs" style={{ color: theme.textMuted }}>
+          <p className="text-xs text-base-content/60">
             Generate a new variation showing the character holding a prop. Provide a text description, a reference image, or both.
           </p>
 
@@ -488,8 +493,8 @@ export default function BatchDetail() {
               value={propDesc}
               onChange={(e) => setPropDesc(e.target.value)}
               placeholder="e.g., a glowing blue sword, a leather-bound book..."
-              className="w-full px-3 py-2 rounded-lg text-sm"
-              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+              className="input input-bordered bg-base-300 w-full text-sm"
+              style={{ color: theme.textBody, minHeight: '44px' }}
             />
           </div>
 
@@ -498,7 +503,7 @@ export default function BatchDetail() {
             <Label theme={theme}>
               <div className="flex items-center gap-1.5">
                 Prop Reference Image
-                <span className="px-1.5 py-0.5 rounded text-xs" style={{ background: theme.fieldBg, color: theme.textMuted }}>optional</span>
+                <span className="badge badge-ghost text-xs" style={{ color: theme.textMuted }}>optional</span>
               </div>
             </Label>
             <PropImageUpload theme={theme} value={propImageUrl} onChange={setPropImageUrl} />
@@ -510,7 +515,7 @@ export default function BatchDetail() {
               theme={theme}
               disabled={generating || (!propDesc.trim() && !propImageUrl)}
             >
-              {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Package className="w-4 h-4 mr-2" />}
+              {generating ? <span className="loading loading-spinner loading-sm mr-2" /> : <Package className="w-4 h-4 mr-2" />}
               Generate with Prop
             </Button>
             <Button onClick={() => { setShowAddPropPanel(false); setPropDesc(''); setPropImageUrl(null) }} theme={theme} variant="ghost">
@@ -522,13 +527,13 @@ export default function BatchDetail() {
 
       {/* Reference + Description */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="rounded-xl overflow-hidden" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+        <div className="card bg-base-200 border border-base-300 rounded-xl overflow-hidden">
           <div className="aspect-square">
             {batch.reference_image_url ? (
               <img src={batch.reference_image_url} alt="Reference" className="w-full h-full object-contain" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center" style={{ background: theme.fieldBg }}>
-                <span style={{ color: theme.textMuted }}>No reference</span>
+              <div className="w-full h-full flex items-center justify-center bg-base-300">
+                <span className="text-base-content/50">No reference</span>
               </div>
             )}
           </div>
@@ -539,15 +544,14 @@ export default function BatchDetail() {
       {/* Image grid */}
       {images.length === 0 ? (
         <div className="text-center py-12">
-          <p style={{ color: theme.textMuted }}>No images generated yet</p>
+          <p className="text-base-content/50">No images generated yet</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
           {images.map(img => (
             <div
               key={img.id}
-              className="relative group cursor-pointer rounded-xl overflow-hidden"
-              style={{ background: theme.fieldBg }}
+              className="relative group cursor-pointer rounded-xl overflow-hidden bg-base-300"
               onClick={() => bulkMode ? toggleSelection(img.id) : setShowEditModal(img)}
             >
               <img
@@ -558,11 +562,11 @@ export default function BatchDetail() {
                 className="w-full h-auto block transition-transform duration-500 group-hover:scale-105"
                 style={{ objectFit: 'contain' }}
               />
-              
+
               {bulkMode && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
                   {selectedImages.has(img.id) ? (
-                    <div className="w-6 h-6 rounded bg-violet-500 flex items-center justify-center">
+                    <div className="w-6 h-6 rounded bg-secondary flex items-center justify-center">
                       <Check className="w-4 h-4 text-white" />
                     </div>
                   ) : (
@@ -639,11 +643,11 @@ function AnalysisPanel({ batch, theme }) {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="lg:col-span-2 rounded-xl overflow-hidden" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+    <div className="card bg-base-200 border border-base-300 lg:col-span-2 rounded-xl overflow-hidden">
       <button
         className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:opacity-80"
         onClick={() => setOpen(v => !v)}
-        style={{ borderBottom: open ? `1px solid ${theme.cardBorder}` : 'none' }}
+        style={{ minHeight: '44px', borderBottom: open ? `1px solid ${theme.cardBorder}` : 'none' }}
       >
         <span className="text-xs uppercase tracking-widest font-medium" style={{ color: theme.labelColor }}>
           Analysis Results
@@ -651,7 +655,7 @@ function AnalysisPanel({ batch, theme }) {
         <span className="flex items-center gap-2 text-xs" style={{ color: theme.textMuted }}>
           {batch.character_description
             ? (open ? 'Hide' : 'Show')
-            : <span style={{ color: '#ef4444' }}>Not available</span>}
+            : <span className="text-error">Not available</span>}
           {open
             ? <ChevronUp className="w-4 h-4" />
             : <ChevronDown className="w-4 h-4" />}
@@ -666,7 +670,7 @@ function AnalysisPanel({ batch, theme }) {
       )}
       {!open && (
         <div className="px-4 py-3">
-          <p className="text-sm" style={{ color: theme.textMuted }}>
+          <p className="text-sm text-base-content/60">
             {batch.character_description
               ? 'Tap to view the full AI analysis used to generate this character\'s images.'
               : 'No analysis data stored for this character.'}
@@ -721,13 +725,17 @@ function ImageEditModal({ image, theme, onClose, onUpdate, onRegenerate }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      {/* Edit modal — DaisyUI dialog */}
+      <dialog className="modal modal-bottom sm:modal-middle" open>
         <div
-          className="relative w-full max-w-3xl rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
+          className="modal-box relative w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto"
           style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
         >
-          <button onClick={onClose} className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10">
+          <button
+            onClick={onClose}
+            className="btn btn-ghost btn-circle btn-sm absolute top-4 right-4"
+            style={{ minHeight: '44px' }}
+          >
             <X className="w-5 h-5" style={{ color: theme.textMuted }} />
           </button>
 
@@ -757,16 +765,16 @@ function ImageEditModal({ image, theme, onClose, onUpdate, onRegenerate }) {
                   onChange={(e) => setChangeDesc(e.target.value)}
                   placeholder="Make them smile, change pose to..."
                   rows={3}
-                  className="w-full px-3 py-2 rounded-xl text-sm resize-y"
-                  style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody, minHeight: '96px' }}
-                  autocorrect="on"
+                  className="textarea textarea-bordered bg-base-300 w-full text-sm resize-y"
+                  style={{ color: theme.textBody, minHeight: '96px' }}
+                  autoCorrect="on"
                   spellCheck="true"
                 />
               </div>
 
               <div className="flex gap-2">
                 <Button onClick={handleRegenerate} theme={theme} disabled={!changeDesc.trim() || generating} className="flex-1">
-                  {generating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                  {generating ? <span className="loading loading-spinner loading-sm mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                   Regenerate
                 </Button>
                 <Button onClick={handleDownload} theme={theme} variant="outline">
@@ -780,32 +788,41 @@ function ImageEditModal({ image, theme, onClose, onUpdate, onRegenerate }) {
             </div>
           </div>
         </div>
-      </div>
+        <div className="modal-backdrop bg-black/60" onClick={onClose} />
+      </dialog>
 
       {/* Lightbox */}
       {lightboxOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 cursor-zoom-out"
-          style={{ background: 'rgba(0,0,0,0.92)' }}
-          onClick={() => setLightboxOpen(false)}
-        >
-          <button
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+        <dialog className="modal" open style={{ zIndex: 60 }}>
+          <div
+            className="modal-box bg-transparent shadow-none max-w-none w-full h-full flex items-center justify-center p-4 cursor-zoom-out"
+            style={{ background: 'transparent', maxWidth: '100vw', maxHeight: '100vh' }}
             onClick={() => setLightboxOpen(false)}
           >
-            <X className="w-6 h-6 text-white" />
-          </button>
-          <img
-            src={image.url}
-            alt={image.label}
-            className="max-w-full max-h-full rounded-xl shadow-2xl"
-            style={{ objectFit: 'contain', maxHeight: 'calc(100vh - 4rem)' }}
-            onClick={(e) => e.stopPropagation()}
-          />
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full" style={{ background: 'rgba(0,0,0,0.7)' }}>
-            <p className="text-sm text-white text-center">{image.label}</p>
+            <button
+              className="btn btn-circle btn-sm bg-white/10 hover:bg-white/20 border-0 absolute top-4 right-4"
+              style={{ minHeight: '44px' }}
+              onClick={() => setLightboxOpen(false)}
+            >
+              <X className="w-6 h-6 text-white" />
+            </button>
+            <img
+              src={image.url}
+              alt={image.label}
+              className="max-w-full max-h-full rounded-xl shadow-2xl"
+              style={{ objectFit: 'contain', maxHeight: 'calc(100vh - 4rem)' }}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full" style={{ background: 'rgba(0,0,0,0.7)' }}>
+              <p className="text-sm text-white text-center">{image.label}</p>
+            </div>
           </div>
-        </div>
+          <div
+            className="modal-backdrop"
+            style={{ background: 'rgba(0,0,0,0.92)' }}
+            onClick={() => setLightboxOpen(false)}
+          />
+        </dialog>
       )}
     </>
   )
@@ -830,8 +847,8 @@ function PropImageUpload({ theme, value, onChange }) {
       onClick={() => inputRef.current?.click()}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
-      className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all hover:opacity-80"
-      style={{ borderColor: theme.fieldBorder, background: theme.fieldBg }}
+      className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all hover:opacity-80 bg-base-300"
+      style={{ borderColor: theme.fieldBorder }}
     >
       <input
         ref={inputRef}
@@ -845,15 +862,15 @@ function PropImageUpload({ theme, value, onChange }) {
           <img src={value} alt="Prop reference" className="max-h-32 mx-auto rounded-lg" />
           <button
             onClick={(e) => { e.stopPropagation(); onChange(null) }}
-            className="absolute top-1 right-1 p-1 rounded-full bg-black/60"
+            className="btn btn-circle btn-xs bg-black/60 border-0 absolute top-1 right-1"
           >
             <X className="w-3.5 h-3.5 text-white" />
           </button>
         </div>
       ) : (
         <div>
-          <Package className="w-6 h-6 mx-auto mb-1" style={{ color: theme.textMuted }} />
-          <p className="text-xs" style={{ color: theme.textMuted }}>Drop prop image or click to upload</p>
+          <Package className="w-6 h-6 mx-auto mb-1 text-base-content/50" style={{ color: theme.textMuted }} />
+          <p className="text-xs text-base-content/50">Drop prop image or click to upload</p>
         </div>
       )}
     </div>
@@ -909,8 +926,8 @@ function Input({ label, value, onChange, theme }) {
         type="text"
         value={value}
         onChange={onChange}
-        className="w-full px-3 py-2 rounded-xl text-sm"
-        style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+        className="input input-bordered bg-base-300 w-full text-sm"
+        style={{ color: theme.textBody, minHeight: '44px' }}
       />
     </div>
   )

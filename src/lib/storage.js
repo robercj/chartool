@@ -1,12 +1,14 @@
 // ─── storage.js ───────────────────────────────────────────────────────────────
-// All persistent data is now stored in Supabase Postgres with Row-Level Security.
-// Each entity module mirrors the old localStorage API surface so call-sites in
-// pages need only minimal changes:
-//   • All methods are now async (return Promises)
-//   • `create`, `update`, `delete`, `filter` require the authenticated user's id
-//     which is passed in via the `userId` option parameter.
+// Supabase Postgres data layer. All tables have Row-Level Security enabled —
+// every query is automatically scoped to the authenticated user.
 //
-// The old useLocalStorage hook is kept for theme/genre preferences only.
+// Entity modules: Storyline, CharacterBatch, GeneratedImage, StorylinePrompt,
+//                 CharacterDraft, Character
+//
+// All methods are async. `create` methods require the authenticated userId
+// so the user_id column is populated server-side before insert.
+//
+// useLocalStorage: thin hook kept for client-side theme/genre preference only.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
@@ -78,7 +80,8 @@ export const Storyline = {
 
   /** Create a new storyline */
   async create(userId, data) {
-    const { batch_ids, ...rest } = data; // batch_ids not a column; managed via batches
+    // batch_ids is not a DB column — strip it before insert (managed via character_batches.storyline_id)
+    const { batch_ids: _batch_ids, ...rest } = data;
     const { data: created, error } = await supabase
       .from('storylines')
       .insert({ ...rest, user_id: userId })
@@ -90,7 +93,7 @@ export const Storyline = {
 
   /** Update fields on an existing storyline */
   async update(id, data) {
-    const { batch_ids, ...rest } = data;
+    const { batch_ids: _batch_ids, ...rest } = data;
     const { error } = await supabase
       .from('storylines')
       .update(rest)
@@ -283,18 +286,22 @@ export const StorylinePrompt = {
   },
 };
 
-// ─── SavedPrompt (stub — not actively used) ───────────────────────────────────
-// Kept for import compatibility. No DB table; was never actively persisted.
+// ─── SavedPrompt (no-op stub) ─────────────────────────────────────────────────
+// There is no saved_prompts DB table. This stub exists solely to satisfy imports
+// in Generate.jsx that were written before the feature was deprioritised.
+// Remove this and the import in Generate.jsx when cleaning up the Generate page.
 export const SavedPrompt = {
   async list() { return []; },
   async get() { return null; },
-  async create(userId, data) { return { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() }; },
+  async create(_userId, data) { return { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() }; },
   async update() {},
   async delete() {},
 };
 
 // ─── Settings (localStorage only — not user data) ────────────────────────────
-// Kept purely for the seedSettings.js legacy path during transition.
+// Legacy: no longer used. seedSettings.js was removed; API keys live in Supabase
+// Edge Function secrets only. This module is kept to avoid breaking any consumers
+// that might reference it, but can be safely deleted once confirmed unused.
 export const Settings = {
   get: () => JSON.parse(localStorage.getItem('cf_settings') || '{}'),
   set: (data) => localStorage.setItem('cf_settings', JSON.stringify(data)),

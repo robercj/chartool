@@ -2,6 +2,10 @@ import { ChevronDown, ChevronUp, Palette, User } from 'lucide-react';
 import PillTagInput from './PillTagInput';
 import { BODY_TYPES } from '../../lib/constants/DERE_PRESETS';
 
+// Shared input class for appearance fields
+const FIELD_CLS = 'input input-bordered w-full bg-base-300 text-base-content';
+const LABEL_CLS = 'label label-text font-medium pb-1';
+
 export default function AppearanceForm({
   isExpanded,
   onToggle,
@@ -10,48 +14,44 @@ export default function AppearanceForm({
   disabled = false,
 }) {
   const handleFieldChange = (field, value) => {
-    onChange({
-      ...appearanceData,
-      [field]: value,
-    });
+    onChange({ ...appearanceData, [field]: value });
   };
 
   return (
-    <div className="border border-gray-700 rounded-xl overflow-hidden">
+    <div className="collapse collapse-arrow border border-base-300 rounded-xl bg-base-200">
+      {/* DaisyUI collapse uses checkbox internally but we control it externally */}
       <button
         type="button"
         onClick={onToggle}
         disabled={disabled}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-800/50 hover:bg-gray-800 transition-colors text-white"
+        className="collapse-title flex items-center gap-2 font-medium text-base-content min-h-[56px]"
+        aria-expanded={isExpanded}
       >
-        <span className="flex items-center gap-2">
-          <User className="w-5 h-5 text-indigo-400" />
-          <span className="font-medium">+ Add Detailed Appearance</span>
+        <User className="w-5 h-5 text-primary flex-shrink-0" />
+        + Add Detailed Appearance
+        <span className="ml-auto">
+          {isExpanded
+            ? <ChevronUp className="w-5 h-5 opacity-60" />
+            : <ChevronDown className="w-5 h-5 opacity-60" />
+          }
         </span>
-        {isExpanded ? (
-          <ChevronUp className="w-5 h-5 text-gray-400" />
-        ) : (
-          <ChevronDown className="w-5 h-5 text-gray-400" />
-        )}
       </button>
 
       {isExpanded && (
-        <div className="p-4 space-y-6 bg-gray-900/30">
+        <div className="collapse-content p-4 space-y-6">
+
           {/* Body & Structure */}
           <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Body & Structure</h3>
-            
+            <h3 className="text-base font-semibold text-base-content">Body &amp; Structure</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label htmlFor="body-type" className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Body Type
-                </label>
+                <label htmlFor="body-type" className={LABEL_CLS}>Body Type</label>
                 <select
                   id="body-type"
                   value={appearanceData.body_type || ''}
                   onChange={(e) => handleFieldChange('body_type', e.target.value)}
                   disabled={disabled}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  className="select select-bordered w-full bg-base-300"
                 >
                   <option value="">Select...</option>
                   {BODY_TYPES.map(type => (
@@ -59,34 +59,26 @@ export default function AppearanceForm({
                   ))}
                 </select>
               </div>
-
               <div>
-                <label htmlFor="height" className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Height Descriptor
-                </label>
+                <label htmlFor="height" className={LABEL_CLS}>Height Descriptor</label>
                 <input
-                  id="height"
-                  type="text"
+                  id="height" type="text"
                   value={appearanceData.height_descriptor || ''}
                   onChange={(e) => handleFieldChange('height_descriptor', e.target.value)}
                   placeholder="e.g., tall, short, 5'9&quot;"
                   disabled={disabled}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  className={FIELD_CLS}
                 />
               </div>
-
               <div>
-                <label htmlFor="skin-tone" className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Skin Tone
-                </label>
+                <label htmlFor="skin-tone" className={LABEL_CLS}>Skin Tone</label>
                 <input
-                  id="skin-tone"
-                  type="text"
+                  id="skin-tone" type="text"
                   value={appearanceData.skin_tone || ''}
                   onChange={(e) => handleFieldChange('skin_tone', e.target.value)}
                   placeholder="e.g., pale, tan, dark..."
                   disabled={disabled}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  className={FIELD_CLS}
                 />
               </div>
             </div>
@@ -94,70 +86,52 @@ export default function AppearanceForm({
 
           {/* Hair & Eyes */}
           <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Hair & Eyes</h3>
-            
+            <h3 className="text-base font-semibold text-base-content">Hair &amp; Eyes</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <PillTagInput
+                id="hair-color" label="Hair Color"
+                value={appearanceData.hair_color || []}
+                onChange={(colors) => handleFieldChange('hair_color', colors)}
+                placeholder="e.g., silver, black with blue highlights..."
+                disabled={disabled}
+              />
               <div>
-                <PillTagInput
-                  id="hair-color"
-                  label="Hair Color"
-                  value={appearanceData.hair_color || []}
-                  onChange={(colors) => handleFieldChange('hair_color', colors)}
-                  placeholder="e.g., silver, black with blue highlights..."
-                  disabled={disabled}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="hair-style" className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Hair Style
-                </label>
+                <label htmlFor="hair-style" className={LABEL_CLS}>Hair Style</label>
                 <input
-                  id="hair-style"
-                  type="text"
+                  id="hair-style" type="text"
                   value={appearanceData.hair_style || ''}
                   onChange={(e) => handleFieldChange('hair_style', e.target.value)}
                   placeholder="e.g., long wavy ponytail, short undercut..."
                   disabled={disabled}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  className={FIELD_CLS}
                 />
               </div>
-
+              <PillTagInput
+                id="eye-color" label="Eye Color"
+                value={appearanceData.eye_color || []}
+                onChange={(colors) => handleFieldChange('eye_color', colors)}
+                placeholder="e.g., emerald green, heterochromia..."
+                disabled={disabled}
+              />
               <div>
-                <PillTagInput
-                  id="eye-color"
-                  label="Eye Color"
-                  value={appearanceData.eye_color || []}
-                  onChange={(colors) => handleFieldChange('eye_color', colors)}
-                  placeholder="e.g., emerald green, heterochromia..."
-                  disabled={disabled}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="eye-shape" className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Eye Shape
-                </label>
+                <label htmlFor="eye-shape" className={LABEL_CLS}>Eye Shape</label>
                 <input
-                  id="eye-shape"
-                  type="text"
+                  id="eye-shape" type="text"
                   value={appearanceData.eye_shape || ''}
                   onChange={(e) => handleFieldChange('eye_shape', e.target.value)}
                   placeholder="e.g., almond-shaped, wide innocent eyes..."
                   disabled={disabled}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  className={FIELD_CLS}
                 />
               </div>
             </div>
           </section>
 
           {/* Facial Features */}
-          <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Facial Features</h3>
-            
+          <section>
+            <h3 className="text-base font-semibold text-base-content mb-3">Facial Features</h3>
             <PillTagInput
-              id="facial-features"
-              label="Facial Features"
+              id="facial-features" label="Facial Features"
               value={appearanceData.facial_features || []}
               onChange={(features) => handleFieldChange('facial_features', features)}
               placeholder="e.g., freckles, sharp jaw, dimples, scar on left cheek..."
@@ -167,47 +141,36 @@ export default function AppearanceForm({
 
           {/* Clothing & Accessories */}
           <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Palette className="w-5 h-5 text-indigo-400" />
-              Clothing & Accessories
+            <h3 className="text-base font-semibold text-base-content flex items-center gap-2">
+              <Palette className="w-4 h-4 text-primary" />
+              Clothing &amp; Accessories
             </h3>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="clothing-style" className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Clothing Style
-                </label>
+                <label htmlFor="clothing-style" className={LABEL_CLS}>Clothing Style</label>
                 <input
-                  id="clothing-style"
-                  type="text"
+                  id="clothing-style" type="text"
                   value={appearanceData.clothing_style || ''}
                   onChange={(e) => handleFieldChange('clothing_style', e.target.value)}
                   placeholder="e.g., gothic lolita, business casual..."
                   disabled={disabled}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  className={FIELD_CLS}
                 />
               </div>
-
               <div>
-                <label htmlFor="art-style" className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Art Style Reference
-                </label>
+                <label htmlFor="art-style" className={LABEL_CLS}>Art Style Reference</label>
                 <input
-                  id="art-style"
-                  type="text"
+                  id="art-style" type="text"
                   value={appearanceData.art_style_reference || ''}
                   onChange={(e) => handleFieldChange('art_style_reference', e.target.value)}
                   placeholder="e.g., Studio Ghibli, shounen manga, painterly..."
                   disabled={disabled}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  className={FIELD_CLS}
                 />
               </div>
             </div>
-
             <div>
-              <label htmlFor="signature-outfit" className="block text-sm font-medium text-gray-300 mb-1.5">
-                Signature Outfit
-              </label>
+              <label htmlFor="signature-outfit" className={LABEL_CLS}>Signature Outfit</label>
               <textarea
                 id="signature-outfit"
                 value={appearanceData.signature_outfit || ''}
@@ -215,23 +178,19 @@ export default function AppearanceForm({
                 placeholder="Detailed description of their most recognizable outfit..."
                 rows={3}
                 disabled={disabled}
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 resize-none"
+                className="textarea textarea-bordered w-full bg-base-300 resize-none"
               />
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <PillTagInput
-                id="accessories"
-                label="Accessories"
+                id="accessories" label="Accessories"
                 value={appearanceData.accessories || []}
                 onChange={(items) => handleFieldChange('accessories', items)}
                 placeholder="e.g., guitar, bandanna, oversized glasses..."
                 disabled={disabled}
               />
-              
               <PillTagInput
-                id="props"
-                label="Props"
+                id="props" label="Props"
                 value={appearanceData.props || []}
                 onChange={(items) => handleFieldChange('props', items)}
                 placeholder="Items typically shown with the character..."
@@ -241,12 +200,10 @@ export default function AppearanceForm({
           </section>
 
           {/* Visual Motifs */}
-          <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Visual Motifs</h3>
-            
+          <section>
+            <h3 className="text-base font-semibold text-base-content mb-3">Visual Motifs</h3>
             <PillTagInput
-              id="visual-motifs"
-              label="Visual Motifs"
+              id="visual-motifs" label="Visual Motifs"
               value={appearanceData.visual_motifs || []}
               onChange={(motifs) => handleFieldChange('visual_motifs', motifs)}
               placeholder="Symbolic recurring elements: roses, chains, stars..."

@@ -1,8 +1,15 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// ─── fal-generate/index.ts ───────────────────────────────────────────────────
+// Reference-image-guided image generation via fal-ai/nano-banana-2/edit.
+// Requires at least one reference image URL in `input.image_urls`.
+//
+// Required Supabase secrets:
+//   CharacterForge  — Supabase admin key (sb_secret_...)
+//   FAL_KEY         — fal.ai API key
+//
+// Deploy with: supabase functions deploy fal-generate --no-verify-jwt
+// ─────────────────────────────────────────────────────────────────────────────
 
-// IMPORTANT: This function uses the NEW Supabase API key system (sb_secret_...).
-// Legacy JWT-based service_role keys (eyJ...) are NOT supported.
-// Deploy with --no-verify-jwt flag.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

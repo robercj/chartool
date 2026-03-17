@@ -3,118 +3,76 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { Wand2, Save, Loader2, AlertTriangle, Sparkles, ChevronRight } from 'lucide-react';
+import { Save, Sparkles, ChevronRight } from 'lucide-react';
 
 import { useDraftPersistence } from '../lib/hooks/useDraftPersistence';
 import { CharacterDraft, Character } from '../lib/storage';
 import { synthesizeCharacterImagePrompt, generateCharacterImage, generateCharacterManifest } from '../lib/anthropic';
 
 import CharacterIdentityForm from '../components/character/CharacterIdentityForm';
-import AppearanceForm from '../components/character/AppearanceForm';
-import PromptPreviewPanel from '../components/character/PromptPreviewPanel';
-import ImageEditContext from '../components/character/ImageEditContext';
+import AppearanceForm        from '../components/character/AppearanceForm';
+import PromptPreviewPanel    from '../components/character/PromptPreviewPanel';
+import ImageEditContext      from '../components/character/ImageEditContext';
 import ExitConfirmationModal from '../components/character/ExitConfirmationModal';
 
 function sanitizeForStorage(data) {
   const sanitized = {};
   for (const [key, value] of Object.entries(data)) {
-    if (value === undefined || value === null || typeof value === 'function') {
-      continue;
-    }
-    if (typeof value === 'object' && value !== null) {
-      if (Array.isArray(value)) {
-        sanitized[key] = value;
-      } else {
-        sanitized[key] = sanitizeForStorage(value);
-      }
-    } else {
-      sanitized[key] = value;
-    }
+    if (value === undefined || value === null || typeof value === 'function') continue;
+    sanitized[key] = typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? sanitizeForStorage(value)
+      : value;
   }
   return sanitized;
 }
 
 const INITIAL_FORM_STATE = {
-  character_name: '',
-  character_role: '',
-  archetype: '',
-  narrative_function: '',
-  assigned_story_id: null,
-  age: '',
-  sex: null,
-  gender_expression: null,
-  species_or_race: '',
-  nationality_or_origin: '',
-  social_class: null,
-  occupation_or_role: '',
-  dere_presets: [],
-  custom_personality_modifier: '',
-  personality_mode: 'preset_only',
-  surface_traits: [],
-  hidden_traits: [],
-  emotional_triggers_positive: [],
-  emotional_triggers_negative: [],
-  speech_pattern: '',
-  behavioral_tendencies: [],
-  moral_alignment: '',
-  values_and_beliefs: [],
-  fears_and_insecurities: [],
-  surface_goal: '',
-  deep_desire: '',
-  internal_conflict: '',
-  backstory_summary: '',
-  formative_event: '',
-  relationship_to_protagonist: '',
-  relationship_to_authority: '',
-  relationship_to_peers: '',
-  relationship_to_love_interest: '',
-  world_context: '',
-  knowledge_domain: [],
-  tone_of_voice: '',
-  verbal_quirks: [],
-  internal_monologue_style: '',
-  consistency_anchors: [],
-  contradiction_points: [],
-  appearance: {},
-  image_prompt: {},
-  seed: null,
-  seed_locked: false,
-  creation_status: 'draft',
-  generated_image_url: null,
-  fal_job_id: null,
+  character_name: '', character_role: '', archetype: '', narrative_function: '',
+  assigned_story_id: null, age: '', sex: null, gender_expression: null,
+  species_or_race: '', nationality_or_origin: '', social_class: null, occupation_or_role: '',
+  dere_presets: [], custom_personality_modifier: '', personality_mode: 'preset_only',
+  surface_traits: [], hidden_traits: [], emotional_triggers_positive: [], emotional_triggers_negative: [],
+  speech_pattern: '', behavioral_tendencies: [], moral_alignment: '', values_and_beliefs: [],
+  fears_and_insecurities: [], surface_goal: '', deep_desire: '', internal_conflict: '',
+  backstory_summary: '', formative_event: '', relationship_to_protagonist: '',
+  relationship_to_authority: '', relationship_to_peers: '', relationship_to_love_interest: '',
+  world_context: '', knowledge_domain: [], tone_of_voice: '', verbal_quirks: [],
+  internal_monologue_style: '', consistency_anchors: [], contradiction_points: [],
+  appearance: {}, image_prompt: {}, seed: null, seed_locked: false,
+  creation_status: 'draft', generated_image_url: null, fal_job_id: null,
 };
 
+const STEPS = [
+  { id: 1, label: 'Identity' },
+  { id: 2, label: 'Appearance' },
+  { id: 3, label: 'Generate' },
+];
+
 export default function GenerateCharacterPage() {
-  const navigate = useNavigate();
-  const { draftId } = useParams();
-  const [searchParams] = useSearchParams();
-  const storyIdParam = searchParams.get('storyId');
-  const { user } = useAuth();
-  
-  const [formData, setFormData] = useState(INITIAL_FORM_STATE);
+  const navigate      = useNavigate();
+  const { draftId }   = useParams();
+  const [searchParams]  = useSearchParams();
+  const storyIdParam    = searchParams.get('storyId');
+  const { user }        = useAuth();
+
+  const [formData,           setFormData]           = useState(INITIAL_FORM_STATE);
   const [appearanceExpanded, setAppearanceExpanded] = useState(false);
-  const [imageHistory, setImageHistory] = useState([]);
-  const [showExitModal, setShowExitModal] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isFinalizing, setIsFinalizing] = useState(false);
-  const [phase, setPhase] = useState(1);
-  
+  const [imageHistory,       setImageHistory]       = useState([]);
+  const [showExitModal,      setShowExitModal]      = useState(false);
+  const [pendingNavigation,  setPendingNavigation]  = useState(null);
+  const [isGenerating,       setIsGenerating]       = useState(false);
+  const [isFinalizing,       setIsFinalizing]       = useState(false);
+  const [phase,              setPhase]              = useState(1);
+
   const abortControllerRef = useRef(null);
 
-  const { draft, isDirty, lastSaved, updateState, saveNow, isInitialized } = useDraftPersistence(
-    draftId,
-    user?.id
-  );
-
+  const { draft, isDirty, lastSaved, updateState, saveNow, isInitialized } = useDraftPersistence(draftId, user?.id);
   const [isNewDraft, setIsNewDraft] = useState(false);
 
   useEffect(() => {
     if (draft) {
       setFormData(prev => ({ ...prev, ...draft }));
-      if (draft.appearance && Object.keys(draft.appearance).length > 0) {
-        setAppearanceExpanded(true);
-      }
+      if (draft.appearance && Object.keys(draft.appearance).length > 0) setAppearanceExpanded(true);
       if (draft.generated_image_url) {
         setImageHistory(prev => {
           const history = prev.filter(url => url !== draft.generated_image_url);
@@ -150,210 +108,103 @@ export default function GenerateCharacterPage() {
     }
   }, [draftId, user, isNewDraft, isInitialized, navigate]);
 
-  const handleFormChange = useCallback((updates) => {
-    setFormData(prev => {
-      const newData = { ...prev, ...updates };
-      updateState(newData);
-      return newData;
-    });
-  }, [updateState]);
-
-  const handleAppearanceChange = useCallback((appearanceData) => {
-    setFormData(prev => {
-      const newData = { ...prev, appearance: appearanceData };
-      updateState(newData);
-      return newData;
-    });
-  }, [updateState]);
-
-  const handleSeedChange = useCallback((seed) => {
-    setFormData(prev => {
-      const newData = { ...prev, seed };
-      updateState(newData);
-      return newData;
-    });
-  }, [updateState]);
-
-  const handleSeedLockToggle = useCallback((locked) => {
-    setFormData(prev => {
-      const newData = { ...prev, seed_locked: locked };
-      updateState(newData);
-      return newData;
-    });
-  }, [updateState]);
-
-  const handleJsonChange = useCallback((json) => {
-    setFormData(prev => {
-      const newData = { ...prev, ...json };
-      updateState(newData);
-      return newData;
-    });
-  }, [updateState]);
+  const handleFormChange        = useCallback((updates) => setFormData(prev => { const n = { ...prev, ...updates }; updateState(n); return n; }), [updateState]);
+  const handleAppearanceChange  = useCallback((a)       => setFormData(prev => { const n = { ...prev, appearance: a }; updateState(n); return n; }), [updateState]);
+  const handleSeedChange        = useCallback((seed)    => setFormData(prev => { const n = { ...prev, seed }; updateState(n); return n; }), [updateState]);
+  const handleSeedLockToggle    = useCallback((locked)  => setFormData(prev => { const n = { ...prev, seed_locked: locked }; updateState(n); return n; }), [updateState]);
+  const handleJsonChange        = useCallback((json)    => setFormData(prev => { const n = { ...prev, ...json }; updateState(n); return n; }), [updateState]);
 
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
     abortControllerRef.current = new AbortController();
-
     try {
-      const characterData = {
-        ...formData,
-        appearance: formData.appearance || {},
-      };
-
-      const imagePrompt = await synthesizeCharacterImagePrompt(characterData);
-      
-      const result = await generateCharacterImage(
+      const characterData = { ...formData, appearance: formData.appearance || {} };
+      const imagePrompt   = await synthesizeCharacterImagePrompt(characterData);
+      const result        = await generateCharacterImage(
         { prompt: imagePrompt, seed: formData.seed_locked ? formData.seed : null },
         abortControllerRef.current.signal
       );
-
-      const newImageHistory = [
-        result.url,
-        ...imageHistory.filter(url => url !== result.url),
-      ].slice(0, 10);
-
-      setImageHistory(newImageHistory);
-      
-      const updatedData = {
-        ...formData,
-        generated_image_url: result.url,
-        fal_job_id: result.jobId,
-        seed: result.seed || formData.seed,
-        image_prompt: {
-          ...formData.image_prompt,
-          synthesized_prompt: imagePrompt,
-        },
-        creation_status: 'in_progress',
-      };
-
-      setFormData(updatedData);
-      updateState(updatedData);
-      
+      const newHistory    = [result.url, ...imageHistory.filter(u => u !== result.url)].slice(0, 10);
+      setImageHistory(newHistory);
+      const updatedData   = { ...formData, generated_image_url: result.url, fal_job_id: result.jobId, seed: result.seed || formData.seed, image_prompt: { ...formData.image_prompt, synthesized_prompt: imagePrompt }, creation_status: 'in_progress' };
+      setFormData(updatedData); updateState(updatedData);
       toast.success('Character image generated!');
     } catch (error) {
-      if (error.name === 'AbortError' || error.message === 'Request cancelled') {
-        return;
-      }
-      console.error('Generation failed:', error);
+      if (error.name === 'AbortError' || error.message === 'Request cancelled') return;
       toast.error('Failed to generate character image. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
+    } finally { setIsGenerating(false); }
   }, [formData, imageHistory, updateState]);
 
   const handleRegenerate = useCallback(async (prompt) => {
     setIsGenerating(true);
     abortControllerRef.current = new AbortController();
-
     try {
-      const characterData = {
-        ...formData,
-        appearance: formData.appearance || {},
-      };
-
-      const basePrompt = await synthesizeCharacterImagePrompt(characterData);
-      const finalPrompt = `${basePrompt}. ${prompt}`;
-
-      const result = await generateCharacterImage(
+      const characterData = { ...formData, appearance: formData.appearance || {} };
+      const basePrompt    = await synthesizeCharacterImagePrompt(characterData);
+      const finalPrompt   = prompt ? `${basePrompt}. ${prompt}` : basePrompt;
+      const result        = await generateCharacterImage(
         { prompt: finalPrompt, seed: formData.seed_locked ? formData.seed : null },
         abortControllerRef.current.signal
       );
-
-      const newImageHistory = [
-        result.url,
-        ...imageHistory.filter(url => url !== result.url),
-      ].slice(0, 10);
-
-      setImageHistory(newImageHistory);
-
-      const updatedData = {
-        ...formData,
-        generated_image_url: result.url,
-        fal_job_id: result.jobId,
-        seed: result.seed || formData.seed,
-      };
-
-      setFormData(updatedData);
-      updateState(updatedData);
-
+      const newHistory = [result.url, ...imageHistory.filter(u => u !== result.url)].slice(0, 10);
+      setImageHistory(newHistory);
+      const updatedData = { ...formData, generated_image_url: result.url, fal_job_id: result.jobId, seed: result.seed || formData.seed };
+      setFormData(updatedData); updateState(updatedData);
       toast.success('Character regenerated!');
     } catch (error) {
-      if (error.name === 'AbortError' || error.message === 'Request cancelled') {
-        return;
-      }
-      console.error('Regeneration failed:', error);
+      if (error.name === 'AbortError' || error.message === 'Request cancelled') return;
       toast.error('Failed to regenerate. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
+    } finally { setIsGenerating(false); }
   }, [formData, imageHistory, updateState]);
 
-  const handleRegenerateWithoutInput = useCallback(async () => {
-    await handleRegenerate('');
-  }, [handleRegenerate]);
+  const handleRegenerateWithoutInput = useCallback(async () => { await handleRegenerate(''); }, [handleRegenerate]);
 
   const handleFinalize = useCallback(async () => {
-    if (!formData.character_name) {
-      toast.error('Character name is required for finalization');
-      return;
-    }
+    if (!formData.character_name)       { toast.error('Character name is required for finalization'); return; }
+    if (!formData.generated_image_url)  { toast.error('Please generate an image before finalization'); return; }
 
-    if (!formData.generated_image_url) {
-      toast.error('Please generate an image before finalization');
-      return;
-    }
-
-    const requiredFields = [
-      { key: 'character_role', label: 'Role in Story' },
-      { key: 'archetype', label: 'Archetype' },
-      { key: 'narrative_function', label: 'Narrative Function' },
-      { key: 'age', label: 'Age' },
-      { key: 'sex', label: 'Sex' },
-      { key: 'gender_expression', label: 'Gender Expression' },
-      { key: 'species_or_race', label: 'Species/Race' },
-      { key: 'nationality_or_origin', label: 'Nationality/Origin' },
-      { key: 'social_class', label: 'Social Class' },
-      { key: 'occupation_or_role', label: 'Occupation/Role' },
-      { key: 'backstory_summary', label: 'Backstory Summary' },
-      { key: 'formative_event', label: 'Formative Event' },
+    const required = [
+      { key: 'character_role', label: 'Role in Story' }, { key: 'archetype', label: 'Archetype' },
+      { key: 'narrative_function', label: 'Narrative Function' }, { key: 'age', label: 'Age' },
+      { key: 'sex', label: 'Sex' }, { key: 'gender_expression', label: 'Gender Expression' },
+      { key: 'species_or_race', label: 'Species/Race' }, { key: 'nationality_or_origin', label: 'Nationality/Origin' },
+      { key: 'social_class', label: 'Social Class' }, { key: 'occupation_or_role', label: 'Occupation/Role' },
+      { key: 'backstory_summary', label: 'Backstory Summary' }, { key: 'formative_event', label: 'Formative Event' },
       { key: 'relationship_to_protagonist', label: 'Relationship to Protagonist' },
     ];
-
-    const missingFields = requiredFields.filter(field => {
-      const value = formData[field.key];
-      return !value || (Array.isArray(value) && value.length === 0);
-    });
-
-    if (missingFields.length > 0) {
-      toast.error(`Please fill in: ${missingFields.map(f => f.label).join(', ')}`);
-      return;
-    }
+    const missing = required.filter(f => { const v = formData[f.key]; return !v || (Array.isArray(v) && v.length === 0); });
+    if (missing.length > 0) { toast.error(`Please fill in: ${missing.map(f => f.label).join(', ')}`); return; }
 
     setIsFinalizing(true);
-
     try {
-      const characterData = {
-        ...formData,
-        appearance: formData.appearance || {},
-      };
+      const characterData    = { ...formData, appearance: formData.appearance || {} };
+      const manifestResult   = await generateCharacterManifest(characterData);
+      let finalImageUrl      = formData.generated_image_url;
+      let finalImageHistory  = imageHistory;
+      let finalFalJobId      = formData.fal_job_id;
+      let finalSeed          = formData.seed;
 
-      const manifestResult = await generateCharacterManifest(characterData);
+      if (!finalImageUrl && manifestResult.imagePrompt) {
+        const imgResult = await generateCharacterImage(
+          { prompt: manifestResult.imagePrompt, seed: formData.seed_locked ? formData.seed : null },
+          abortControllerRef.current?.signal
+        );
+        finalImageUrl     = imgResult.url;
+        finalFalJobId     = imgResult.jobId;
+        finalSeed         = imgResult.seed || formData.seed;
+        finalImageHistory = [imgResult.url, ...imageHistory].slice(0, 10);
+      }
 
-      const enrichedData = manifestResult.enrichedData || characterData;
+      const transformedData = { ...formData, emotional_triggers: { positive: formData.emotional_triggers_positive || [], negative: formData.emotional_triggers_negative || [] } };
+      delete transformedData.emotional_triggers_positive;
+      delete transformedData.emotional_triggers_negative;
 
-      const characterRecord = sanitizeForStorage({
-        ...enrichedData,
-        character_manifest: manifestResult.manifest,
-        creation_status: 'finalized',
-        image_history: imageHistory,
-      });
-
+      const characterRecord = sanitizeForStorage({ ...transformedData, character_manifest: manifestResult.manifest, creation_status: 'finalized', generated_image_url: finalImageUrl, fal_job_id: finalFalJobId, seed: finalSeed, image_history: finalImageHistory });
       const created = await Character.create(user.id, characterRecord);
 
       if (draftId) {
         await CharacterDraft.delete(draftId);
-        const storageKey = `character_draft_${draftId}`;
-        localStorage.removeItem(storageKey);
+        localStorage.removeItem(`character_draft_${draftId}`);
       }
 
       toast.success('Character finalized!');
@@ -361,49 +212,40 @@ export default function GenerateCharacterPage() {
     } catch (error) {
       console.error('Finalization failed:', error);
       toast.error('Failed to finalize character. Please try again.');
-    } finally {
-      setIsFinalizing(false);
-    }
+    } finally { setIsFinalizing(false); }
   }, [formData, imageHistory, user, draftId, navigate]);
 
   const handleNavigate = useCallback((to) => {
-    if (isDirty) {
-      setPendingNavigation(to);
-      setShowExitModal(true);
-    } else {
-      navigate(to);
-    }
+    if (isDirty) { setPendingNavigation(to); setShowExitModal(true); }
+    else         { navigate(to); }
   }, [isDirty, navigate]);
 
   const handleSaveAndLeave = useCallback(async () => {
     await saveNow();
     setShowExitModal(false);
-    if (pendingNavigation) {
-      navigate(pendingNavigation);
-    }
+    if (pendingNavigation) navigate(pendingNavigation);
   }, [saveNow, pendingNavigation, navigate]);
 
   const handleLeaveWithoutSaving = useCallback(() => {
     setShowExitModal(false);
-    if (pendingNavigation) {
-      navigate(pendingNavigation);
-    }
+    if (pendingNavigation) navigate(pendingNavigation);
   }, [pendingNavigation, navigate]);
 
   const showImageContext = formData.generated_image_url || imageHistory.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-base-100">
       <div className="max-w-5xl mx-auto px-4 py-6">
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Sparkles className="w-7 h-7 text-indigo-400" />
+            <h1 className="text-2xl font-bold text-base-content flex items-center gap-2">
+              <Sparkles className="w-7 h-7 text-primary" />
               Generate Character
             </h1>
             {draftId && lastSaved && (
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-sm text-base-content/50 mt-1">
                 Draft saved {formatDistanceToNow(lastSaved, { addSuffix: true })}
                 {isDirty && ' (unsaved changes)'}
               </p>
@@ -413,14 +255,15 @@ export default function GenerateCharacterPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleNavigate('/characters')}
-              className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+              className="btn btn-ghost btn-sm"
             >
               View Characters
             </button>
             <button
               onClick={saveNow}
               disabled={!isDirty}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              className="btn btn-neutral btn-sm gap-2"
+              style={{ minHeight: '40px' }}
             >
               <Save className="w-4 h-4" />
               Save Draft
@@ -428,58 +271,20 @@ export default function GenerateCharacterPage() {
           </div>
         </div>
 
-        {/* Progress Indicator */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setPhase(1)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                phase === 1 ? 'bg-indigo-600 text-white' : 'text-gray-400'
-              }`}
+        {/* DaisyUI Steps */}
+        <ul className="steps steps-horizontal w-full mb-8">
+          {STEPS.map(step => (
+            <li
+              key={step.id}
+              className={`step ${phase >= step.id ? 'step-primary' : ''} cursor-pointer`}
+              onClick={() => setPhase(step.id)}
             >
-              <span className="w-6 h-6 flex items-center justify-center rounded-full bg-indigo-600 text-white text-sm">
-                1
-              </span>
-              Identity
-            </button>
-            <ChevronRight className="w-5 h-5 text-gray-600" />
-            <button
-              onClick={() => setPhase(2)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                phase === 2 ? 'bg-indigo-600 text-white' : 'text-gray-400'
-              }`}
-            >
-              <span className={`w-6 h-6 flex items-center justify-center rounded-full ${
-                phase === 2 ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400'
-              } text-sm`}>
-                2
-              </span>
-              Appearance
-            </button>
-            <ChevronRight className="w-5 h-5 text-gray-600" />
-            <button
-              onClick={() => setPhase(3)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                phase === 3 ? 'bg-indigo-600 text-white' : 'text-gray-400'
-              }`}
-            >
-              <span className={`w-6 h-6 flex items-center justify-center rounded-full ${
-                phase === 3 ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400'
-              } text-sm`}>
-                3
-              </span>
-              Generate
-            </button>
-          </div>
-          <div className="h-1 bg-gray-800 rounded-full mt-2">
-            <div 
-              className="h-full bg-indigo-600 rounded-full transition-all duration-300"
-              style={{ width: `${(phase / 3) * 100}%` }}
-            />
-          </div>
-        </div>
+              {step.label}
+            </li>
+          ))}
+        </ul>
 
-        {/* Main Content */}
+        {/* Phase content */}
         <div className="space-y-6">
           {phase === 1 && (
             <CharacterIdentityForm
@@ -529,21 +334,24 @@ export default function GenerateCharacterPage() {
           )}
         </div>
 
-        {/* Navigation Buttons */}
-        {(!showImageContext) && (
-          <div className="flex justify-between mt-8 pt-6 border-t border-gray-800">
-            {phase > 1 && (
+        {/* Step navigation */}
+        {!showImageContext && (
+          <div className="flex justify-between mt-8 pt-6 border-t border-base-300">
+            {phase > 1 ? (
               <button
                 onClick={() => setPhase(phase - 1)}
-                className="px-6 py-2.5 text-gray-300 hover:text-white transition-colors"
+                className="btn btn-ghost"
+                style={{ minHeight: '44px' }}
               >
                 Back
               </button>
-            )}
+            ) : <div />}
+
             {phase < 3 && (
               <button
                 onClick={() => setPhase(phase + 1)}
-                className="ml-auto flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors"
+                className="btn btn-primary gap-2"
+                style={{ minHeight: '44px' }}
               >
                 Continue
                 <ChevronRight className="w-4 h-4" />
@@ -553,7 +361,6 @@ export default function GenerateCharacterPage() {
         )}
       </div>
 
-      {/* Exit Confirmation Modal */}
       <ExitConfirmationModal
         isOpen={showExitModal}
         onClose={() => setShowExitModal(false)}
