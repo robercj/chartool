@@ -1,14 +1,15 @@
 // ─── anthropic.js ─────────────────────────────────────────────────────────────
-// IMPORTANT: This codebase uses the NEW Supabase API key system (sb_publishable_
-// and sb_secret_ keys). Legacy JWT-based keys (anon/service_role with eyJ...
-// format) are NOT supported and MUST NOT be used.
-//
-// All AI calls are now routed through Supabase Edge Functions.
-// API keys (Anthropic + fal.ai) live exclusively in Supabase secrets — never
-// in the browser bundle.
+// All AI calls are proxied through Supabase Edge Functions. API keys
+// (Anthropic, fal.ai) live exclusively in Supabase secrets and are never
+// present in the browser bundle.
 //
 // Call flow:
-//   Browser → Supabase Edge Function (auth + limit check) → Anthropic / fal.ai
+//   Browser → supabase.functions.invoke()
+//          → Edge Function (JWT auth + usage-limit check)
+//          → Anthropic API / fal.ai
+//
+// NOTE: This project uses Supabase's new publishable-key format (sb_publishable_).
+// Legacy anon keys (eyJ...) are not used.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from './supabase';
 
@@ -66,9 +67,15 @@ SECTION C — AI REMINDERS
 - The opening situation must match the premise's "frozen crisis moment" — do not start the story before or after this point
 - Maintain the firewall between Section A (world/character facts) and Section B (narrator instructions) — no mechanical rules in A, no in-world lore in B`;
 
-// ─── Helper: call an edge function via the Supabase client ───────────────────
-// signal: optional AbortSignal — if provided, the request will be cancelled
-// when the signal fires (e.g. component unmount or user-triggered stop).
+// ─── callEdgeFunction ─────────────────────────────────────────────────────────
+// Internal helper — invokes a Supabase Edge Function with the authenticated
+// session attached automatically by the Supabase client.
+//
+// @param {string}      functionName  Name of the edge function (e.g. 'anthropic-proxy')
+// @param {object}      body          Request payload
+// @param {AbortSignal} [signal]      Optional cancellation signal
+// @throws {LimitError}  On HTTP 429 (usage limit reached)
+// @throws {Error}       On all other non-OK responses
 async function callEdgeFunction(functionName, body, signal = null) {
   await supabase.auth.initialize();
 
@@ -181,10 +188,19 @@ export async function callLLM({ prompt, imageUrls = [], responseSchema = null, g
   return text;
 }
 
-// ─── Image Generation: fal.ai ─────────────────────────────────────────────────
-// Uses sync_mode on fal.run (not queue.fal.run) — result comes back in one
-// HTTP response, no polling. The edge function enforces a 90s per-attempt
-// timeout server-side; the signal allows client-side cancellation on unmount.
+// ─── generateImage ────────────────────────────────────────────────────────────
+// Reference-image-guided generation via fal-ai/nano-banana-2/edit.
+// Requires at least one reference image (referenceImageUrls or referenceImageUrl).
+// Uses sync_mode — result returns in a single HTTP response (no polling).
+// The edge function enforces a 90 s per-attempt timeout with up to 3 retries.
+//
+// @param {string}   prompt
+// @param {string}   [referenceImageUrl]   Legacy single-image path
+// @param {string[]} [referenceImageUrls]  Preferred: multiple source angles
+// @param {string}   [propImageUrl]        Appended after reference images
+// @param {string}   [aspectRatio='3:4']
+// @param {AbortSignal} [signal]
+// @returns {Promise<string>} CDN URL of the generated image
 export async function generateImage({ prompt, referenceImageUrl, referenceImageUrls, propImageUrl, aspectRatio = '3:4' }, signal = null) {
   const sourceImages = [];
   if (referenceImageUrls && referenceImageUrls.length > 0) {
@@ -210,9 +226,14 @@ export async function generateImage({ prompt, referenceImageUrl, referenceImageU
   return images[0].url;
 }
 
-// ─── Background Removal: fal.ai (rembg) ──────────────────────────────────────
-// Throws on failure — callers are responsible for deciding whether to surface
-// the error or fall back to the original image. Do NOT wrap in a silent catch.
+// ─── removeImageBackground ───────────────────────────────────────────────────
+// Background removal via fal-ai/imageutils/rembg.
+// Throws on failure — callers must decide whether to surface the error or fall
+// back to the original image. Do NOT swallow this in a silent catch block.
+//
+// @param {string}      imageUrl  URL of the image to process
+// @param {AbortSignal} [signal]
+// @returns {Promise<string>} CDN URL of the processed image (PNG with alpha)
 export async function removeImageBackground(imageUrl, signal = null) {
   const result = await callEdgeFunction('fal-rembg', { image_url: imageUrl }, signal);
   const outputUrl = result?.image?.url;
@@ -237,7 +258,7 @@ Requirements:
 - Include specific visual details: hair color/style, eye color, clothing, accessories, body type
 - Specify pose and expression
 - Include appropriate art style tags (anime, manga, etc.)
-- Do NOT includeNSFW or inappropriate content
+  - Do NOT include NSFW or inappropriate content
 - Focus on creating a visually appealing character portrait
 - Keep the prompt under 500 words
 
@@ -260,86 +281,79 @@ ${JSON.stringify(characterData, null, 2)}`;
 }
 
 // ─── Character Manifest Generation: Claude ──────────────────────────────────
-// Generates a prose character manifest usable as a system prompt
+// Generates a prose character manifest (AI roleplay system prompt).
+//
+// Two modes:
+//   hasImage=true  → returns { manifest } only (image already exists)
+//   hasImage=false → returns { manifest, imagePrompt } so the caller can pass
+//                    imagePrompt straight to fal.ai without a second round-trip
+//
+// In both modes Claude fills in any gaps the user left empty, using context
+// clues from the fields that ARE filled.
 export async function generateCharacterManifest(characterData) {
-  const personalityFields = [
-    'dere_presets',
-    'custom_personality_modifier',
-    'personality_mode',
-    'surface_traits',
-    'hidden_traits',
-    'emotional_triggers_positive',
-    'emotional_triggers_negative',
-    'behavioral_tendencies',
-    'moral_alignment',
-    'values_and_beliefs',
-    'fears_and_insecurities',
-    'surface_goal',
-    'deep_desire',
-    'internal_conflict',
-    'speech_pattern',
-    'tone_of_voice',
-    'verbal_quirks',
-    'internal_monologue_style',
-    'consistency_anchors',
-    'contradiction_points',
-    'relationship_to_authority',
-    'relationship_to_peers',
-    'relationship_to_love_interest',
-    'world_context',
-    'knowledge_domain',
-  ];
+  const hasImage = !!characterData.generated_image_url;
 
-  const systemPrompt = `You are a character profile writer. Your task is to create a comprehensive, high-fidelity character manifest from the provided character data.
+  // Build a compact summary of the character — only non-empty fields — to keep
+  // the token count small and focused.
+  const summary = {};
+  for (const [k, v] of Object.entries(characterData)) {
+    if (v === null || v === undefined || v === '') continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) continue;
+    // Skip internal/storage fields that aren't meaningful to Claude
+    if (['id', 'user_id', 'draft_id', 'fal_job_id', 'creation_status',
+         'draft_saved_at', 'last_modified_at', 'created_at', 'updated_at',
+         'image_history', 'generated_image_url', 'image_prompt'].includes(k)) continue;
+    summary[k] = v;
+  }
 
-The manifest serves as a ready-to-use AI roleplay system prompt. It should include:
+  const imagePromptSection = hasImage ? '' : `
+3. "image_prompt": A single vivid paragraph for an AI image generator (fal.ai/FLUX). Include: full-body or portrait framing, pose, expression, hair colour/style, eye colour, clothing, accessories, background/setting, mood, lighting, and art-style tags (e.g. "anime illustration", "manga style"). Under 300 words. Output the raw prompt string only — no JSON nesting inside this field.`;
+
+  const systemPrompt = `You are a character profile writer. Your task is to produce a high-fidelity character manifest from the provided data.
+
+The manifest is a ready-to-use AI roleplay system prompt. It must cover:
 1. Core identity (name, role, archetype)
 2. Personality breakdown (surface traits, hidden traits, dere type if applicable)
 3. Psychological profile (desires, fears, internal conflict)
 4. Speech and voice patterns
 5. Backstory summary
 6. Relationships
-7. Behavioral guidelines
+7. Behavioural guidelines with concrete examples
 
-IMPORTANT: Use context clues and your creativity to fill in any missing or empty fields. For personality-related fields (dere presets, traits, fears, desires, speech patterns, etc.), create rich, internally consistent details that complement the provided character information. If key identity details are missing, infer plausible choices based on the character's role, archetype, and backstory.
+Fill in any missing or empty fields using context clues and creativity. Infer plausible, internally consistent details from the fields that are provided. Do not leave blanks.
 
-Write in third person, past tense for backstory, present tense for behavioral instructions.
-Make the character feel three-dimensional with contradictions and depth.
-Include specific examples of how the character would react in certain situations.
+Write in third person, past tense for backstory, present tense for behavioural instructions.
 
-Respond in JSON format with two fields:
-1. "enriched_data": The complete character object with all missing personality fields filled in
-2. "manifest": The prose character manifest`;
+Respond in JSON with these fields:
+1. "manifest": The prose character manifest${imagePromptSection}`;
 
-  const userMessage = `Create a character manifest from this data. Fill in any missing or empty personality fields using context clues and creativity:
+  const userMessage = `Create a character manifest from this data. Fill gaps with creative, consistent choices:
 
-${JSON.stringify(characterData, null, 2)}
-
-Required fields that must be present: character_name, character_role, archetype, narrative_function, age, sex, gender_expression, species_or_race, nationality_or_origin, social_class, occupation_or_role, backstory_summary, formative_event, relationship_to_protagonist
-
-Personality fields to fill if missing: ${personalityFields.join(', ')}`;
+${JSON.stringify(summary, null, 2)}`;
 
   const data = await callEdgeFunction('anthropic-proxy', {
     _generation_type: 'character_manifest',
     model: 'claude-sonnet-4-5',
-    max_tokens: 6000,
+    max_tokens: hasImage ? 2500 : 3200,
     temperature: 0.7,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
   });
 
   const responseText = data.content?.[0]?.text || '';
-  
+
   try {
     const parsed = JSON.parse(responseText);
     return {
       manifest: parsed.manifest || responseText,
-      enrichedData: parsed.enriched_data || characterData,
+      imagePrompt: parsed.image_prompt || null,
     };
   } catch {
+    // Claude returned plain text instead of JSON — treat the whole thing as the manifest
     return {
       manifest: responseText,
-      enrichedData: characterData,
+      imagePrompt: null,
     };
   }
 }

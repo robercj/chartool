@@ -1,4 +1,4 @@
-import { useState, useRef, forwardRef } from 'react'
+import { useState, useEffect, useRef, forwardRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -312,9 +312,8 @@ export default function StorylineForm() {
 
       setProgressLabel(`Saving to ${folderDisplayName} in Storyline Gallery…`)
 
-      let storylineId
       if (folderMode === 'new') {
-        const newSl = await Storyline.create(userId, {
+        await Storyline.create(userId, {
           name:                  folderDisplayName,
           storyline_art_style:   null,
           storyline_prompt_id:   saved.id,
@@ -325,7 +324,6 @@ export default function StorylineForm() {
             token_tier:         tokenTier,
           },
         })
-        storylineId = newSl.id
       } else {
         await Storyline.update(selectedFolderId, {
           storyline_prompt_id: saved.id,
@@ -336,7 +334,6 @@ export default function StorylineForm() {
             token_tier:        tokenTier,
           },
         })
-        storylineId = selectedFolderId
       }
 
       queryClient.invalidateQueries({ queryKey: ['storylines', userId] })
@@ -367,7 +364,7 @@ export default function StorylineForm() {
       <div className="flex items-center gap-3 mb-6 md:mb-8">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 rounded-lg hover:bg-white/10 transition-colors touch-min flex-shrink-0"
+          className="btn btn-ghost btn-sm flex-shrink-0"
           aria-label="Go back"
           style={{ minWidth: '44px', minHeight: '44px' }}
         >
@@ -386,7 +383,7 @@ export default function StorylineForm() {
           >
             Generate Storyline
           </h1>
-          <p style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>
+          <p className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>
             Build a structured roleplay prompt from your world premise
           </p>
         </div>
@@ -395,22 +392,21 @@ export default function StorylineForm() {
 
       {/* ── Folder Assignment ── */}
       <SectionCard theme={theme} title="Story Folder" className="mb-6">
-        <p className="text-sm -mt-1 mb-3" style={{ color: theme.textMuted }}>
+        <p className="text-sm -mt-1 mb-3 text-base-content/60">
           All outputs from this generation will be saved into this folder in your Storyline Gallery.
         </p>
 
         {/* Mode toggle */}
         <div
           ref={fieldRefs.folder}
-          className="flex rounded-xl overflow-hidden mb-4"
-          style={{ border: `1px solid ${theme.fieldBorder}` }}
+          className="flex rounded-xl overflow-hidden mb-4 border border-base-300"
           role="group"
           aria-label="Folder mode"
         >
           <button
             type="button"
             onClick={() => setFolderMode('new')}
-            className="flex-1 flex items-center justify-center gap-2 text-sm font-medium transition-all touch-min"
+            className="flex-1 flex items-center justify-center gap-2 text-sm font-medium transition-all"
             style={{
               minHeight:   '44px',
               background:  folderMode === 'new' ? theme.primaryGlow : theme.fieldBg,
@@ -425,7 +421,7 @@ export default function StorylineForm() {
           <button
             type="button"
             onClick={() => setFolderMode('existing')}
-            className="flex-1 flex items-center justify-center gap-2 text-sm font-medium transition-all touch-min"
+            className="flex-1 flex items-center justify-center gap-2 text-sm font-medium transition-all"
             style={{
               minHeight:  '44px',
               background: folderMode === 'existing' ? theme.primaryGlow : theme.fieldBg,
@@ -449,12 +445,10 @@ export default function StorylineForm() {
                 if (errors.folder) setErrors(ev => ({ ...ev, folder: undefined }))
               }}
               placeholder="e.g. The Ashen Crown Chronicles"
-              className="w-full px-3 rounded-xl text-sm"
+              className="input input-bordered bg-base-300 w-full text-sm"
               style={{
-                height:     '44px',
-                background: theme.fieldBg,
-                border:     `1px solid ${errors.folder ? '#ef4444' : theme.fieldBorder}`,
-                color:      theme.textBody,
+                height:      '44px',
+                borderColor: errors.folder ? 'var(--fallback-er,oklch(var(--er)))' : undefined,
               }}
               aria-invalid={!!errors.folder}
               aria-describedby={errors.folder ? 'folder-error' : undefined}
@@ -464,7 +458,7 @@ export default function StorylineForm() {
           <div>
             <FieldLabel theme={theme} required>Select Folder</FieldLabel>
             {storylines.length === 0 ? (
-              <p className="text-sm" style={{ color: theme.textMuted }}>
+              <p className="text-sm text-base-content/60">
                 No storyline folders yet. Switch to "New Folder" to create one.
               </p>
             ) : (
@@ -477,23 +471,21 @@ export default function StorylineForm() {
                       setSelectedFolderId(sl.id)
                       if (errors.folder) setErrors(ev => ({ ...ev, folder: undefined }))
                     }}
-                    className="w-full flex items-center justify-between p-3 rounded-xl text-left transition-all touch-min"
+                    className="btn btn-ghost w-full justify-between text-left border border-base-300"
                     style={{
-                      minHeight:  '44px',
-                      background: selectedFolderId === sl.id ? theme.primaryGlow : theme.fieldBg,
-                      border:     `1px solid ${selectedFolderId === sl.id ? theme.primary : theme.fieldBorder}`,
+                      minHeight:   '44px',
+                      background:  selectedFolderId === sl.id ? theme.primaryGlow : theme.fieldBg,
+                      borderColor: selectedFolderId === sl.id ? theme.primary : undefined,
                     }}
                   >
-                    <span className="text-sm font-medium" style={{ color: theme.textBody }}>
+                    <span className="text-sm font-medium text-base-content">
                       {sl.name}
                     </span>
                     <div className="flex items-center gap-2">
                       {sl.storyline_prompt_id && (
-                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: theme.primaryGlow, color: theme.primary }}>
-                          has prompt
-                        </span>
+                        <span className="badge badge-primary badge-sm">has prompt</span>
                       )}
-                      <span className="text-xs" style={{ color: theme.textMuted }}>
+                      <span className="text-xs text-base-content/60">
                         {sl.batch_ids?.length || 0} chars
                       </span>
                     </div>
@@ -505,7 +497,7 @@ export default function StorylineForm() {
         )}
 
         {errors.folder && (
-          <p id="folder-error" className="text-xs mt-2" style={{ color: '#ef4444' }} role="alert">
+          <p id="folder-error" className="text-xs mt-2 text-error" role="alert">
             {errors.folder}
           </p>
         )}
@@ -699,13 +691,8 @@ export default function StorylineForm() {
           </div>
           <button
             onClick={addNPC}
-            className="mt-3 w-full flex items-center justify-center gap-2 px-4 rounded-xl text-sm transition-all hover:opacity-80 touch-min"
-            style={{
-              minHeight:  '44px',
-              background: theme.fieldBg,
-              border:     `1px solid ${theme.fieldBorder}`,
-              color:      theme.textBody,
-            }}
+            className="btn btn-ghost btn-sm mt-3 w-full border border-base-300"
+            style={{ minHeight: '44px' }}
             aria-label="Add NPC"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
@@ -737,13 +724,8 @@ export default function StorylineForm() {
           </div>
           <button
             onClick={addFaction}
-            className="mt-3 w-full flex items-center justify-center gap-2 px-4 rounded-xl text-sm transition-all hover:opacity-80 touch-min"
-            style={{
-              minHeight:  '44px',
-              background: theme.fieldBg,
-              border:     `1px solid ${theme.fieldBorder}`,
-              color:      theme.textBody,
-            }}
+            className="btn btn-ghost btn-sm mt-3 w-full border border-base-300"
+            style={{ minHeight: '44px' }}
             aria-label="Add Faction"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
@@ -809,7 +791,7 @@ export default function StorylineForm() {
           <div className="space-y-3">
             {/* Value display — always visible, not just on hover */}
             <div className="flex justify-between items-center">
-              <span style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>More tension</span>
+              <span className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>More tension</span>
               <span
                 className="font-bold px-3 py-1 rounded-lg"
                 style={{
@@ -822,14 +804,14 @@ export default function StorylineForm() {
               >
                 {powerFantasyRatio}%
               </span>
-              <span style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>More dominance</span>
+              <span className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>More dominance</span>
             </div>
             <input
               type="range"
               min={40} max={80} step={5}
               value={powerFantasyRatio}
               onChange={e => setPowerFantasyRatio(Number(e.target.value))}
-              className="w-full"
+              className="range range-primary w-full"
               style={{ accentColor: theme.primary, color: theme.primary }}
               aria-label="Power Fantasy Ratio"
               aria-valuemin={40}
@@ -878,7 +860,7 @@ export default function StorylineForm() {
               min={1} max={5} step={1}
               value={moralComplexityLevel}
               onChange={e => setMoralComplexityLevel(Number(e.target.value))}
-              className="w-full"
+              className="range range-primary w-full"
               style={{ accentColor: theme.primary, color: theme.primary }}
               aria-label="Moral Complexity Level"
               aria-valuemin={1}
@@ -939,11 +921,11 @@ export default function StorylineForm() {
         <button
           onClick={handleReviewGenerate}
           disabled={generating}
-          className="flex items-center gap-2 px-8 rounded-xl font-semibold text-base transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ height: '48px', background: theme.buttonGradient, color: 'white' }}
+          className="btn btn-primary"
+          style={{ minHeight: '48px' }}
         >
           {generating ? (
-            <><Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />Generating…</>
+            <><span className="loading loading-spinner loading-sm" aria-hidden="true" />Generating…</>
           ) : (
             <><BookMarked className="w-5 h-5" aria-hidden="true" />Review & Generate</>
           )}
@@ -952,7 +934,7 @@ export default function StorylineForm() {
 
       {/* Mobile sticky submit bar — fixed at bottom, full viewport width */}
       <div
-        className="md:hidden fixed bottom-0 left-0 right-0 z-20 px-4"
+        className="sticky-bottom-bar md:hidden fixed bottom-0 left-0 right-0 z-20 px-4"
         style={{
           background:    theme.navBg,
           backdropFilter:'blur(16px)',
@@ -965,11 +947,11 @@ export default function StorylineForm() {
         <button
           onClick={handleReviewGenerate}
           disabled={generating}
-          className="w-full flex items-center justify-center gap-2 rounded-xl font-semibold text-base transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ height: '48px', background: theme.buttonGradient, color: 'white' }}
+          className="btn btn-primary btn-block pb-safe"
+          style={{ minHeight: '48px' }}
         >
           {generating ? (
-            <><Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />Generating…</>
+            <><span className="loading loading-spinner loading-sm" aria-hidden="true" />Generating…</>
           ) : (
             <><BookMarked className="w-5 h-5" aria-hidden="true" />Review & Generate</>
           )}
@@ -1029,14 +1011,14 @@ const FieldGroup = forwardRef(function FieldGroup(
           <span style={{ fontSize: 'var(--font-size-label)', color: theme.primary }}>*</span>
         )}
         {hint && (
-          <span style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>— {hint}</span>
+          <span className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>— {hint}</span>
         )}
       </div>
       {children}
       {error && (
         <p
-          className="mt-1"
-          style={{ fontSize: 'var(--font-size-label)', color: '#ef4444' }}
+          className="mt-1 text-error"
+          style={{ fontSize: 'var(--font-size-label)' }}
           role="alert"
           aria-live="polite"
         >
@@ -1056,19 +1038,18 @@ function SectionCard({ theme, title, children, className = '' }) {
       that need clipping (e.g. image thumbnails) handle it themselves.
     */
     <div
-      className={`rounded-2xl ${className}`}
-      style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
+      className={`card bg-base-200 border border-base-300 rounded-2xl ${className}`}
     >
       {/* Section heading — scrolls naturally; no sticky on mobile */}
-      <div style={{ borderBottom: `1px solid ${theme.fieldBorder}` }}>
+      <div className="border-b border-base-300">
         <h2
-          className="font-bold px-5 py-4 md:px-6"
-          style={{ fontSize: 'var(--font-size-heading)', color: theme.textBody }}
+          className="font-bold px-5 py-4 md:px-6 text-base-content"
+          style={{ fontSize: 'var(--font-size-heading)' }}
         >
           {title}
         </h2>
       </div>
-      <div className="p-4 md:p-6 space-y-5">
+      <div className="card-body p-4 md:p-6 space-y-5">
         {children}
       </div>
     </div>
@@ -1082,15 +1063,10 @@ function TextInput({ value, onChange, placeholder, theme, className = '', 'aria-
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className={`w-full px-3 rounded-xl text-sm transition-colors ${className}`}
-      style={{
-        height:     '44px',
-        background: theme.fieldBg,
-        border:     `1px solid ${theme.fieldBorder}`,
-        color:      theme.textBody,
-      }}
+      className={`input input-bordered bg-base-300 w-full text-sm transition-colors ${className}`}
+      style={{ height: '44px' }}
       aria-invalid={ariaInvalid}
-      autocorrect="on"
+      autoCorrect="on"
       spellCheck="true"
     />
   )
@@ -1104,20 +1080,17 @@ function Textarea({ value, onChange, placeholder, hint, rows = 3, theme, 'aria-i
         onChange={onChange}
         placeholder={placeholder}
         rows={rows}
-        className="w-full px-3 py-2 rounded-xl text-sm resize-y transition-colors"
+        className="textarea textarea-bordered bg-base-300 w-full text-sm resize-y transition-colors"
         style={{
-          background: theme.fieldBg,
-          border:     `1px solid ${theme.fieldBorder}`,
-          color:      theme.textBody,
-          minHeight:  '96px',   /* 96px mobile minimum per spec */
+          minHeight: '96px',   /* 96px mobile minimum per spec */
         }}
         aria-invalid={ariaInvalid}
         aria-describedby={ariaDescribedBy}
-        autocorrect="on"
+        autoCorrect="on"
         spellCheck="true"
       />
       {hint && (
-        <p className="mt-1" style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>
+        <p className="mt-1 text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>
           {hint}
         </p>
       )}
@@ -1130,12 +1103,10 @@ function Chip({ label, selected, onClick, theme, role = 'checkbox', 'aria-checke
     <button
       type="button"
       onClick={onClick}
-      className="chip-btn rounded-full font-medium transition-all flex-shrink-0"
+      className={`btn btn-sm chip-btn rounded-full flex-shrink-0 ${selected ? 'btn-primary btn-active' : 'btn-ghost border border-base-300'}`}
       style={{
-        background:  selected ? theme.primary : theme.fieldBg,
-        color:       selected ? 'white' : theme.textBody,
-        border:      `1px solid ${selected ? theme.primary : theme.fieldBorder}`,
-        boxShadow:   selected ? `0 0 8px ${theme.primaryGlow}` : 'none',
+        minHeight: '44px',
+        boxShadow: selected ? `0 0 8px ${theme.primaryGlow}` : 'none',
       }}
       role={role}
       aria-checked={ariaChecked ?? selected}
@@ -1155,15 +1126,10 @@ function RadioChip({ label, selected, onClick, theme }) {
     <button
       type="button"
       onClick={onClick}
-      className="chip-btn md:rounded-full rounded-xl font-medium transition-all text-left md:text-center w-full md:w-auto flex items-center md:justify-center gap-2"
+      className={`btn btn-sm chip-btn rounded-xl md:rounded-full w-full md:w-auto text-left md:text-center flex items-center md:justify-center gap-2 ${selected ? 'btn-primary btn-active' : 'btn-ghost border border-base-300'}`}
       style={{
-        minHeight:   '44px',
-        background:  selected ? theme.primary : theme.fieldBg,
-        color:       selected ? 'white' : theme.textBody,
-        border:      `1px solid ${selected ? theme.primary : theme.fieldBorder}`,
-        boxShadow:   selected ? `0 0 8px ${theme.primaryGlow}` : 'none',
-        paddingLeft:  '0.75rem',
-        paddingRight: '0.75rem',
+        minHeight: '44px',
+        boxShadow: selected ? `0 0 8px ${theme.primaryGlow}` : 'none',
       }}
       role="radio"
       aria-checked={selected}
@@ -1185,13 +1151,7 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
   const [expanded, setExpanded] = useState(true)
 
   return (
-    <div
-      className="rounded-xl"
-      style={{
-        background: theme.fieldBg,
-        border:     `1px solid ${theme.fieldBorder}`,
-      }}
-    >
+    <div className="collapse collapse-arrow bg-base-200 border border-base-300 rounded-xl">
       {/* Card header */}
       <div
         className="flex items-center justify-between px-4 cursor-pointer"
@@ -1201,7 +1161,7 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
           borderBottom: expanded ? `1px solid ${theme.fieldBorder}` : 'none',
         }}
       >
-        <span className="text-sm font-medium" style={{ color: theme.textBody }}>
+        <span className="text-sm font-medium text-base-content">
           NPC {index + 1}{npc.name ? ` — ${npc.name}` : ''}
         </span>
         <div className="flex items-center gap-1">
@@ -1209,21 +1169,19 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
             <button
               type="button"
               onClick={e => { e.stopPropagation(); onRemove() }}
-              className="flex items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+              className="btn btn-ghost btn-sm btn-circle transition-colors"
               style={{
-                /* Muted style, NOT red — less alarming per spec */
-                color:     theme.textMuted,
                 minWidth:  '44px',
                 minHeight: '44px',
               }}
               aria-label={`Remove NPC ${index + 1}`}
             >
-              <XIcon className="w-4 h-4" aria-hidden="true" />
+              <XIcon className="w-4 h-4 text-base-content/60" aria-hidden="true" />
             </button>
           )}
           {expanded
-            ? <ChevronUp   className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
-            : <ChevronDown className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
+            ? <ChevronUp   className="w-4 h-4 text-base-content/60" aria-hidden="true" />
+            : <ChevronDown className="w-4 h-4 text-base-content/60" aria-hidden="true" />
           }
         </div>
       </div>
@@ -1239,18 +1197,16 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                 value={npc.name}
                 onChange={e => onUpdate({ name: e.target.value })}
                 placeholder="NPC name"
-                className="w-full px-3 rounded-lg text-sm"
+                className="input input-bordered bg-base-300 w-full text-sm"
                 style={{
-                  height:     '44px',
-                  background: theme.cardBg,
-                  border:     `1px solid ${fieldErrors.name ? '#ef4444' : theme.fieldBorder}`,
-                  color:      theme.textBody,
+                  height:      '44px',
+                  borderColor: fieldErrors.name ? 'var(--fallback-er,oklch(var(--er)))' : undefined,
                 }}
                 aria-invalid={!!fieldErrors.name}
-                autocorrect="on"
+                autoCorrect="on"
               />
               {fieldErrors.name && (
-                <p className="text-xs mt-0.5" style={{ color: '#ef4444' }} role="alert">{fieldErrors.name}</p>
+                <p className="text-xs mt-0.5 text-error" role="alert">{fieldErrors.name}</p>
               )}
             </div>
             <div>
@@ -1260,18 +1216,16 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                 value={npc.role}
                 onChange={e => onUpdate({ role: e.target.value })}
                 placeholder="e.g. rival general, reluctant healer"
-                className="w-full px-3 rounded-lg text-sm"
+                className="input input-bordered bg-base-300 w-full text-sm"
                 style={{
-                  height:     '44px',
-                  background: theme.cardBg,
-                  border:     `1px solid ${fieldErrors.role ? '#ef4444' : theme.fieldBorder}`,
-                  color:      theme.textBody,
+                  height:      '44px',
+                  borderColor: fieldErrors.role ? 'var(--fallback-er,oklch(var(--er)))' : undefined,
                 }}
                 aria-invalid={!!fieldErrors.role}
-                autocorrect="on"
+                autoCorrect="on"
               />
               {fieldErrors.role && (
-                <p className="text-xs mt-0.5" style={{ color: '#ef4444' }} role="alert">{fieldErrors.role}</p>
+                <p className="text-xs mt-0.5 text-error" role="alert">{fieldErrors.role}</p>
               )}
             </div>
           </div>
@@ -1283,14 +1237,9 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
               onChange={e => onUpdate({ surface_vs_internal: e.target.value })}
               placeholder="How they appear vs. what they truly feel or want"
               rows={2}
-              className="w-full px-3 py-2 rounded-lg text-sm resize-y"
-              style={{
-                background: theme.cardBg,
-                border:     `1px solid ${theme.fieldBorder}`,
-                color:      theme.textBody,
-                minHeight:  '96px',
-              }}
-              autocorrect="on"
+              className="textarea textarea-bordered bg-base-300 w-full text-sm resize-y"
+              style={{ minHeight: '96px' }}
+              autoCorrect="on"
               spellCheck="true"
             />
           </div>
@@ -1303,13 +1252,8 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                 value={npc.relationship_vector}
                 onChange={e => onUpdate({ relationship_vector: e.target.value })}
                 placeholder="e.g. Antagonist → Reluctant ally"
-                className="w-full px-3 rounded-lg text-sm"
-                style={{
-                  height:     '44px',
-                  background: theme.cardBg,
-                  border:     `1px solid ${theme.fieldBorder}`,
-                  color:      theme.textBody,
-                }}
+                className="input input-bordered bg-base-300 w-full text-sm"
+                style={{ height: '44px' }}
               />
             </div>
             <div>
@@ -1319,13 +1263,8 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                 value={npc.cross_connection}
                 onChange={e => onUpdate({ cross_connection: e.target.value })}
                 placeholder="e.g. Secretly loyal to Faction Leader"
-                className="w-full px-3 rounded-lg text-sm"
-                style={{
-                  height:     '44px',
-                  background: theme.cardBg,
-                  border:     `1px solid ${theme.fieldBorder}`,
-                  color:      theme.textBody,
-                }}
+                className="input input-bordered bg-base-300 w-full text-sm"
+                style={{ height: '44px' }}
               />
             </div>
           </div>
@@ -1343,12 +1282,8 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
                   key={bt}
                   type="button"
                   onClick={() => onUpdate({ bond_type: npc.bond_type === bt ? null : bt })}
-                  className="chip-btn rounded-full font-medium transition-all"
-                  style={{
-                    background: npc.bond_type === bt ? theme.primary : theme.cardBg,
-                    color:      npc.bond_type === bt ? 'white' : theme.textBody,
-                    border:     `1px solid ${npc.bond_type === bt ? theme.primary : theme.fieldBorder}`,
-                  }}
+                  className={`btn btn-sm chip-btn rounded-full ${npc.bond_type === bt ? 'btn-primary btn-active' : 'btn-ghost border border-base-300'}`}
+                  style={{ minHeight: '44px' }}
                   role="radio"
                   aria-checked={npc.bond_type === bt}
                 >
@@ -1367,13 +1302,7 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
   const [expanded, setExpanded] = useState(true)
 
   return (
-    <div
-      className="rounded-xl"
-      style={{
-        background: theme.fieldBg,
-        border:     `1px solid ${theme.fieldBorder}`,
-      }}
-    >
+    <div className="collapse collapse-arrow bg-base-200 border border-base-300 rounded-xl">
       <div
         className="flex items-center justify-between px-4 cursor-pointer"
         onClick={() => setExpanded(e => !e)}
@@ -1382,7 +1311,7 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
           borderBottom: expanded ? `1px solid ${theme.fieldBorder}` : 'none',
         }}
       >
-        <span className="text-sm font-medium" style={{ color: theme.textBody }}>
+        <span className="text-sm font-medium text-base-content">
           Faction {index + 1}{faction.name ? ` — ${faction.name}` : ''}
         </span>
         <div className="flex items-center gap-1">
@@ -1390,20 +1319,19 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
             <button
               type="button"
               onClick={e => { e.stopPropagation(); onRemove() }}
-              className="flex items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+              className="btn btn-ghost btn-sm btn-circle transition-colors"
               style={{
-                color:     theme.textMuted,
                 minWidth:  '44px',
                 minHeight: '44px',
               }}
               aria-label={`Remove Faction ${index + 1}`}
             >
-              <XIcon className="w-4 h-4" aria-hidden="true" />
+              <XIcon className="w-4 h-4 text-base-content/60" aria-hidden="true" />
             </button>
           )}
           {expanded
-            ? <ChevronUp   className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
-            : <ChevronDown className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
+            ? <ChevronUp   className="w-4 h-4 text-base-content/60" aria-hidden="true" />
+            : <ChevronDown className="w-4 h-4 text-base-content/60" aria-hidden="true" />
           }
         </div>
       </div>
@@ -1418,18 +1346,16 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
                 value={faction.name}
                 onChange={e => onUpdate({ name: e.target.value })}
                 placeholder="Faction name"
-                className="w-full px-3 rounded-lg text-sm"
+                className="input input-bordered bg-base-300 w-full text-sm"
                 style={{
-                  height:     '44px',
-                  background: theme.cardBg,
-                  border:     `1px solid ${fieldErrors.name ? '#ef4444' : theme.fieldBorder}`,
-                  color:      theme.textBody,
+                  height:      '44px',
+                  borderColor: fieldErrors.name ? 'var(--fallback-er,oklch(var(--er)))' : undefined,
                 }}
                 aria-invalid={!!fieldErrors.name}
-                autocorrect="on"
+                autoCorrect="on"
               />
               {fieldErrors.name && (
-                <p className="text-xs mt-0.5" style={{ color: '#ef4444' }} role="alert">{fieldErrors.name}</p>
+                <p className="text-xs mt-0.5 text-error" role="alert">{fieldErrors.name}</p>
               )}
             </div>
             <div>
@@ -1439,13 +1365,8 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
                 value={faction.purpose}
                 onChange={e => onUpdate({ purpose: e.target.value })}
                 placeholder="Their driving goal or reason for existing"
-                className="w-full px-3 rounded-lg text-sm"
-                style={{
-                  height:     '44px',
-                  background: theme.cardBg,
-                  border:     `1px solid ${theme.fieldBorder}`,
-                  color:      theme.textBody,
-                }}
+                className="input input-bordered bg-base-300 w-full text-sm"
+                style={{ height: '44px' }}
               />
             </div>
           </div>
@@ -1458,13 +1379,8 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
                 value={faction.stance_toward_protagonist}
                 onChange={e => onUpdate({ stance_toward_protagonist: e.target.value })}
                 placeholder="e.g. Hostile, Neutral, Cautiously interested"
-                className="w-full px-3 rounded-lg text-sm"
-                style={{
-                  height:     '44px',
-                  background: theme.cardBg,
-                  border:     `1px solid ${theme.fieldBorder}`,
-                  color:      theme.textBody,
-                }}
+                className="input input-bordered bg-base-300 w-full text-sm"
+                style={{ height: '44px' }}
               />
             </div>
             <div>
@@ -1474,13 +1390,8 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
                 value={faction.moral_complexity}
                 onChange={e => onUpdate({ moral_complexity: e.target.value })}
                 placeholder="Their grey area — what makes them not purely good or evil"
-                className="w-full px-3 rounded-lg text-sm"
-                style={{
-                  height:     '44px',
-                  background: theme.cardBg,
-                  border:     `1px solid ${theme.fieldBorder}`,
-                  color:      theme.textBody,
-                }}
+                className="input input-bordered bg-base-300 w-full text-sm"
+                style={{ height: '44px' }}
               />
             </div>
           </div>
@@ -1493,7 +1404,7 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
 function SubLabel({ theme, children }) {
   return (
     <div
-      className="uppercase tracking-wider font-medium mb-1"
+      className="uppercase tracking-wider font-medium mb-1 text-base-content/70"
       style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}
     >
       {children}
@@ -1514,11 +1425,11 @@ function ConfirmationModal({ theme, tokenTier, onTierChange, onGenerate, onBack,
   const sheetRef     = useRef(null)
   const firstFocusRef = useRef(null)
 
-  // Focus trap + escape key
-  useState(() => {
+  // Focus the first interactive element when the modal opens
+  useEffect(() => {
     const t = setTimeout(() => firstFocusRef.current?.focus(), 60)
     return () => clearTimeout(t)
-  })
+  }, [])
 
   // Touch drag-to-dismiss state
   const dragState = useRef({ startY: 0, dragging: false })
@@ -1544,9 +1455,9 @@ function ConfirmationModal({ theme, tokenTier, onTierChange, onGenerate, onBack,
   }
 
   return (
-    <div className="fixed inset-0 z-50" aria-modal="true" role="dialog" aria-labelledby="confirm-modal-title">
+    <dialog className="modal modal-bottom sm:modal-middle" open aria-modal="true" aria-labelledby="confirm-modal-title">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" onClick={onBack} />
+      <div className="modal-backdrop" onClick={onBack} />
 
       {/*
         MOBILE BOTTOM SHEET — shown below md breakpoint via CSS.
@@ -1557,24 +1468,21 @@ function ConfirmationModal({ theme, tokenTier, onTierChange, onGenerate, onBack,
       {/* ── Mobile Bottom Sheet ── */}
       <div
         ref={sheetRef}
-        className="bottom-sheet md:hidden absolute bottom-0 left-0 right-0 rounded-t-2xl"
+        className="modal-box bg-base-200 border border-base-300 md:hidden rounded-t-2xl rounded-b-none w-full max-w-full"
         style={{
-          background:       theme.cardBg,
-          border:           `1px solid ${theme.cardBorder}`,
-          borderBottom:     'none',
-          transform:        `translateY(${dragOffset}px)`,
-          transition:       dragOffset === 0 ? 'transform 0.3s cubic-bezier(0.32,0.72,0,1)' : 'none',
-          paddingBottom:    `calc(var(--safe-bottom) + 1rem)`,
-          maxHeight:        '75vh',
-          overflowY:        'auto',
+          transform:     `translateY(${dragOffset}px)`,
+          transition:    dragOffset === 0 ? 'transform 0.3s cubic-bezier(0.32,0.72,0,1)' : 'none',
+          paddingBottom: `calc(var(--safe-bottom) + 1rem)`,
+          maxHeight:     '75vh',
+          overflowY:     'auto',
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-2" aria-hidden="true">
-          <div className="w-10 h-1 rounded-full" style={{ background: theme.fieldBorder }} />
+        <div className="flex justify-center pt-1 pb-2" aria-hidden="true">
+          <div className="w-10 h-1 rounded-full bg-base-300" />
         </div>
 
         <ConfirmModalContent
@@ -1590,24 +1498,19 @@ function ConfirmationModal({ theme, tokenTier, onTierChange, onGenerate, onBack,
       </div>
 
       {/* ── Desktop Centered Dialog ── */}
-      <div className="hidden md:flex absolute inset-0 items-center justify-center p-4">
-        <div
-          className="relative w-full max-w-md rounded-2xl p-6 space-y-5"
-          style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
-        >
-          <ConfirmModalContent
-            theme={theme}
-            tokenTier={tokenTier}
-            onTierChange={onTierChange}
-            onGenerate={onGenerate}
-            onBack={onBack}
-            folderName={folderName}
-            firstFocusRef={firstFocusRef}
-            mobile={false}
-          />
-        </div>
+      <div className="modal-box hidden md:block bg-base-200 border border-base-300 relative w-full max-w-md space-y-5">
+        <ConfirmModalContent
+          theme={theme}
+          tokenTier={tokenTier}
+          onTierChange={onTierChange}
+          onGenerate={onGenerate}
+          onBack={onBack}
+          folderName={folderName}
+          firstFocusRef={firstFocusRef}
+          mobile={false}
+        />
       </div>
-    </div>
+    </dialog>
   )
 }
 
@@ -1617,12 +1520,12 @@ function ConfirmModalContent({ theme, tokenTier, onTierChange, onGenerate, onBac
       <div>
         <h3
           id="confirm-modal-title"
-          className="font-bold mb-1"
-          style={{ fontSize: 'var(--font-size-heading)', color: theme.textBody }}
+          className="font-bold mb-1 text-base-content"
+          style={{ fontSize: 'var(--font-size-heading)' }}
         >
           Choose output depth
         </h3>
-        <p className="text-sm" style={{ color: theme.textMuted }}>
+        <p className="text-sm text-base-content/60">
           This controls how detailed the generated prompt will be.
           {folderName && (
             <> Result will be saved to <span style={{ color: theme.primary }}>"{folderName}"</span>.</>
@@ -1638,11 +1541,11 @@ function ConfirmModalContent({ theme, tokenTier, onTierChange, onGenerate, onBac
             ref={idx === 0 ? firstFocusRef : undefined}
             type="button"
             onClick={() => onTierChange(tier.id)}
-            className="w-full flex items-center gap-3 px-4 rounded-xl text-left transition-all"
+            className="btn btn-ghost w-full justify-start text-left border border-base-300"
             style={{
-              minHeight:  '52px',
-              background: tokenTier === tier.id ? theme.primaryGlow : theme.fieldBg,
-              border:     `1px solid ${tokenTier === tier.id ? theme.primary : theme.fieldBorder}`,
+              minHeight:   '52px',
+              background:  tokenTier === tier.id ? theme.primaryGlow : theme.fieldBg,
+              borderColor: tokenTier === tier.id ? theme.primary : undefined,
             }}
             role="radio"
             aria-checked={tokenTier === tier.id}
@@ -1658,8 +1561,8 @@ function ConfirmModalContent({ theme, tokenTier, onTierChange, onGenerate, onBac
               )}
             </div>
             <div>
-              <div className="text-sm font-semibold" style={{ color: theme.textBody }}>{tier.label}</div>
-              <div style={{ fontSize: 'var(--font-size-label)', color: theme.textMuted }}>{tier.subtitle}</div>
+              <div className="text-sm font-semibold text-base-content">{tier.label}</div>
+              <div className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>{tier.subtitle}</div>
             </div>
           </button>
         ))}
@@ -1673,20 +1576,15 @@ function ConfirmModalContent({ theme, tokenTier, onTierChange, onGenerate, onBac
       <div className="flex flex-col md:flex-row gap-3 pt-1">
         <button
           onClick={onGenerate}
-          className="w-full md:flex-1 rounded-xl text-sm font-semibold transition-all hover:opacity-90 flex items-center justify-center"
-          style={{ height: '48px', background: theme.buttonGradient, color: 'white' }}
+          className="btn btn-primary w-full md:flex-1"
+          style={{ minHeight: '48px' }}
         >
           Generate
         </button>
         <button
           onClick={onBack}
-          className="w-full md:flex-1 rounded-xl text-sm font-medium transition-all hover:opacity-80 flex items-center justify-center"
-          style={{
-            height:     '48px',
-            background: theme.fieldBg,
-            border:     `1px solid ${theme.fieldBorder}`,
-            color:      theme.textBody,
-          }}
+          className="btn btn-ghost w-full md:flex-1 border border-base-300"
+          style={{ minHeight: '48px' }}
         >
           Back
         </button>

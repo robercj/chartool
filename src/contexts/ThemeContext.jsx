@@ -7,6 +7,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 // punch_red:      #ef233c (100–900: #330409 → #fcd3d8)
 // classic_crimson:#d80032 (100–900: #2b000a → #ffc4d2)
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const GENRES = {
   default: {
     label: 'Default',
@@ -230,6 +231,7 @@ export function ThemeProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) throw new Error('useTheme must be used within ThemeProvider');

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import AuthModal from './AuthModal';
 import { useTheme } from '../contexts/ThemeContext';
@@ -7,9 +6,13 @@ import { Sparkles } from 'lucide-react';
 export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   const { theme } = useTheme();
-  const [showAuth, setShowAuth] = useState(true);
 
-  // Still resolving session from Supabase
+  // Already authenticated — always render children immediately, even if profile
+  // is reloading in the background. This prevents in-flight work (image gen,
+  // finalization) from being destroyed by a token refresh on tab focus.
+  if (user) return children;
+
+  // Still resolving session from Supabase on initial load
   if (loading) {
     return (
       <div
@@ -24,9 +27,6 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  // Authenticated — render the protected content
-  if (user) return children;
-
   // Not authenticated — show auth modal over a blurred placeholder
   return (
     <>
@@ -38,7 +38,7 @@ export default function ProtectedRoute({ children }) {
         </div>
       </div>
 
-      {showAuth && <AuthModal onClose={null} />}
+      <AuthModal onClose={null} />
     </>
   );
 }

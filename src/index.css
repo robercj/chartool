@@ -1,4 +1,67 @@
 @import "tailwindcss";
+@plugin "daisyui" {
+  themes: chartool --default;
+}
+
+/* ─── CharTool Custom DaisyUI Theme ─────────────────────────────────────── */
+/*
+  Maps the existing 8-genre colour system to DaisyUI semantic tokens.
+  Runtime genre switching is applied by updating CSS custom properties on
+  :root via ThemeContext — DaisyUI reads them automatically.
+
+  BASE PALETTE (default/genre-neutral dark):
+    primary   = #ef233c  (crimson red — brand)
+    secondary = #8d99ae  (lavender grey)
+    accent    = #d80032  (deep crimson)
+    neutral   = #2b2d42  (space indigo)
+    base-100  = #08090d  (near-black page)
+    base-200  = #11121a  (card background)
+    base-300  = #191b27  (elevated card / field)
+    base-content = #edf2f4 (platinum text)
+*/
+@plugin "daisyui/theme" {
+  name: "chartool";
+  default: true;
+  color-scheme: dark;
+
+  /* Base surfaces */
+  --color-base-100: oklch(7% 0.02 264);    /* #08090d near-black */
+  --color-base-200: oklch(10% 0.025 264);  /* #11121a card bg */
+  --color-base-300: oklch(14% 0.03 264);   /* #191b27 field bg */
+  --color-base-content: oklch(95% 0.01 240); /* #edf2f4 platinum */
+
+  /* Brand colours */
+  --color-primary: oklch(48% 0.22 15);        /* #ef233c crimson */
+  --color-primary-content: oklch(98% 0.005 0); /* white */
+  --color-secondary: oklch(65% 0.04 240);      /* #8d99ae lavender */
+  --color-secondary-content: oklch(10% 0.02 264);
+  --color-accent: oklch(40% 0.20 15);          /* #d80032 deep crimson */
+  --color-accent-content: oklch(98% 0.005 0);
+  --color-neutral: oklch(22% 0.04 264);        /* #2b2d42 space indigo */
+  --color-neutral-content: oklch(88% 0.02 240);
+
+  /* Semantic status colours */
+  --color-info: oklch(62% 0.19 231);           /* #3b82f6 blue */
+  --color-info-content: oklch(98% 0.005 231);
+  --color-success: oklch(64% 0.18 160);        /* #10b981 green */
+  --color-success-content: oklch(98% 0.005 160);
+  --color-warning: oklch(72% 0.18 75);         /* #f59e0b amber */
+  --color-warning-content: oklch(15% 0.04 75);
+  --color-error: oklch(57% 0.22 25);           /* #ef4444 red */
+  --color-error-content: oklch(98% 0.005 25);
+
+  /* Shape */
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+
+  /* Border */
+  --border: 1px;
+
+  /* Effects — subtle depth, no noise */
+  --depth: 1;
+  --noise: 0;
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    PHASE 1 — DESIGN TOKEN & BREAKPOINT FOUNDATION
@@ -74,51 +137,15 @@ body {
   min-width:  var(--touch-target-min);
 }
 
-/* ─── Range Slider — Mobile Touch Override ───────────────────────────────── */
-/*
-  Override tiny default browser thumb (16px) to 28×28px on all browsers.
-  Track height raised to 6px for better touch accuracy.
-*/
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 6px;
-  border-radius: 9999px;
-  cursor: pointer;
-  width: 100%;
-}
-
+/* ─── Range Slider — DaisyUI range component handles base styles ─────────── */
+/* Custom thumb size override for better mobile touch targets (28px) */
 input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background: currentColor;
-  cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-  margin-top: -11px; /* (28 - 6) / 2 = 11px — centres thumb on track */
 }
-
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 9999px;
-}
-
 input[type="range"]::-moz-range-thumb {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background: currentColor;
-  cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-}
-
-input[type="range"]::-moz-range-track {
-  height: 6px;
-  border-radius: 9999px;
 }
 
 /* ─── Focus Indicators ───────────────────────────────────────────────────── */

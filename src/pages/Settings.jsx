@@ -1,20 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Shield, User, Crown, BarChart3, Mail, AlertCircle, CheckCircle, Eye, EyeOff, Lock, Check, Loader2, ExternalLink } from 'lucide-react'
+import { Shield, User, Crown, Mail, Eye, EyeOff, Lock, Check, Loader2, ExternalLink } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import { redirectToCheckout, redirectToCustomerPortal } from '../lib/stripe'
 
-const TIER_COLORS = {
-  free:       { bg: 'rgba(100,116,139,0.2)',  text: '#94a3b8', border: 'rgba(100,116,139,0.35)' },
-  pro:        { bg: 'rgba(99,102,241,0.2)',   text: '#a5b4fc', border: 'rgba(99,102,241,0.35)'  },
-  enterprise: { bg: 'rgba(234,179,8,0.15)',   text: '#fde047', border: 'rgba(234,179,8,0.35)'   },
+// Tier badge DaisyUI class mapping
+const TIER_BADGE = {
+  free:       'badge-ghost',
+  pro:        'badge-info',
+  enterprise: 'badge-warning',
 }
 
-// Tier pricing config — stripe_price_id values should match what's stored in
-// the tiers table after running migration 004_stripe_billing.sql
 const TIER_PLANS = [
   {
     id: 'free',
@@ -59,22 +58,19 @@ const TIER_PLANS = [
 ]
 
 export default function SettingsPage() {
-  const { theme } = useTheme()
+  const { theme }       = useTheme()
   const { user, profile, tier, usage, refreshProfile } = useAuth()
-  const [searchParams] = useSearchParams()
+  const [searchParams]  = useSearchParams()
 
-  const [displayName, setDisplayName] = useState(profile?.display_name || '')
-  const [savingName, setSavingName] = useState(false)
+  const [displayName,      setDisplayName]      = useState(profile?.display_name || '')
+  const [savingName,       setSavingName]        = useState(false)
+  const [newPassword,      setNewPassword]       = useState('')
+  const [confirmPassword,  setConfirmPassword]   = useState('')
+  const [showNew,          setShowNew]           = useState(false)
+  const [showConfirm,      setShowConfirm]       = useState(false)
+  const [savingPassword,   setSavingPassword]    = useState(false)
+  const [checkoutLoading,  setCheckoutLoading]   = useState(null)
 
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showCurrent, setShowCurrent] = useState(false)
-  const [showNew, setShowNew] = useState(false)
-  const [savingPassword, setSavingPassword] = useState(false)
-  const [checkoutLoading, setCheckoutLoading] = useState(null)
-
-  // Handle redirect back from Stripe checkout
   useEffect(() => {
     const upgradeStatus = searchParams.get('upgrade')
     if (upgradeStatus === 'success') {
@@ -83,116 +79,85 @@ export default function SettingsPage() {
     } else if (upgradeStatus === 'cancelled') {
       toast.info('Checkout cancelled — your plan was not changed.')
     }
-  }, [])
+  }, [searchParams, refreshProfile])
 
   const handleUpgrade = async (planId) => {
-    // Fetch the stripe_price_id for this tier from Supabase
     const { data: tierData, error } = await supabase
-      .from('tiers')
-      .select('stripe_price_id')
-      .eq('id', planId)
-      .single()
-
+      .from('tiers').select('stripe_price_id').eq('id', planId).single()
     if (error || !tierData?.stripe_price_id) {
       toast.error('This plan is not yet available for purchase. Please contact support.')
       return
     }
-
     setCheckoutLoading(planId)
-    try {
-      await redirectToCheckout(tierData.stripe_price_id)
-    } catch (err) {
-      toast.error(err.message || 'Failed to start checkout')
-      setCheckoutLoading(null)
-    }
+    try { await redirectToCheckout(tierData.stripe_price_id) }
+    catch (err) { toast.error(err.message || 'Failed to start checkout'); setCheckoutLoading(null) }
   }
 
   const handleManageBilling = async () => {
     setCheckoutLoading('portal')
-    try {
-      await redirectToCustomerPortal()
-    } catch (err) {
-      toast.error(err.message || 'Failed to open billing portal')
-      setCheckoutLoading(null)
-    }
+    try { await redirectToCustomerPortal() }
+    catch (err) { toast.error(err.message || 'Failed to open billing portal'); setCheckoutLoading(null) }
   }
 
-  const tierId = tier?.id || 'free'
-  const tierColors = TIER_COLORS[tierId] || TIER_COLORS.free
+  const tierId     = tier?.id || 'free'
+  const tierBadge  = TIER_BADGE[tierId] || 'badge-ghost'
 
-  const imageLimit = tier?.monthly_image_limit
-  const storyLimit = tier?.monthly_story_limit
+  const imageLimit      = tier?.monthly_image_limit
+  const storyLimit      = tier?.monthly_story_limit
   const dailyImageLimit = tier?.daily_image_limit
   const dailyStoryLimit = tier?.daily_story_limit
-  const imageUsed = usage?.image ?? 0
-  const storyUsed = usage?.story ?? 0
+  const imageUsed       = usage?.image ?? 0
+  const storyUsed       = usage?.story ?? 0
 
   const handleSaveDisplayName = async () => {
     if (!displayName.trim()) return
     setSavingName(true)
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ display_name: displayName.trim() })
-        .eq('id', user.id)
+      const { error } = await supabase.from('profiles').update({ display_name: displayName.trim() }).eq('id', user.id)
       if (error) throw error
       refreshProfile()
       toast.success('Display name updated')
-    } catch (err) {
-      toast.error(err.message || 'Failed to update name')
-    } finally {
-      setSavingName(false)
-    }
+    } catch (err) { toast.error(err.message || 'Failed to update name') }
+    finally { setSavingName(false) }
   }
 
   const handleChangePassword = async (e) => {
     e.preventDefault()
-    if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match')
-      return
-    }
-    if (newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters')
-      return
-    }
+    if (newPassword !== confirmPassword) { toast.error('Passwords do not match'); return }
+    if (newPassword.length < 8)         { toast.error('Password must be at least 8 characters'); return }
     setSavingPassword(true)
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword })
       if (error) throw error
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
+      setNewPassword(''); setConfirmPassword('')
       toast.success('Password updated')
-    } catch (err) {
-      toast.error(err.message || 'Failed to update password')
-    } finally {
-      setSavingPassword(false)
-    }
+    } catch (err) { toast.error(err.message || 'Failed to update password') }
+    finally { setSavingPassword(false) }
   }
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
-      <h1 className="text-3xl font-bold mb-2" style={{
-        background: theme.titleGradient,
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent'
-      }}>
+      <h1
+        className="text-3xl font-bold mb-2"
+        style={{
+          background:           theme.titleGradient,
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor:  'transparent',
+        }}
+      >
         Account Settings
       </h1>
-      <p className="text-sm mb-8" style={{ color: theme.textMuted }}>
+      <p className="text-sm mb-8 text-base-content/50">
         Manage your profile, plan, and usage
       </p>
 
-      {/* ── Account info ──────────────────────────────────────────────────── */}
-      <Section title="Profile" icon={<User className="w-4 h-4" />} theme={theme}>
+      {/* ── Profile ─────────────────────────────────────────────────────── */}
+      <SettingsSection title="Profile" icon={<User className="w-4 h-4" />} theme={theme}>
         <div className="space-y-4">
-          {/* Email (read-only) */}
+          {/* Email — read only */}
           <div>
-            <Label theme={theme}>Email</Label>
-            <div
-              className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
-              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textMuted }}
-            >
+            <label className="label label-text font-medium pb-1 uppercase tracking-widest text-xs">Email</label>
+            <div className="input input-bordered flex items-center gap-2 bg-base-300 text-base-content/50 cursor-default">
               <Mail className="w-4 h-4 flex-shrink-0" />
               {user?.email}
             </div>
@@ -200,86 +165,71 @@ export default function SettingsPage() {
 
           {/* Display name */}
           <div>
-            <Label theme={theme}>Display Name</Label>
+            <label className="label label-text font-medium pb-1 uppercase tracking-widest text-xs">Display Name</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
-                className="flex-1 px-4 py-3 rounded-xl text-sm"
-                style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
                 placeholder="Your name"
+                className="input input-bordered flex-1 bg-base-300"
+                style={{ minHeight: '44px' }}
               />
-              <Button onClick={handleSaveDisplayName} disabled={savingName} theme={theme}>
+              <button
+                onClick={handleSaveDisplayName}
+                disabled={savingName}
+                className="btn btn-primary"
+                style={{ minHeight: '44px' }}
+              >
+                {savingName ? <span className="loading loading-spinner loading-xs" /> : null}
                 {savingName ? 'Saving…' : 'Save'}
-              </Button>
+              </button>
             </div>
           </div>
         </div>
-      </Section>
+      </SettingsSection>
 
-      {/* ── Plan & Usage ───────────────────────────────────────────────────── */}
-      <Section title="Plan & Usage" icon={<Crown className="w-4 h-4" />} theme={theme}>
-        {/* Current plan badge */}
-        <div
-          className="flex items-center justify-between p-4 rounded-xl mb-5"
-          style={{ background: tierColors.bg, border: `1px solid ${tierColors.border}` }}
-        >
+      {/* ── Plan & Usage ─────────────────────────────────────────────────── */}
+      <SettingsSection title="Plan & Usage" icon={<Crown className="w-4 h-4" />} theme={theme}>
+        {/* Current plan */}
+        <div className="flex items-center justify-between p-4 rounded-xl mb-5 bg-base-300 border border-base-300">
           <div>
-            <div className="font-semibold text-sm" style={{ color: tierColors.text }}>
-              {tier?.display_name || 'Free'} Plan
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="font-semibold text-sm text-base-content">{tier?.display_name || 'Free'} Plan</span>
+              <span className={`badge badge-sm ${tierBadge} uppercase tracking-wide`}>
+                {tier?.display_name || 'Free'}
+              </span>
             </div>
-            <div className="text-xs mt-0.5" style={{ color: theme.textMuted }}>
+            <div className="text-xs text-base-content/50">
               {tierId === 'enterprise'
                 ? `No monthly limit · Daily cap: ${dailyImageLimit} images / ${dailyStoryLimit} storylines`
-                : `Resets on the 1st of each month`}
+                : 'Resets on the 1st of each month'}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span
-              className="text-xs px-2 py-1 rounded-lg font-semibold uppercase tracking-wide"
-              style={{ background: tierColors.bg, color: tierColors.text, border: `1px solid ${tierColors.border}` }}
+          {tierId !== 'free' && profile?.stripe_customer_id && (
+            <button
+              onClick={handleManageBilling}
+              disabled={checkoutLoading === 'portal'}
+              className="btn btn-sm btn-ghost gap-1.5"
             >
-              {tier?.display_name || 'Free'}
-            </span>
-            {tierId !== 'free' && profile?.stripe_customer_id && (
-              <button
-                onClick={handleManageBilling}
-                disabled={checkoutLoading === 'portal'}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                style={{ background: theme.fieldBg, color: theme.textBody, border: `1px solid ${theme.fieldBorder}` }}
-              >
-                {checkoutLoading === 'portal'
-                  ? <Loader2 className="w-3 h-3 animate-spin" />
-                  : <ExternalLink className="w-3 h-3" />}
-                Manage Billing
-              </button>
-            )}
-          </div>
+              {checkoutLoading === 'portal'
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <ExternalLink className="w-3 h-3" />}
+              Manage Billing
+            </button>
+          )}
         </div>
 
         {/* Usage bars */}
         <div className="space-y-4 mb-6">
-          <UsageRow
-            label="Image Generations"
-            used={imageUsed}
-            limit={imageLimit}
-            theme={theme}
-            tierColors={tierColors}
-          />
-          <UsageRow
-            label="Storyline Prompts"
-            used={storyUsed}
-            limit={storyLimit}
-            theme={theme}
-            tierColors={tierColors}
-          />
+          <UsageRow label="Image Generations" used={imageUsed} limit={imageLimit} />
+          <UsageRow label="Storyline Prompts" used={storyUsed} limit={storyLimit} />
         </div>
 
-        {/* Pricing cards — shown when not on enterprise */}
+        {/* Pricing cards */}
         {tierId !== 'enterprise' && (
           <div>
-            <div className="text-xs uppercase tracking-widest font-medium mb-3" style={{ color: theme.labelColor }}>
+            <div className="text-xs uppercase tracking-widest font-medium mb-3 text-base-content/50">
               Upgrade Your Plan
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -289,142 +239,122 @@ export default function SettingsPage() {
                 return (
                   <div
                     key={plan.id}
-                    className="relative rounded-xl p-4 flex flex-col"
-                    style={{
-                      background: isCurrent ? tierColors.bg : theme.fieldBg,
-                      border: `1px solid ${isCurrent ? tierColors.border : plan.popular ? theme.primary + '60' : theme.fieldBorder}`,
-                    }}
+                    className={`card relative ${isCurrent ? 'border-primary/60' : plan.popular ? 'border-primary/30' : 'border-base-300'} border bg-base-200`}
                   >
                     {plan.popular && !isCurrent && (
-                      <div
-                        className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-xs font-semibold"
-                        style={{ background: theme.buttonGradient, color: 'white' }}
-                      >
-                        Popular
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span className="badge badge-primary text-xs">Popular</span>
                       </div>
                     )}
-                    <div className="mb-3">
-                      <div className="font-semibold text-sm mb-0.5" style={{ color: isCurrent ? tierColors.text : theme.textBody }}>
-                        {plan.name}
+                    <div className="card-body p-4 gap-3">
+                      <div>
+                        <div className="font-semibold text-sm text-base-content">{plan.name}</div>
+                        <div className="text-lg font-bold text-base-content">
+                          {plan.price === 0 ? 'Free' : `$${plan.price.toFixed(2)}`}
+                          {plan.price > 0 && <span className="text-xs font-normal ml-1 text-base-content/50">/mo</span>}
+                        </div>
                       </div>
-                      <div className="text-lg font-bold" style={{ color: isCurrent ? tierColors.text : theme.textBody }}>
-                        {plan.price === 0 ? 'Free' : `$${plan.price.toFixed(2)}`}
-                        {plan.price > 0 && <span className="text-xs font-normal ml-1" style={{ color: theme.textMuted }}>/mo</span>}
-                      </div>
+                      <ul className="space-y-1.5 flex-1">
+                        {plan.features.map((f, i) => (
+                          <li key={i} className="flex items-start gap-1.5 text-xs text-base-content/70">
+                            <Check className="w-3 h-3 mt-0.5 flex-shrink-0 text-primary" />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                      {isCurrent ? (
+                        <div className="badge badge-outline w-full justify-center py-3 text-xs">
+                          Current Plan
+                        </div>
+                      ) : isUpgrade ? (
+                        <button
+                          onClick={() => handleUpgrade(plan.id)}
+                          disabled={!!checkoutLoading}
+                          className="btn btn-primary btn-sm btn-block"
+                          style={{ minHeight: '36px' }}
+                        >
+                          {checkoutLoading === plan.id
+                            ? <><Loader2 className="w-3 h-3 animate-spin" /> Loading…</>
+                            : `Upgrade to ${plan.name}`}
+                        </button>
+                      ) : null}
                     </div>
-                    <ul className="space-y-1 flex-1 mb-4">
-                      {plan.features.map((f, i) => (
-                        <li key={i} className="flex items-start gap-1.5 text-xs" style={{ color: theme.textMuted }}>
-                          <Check className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: isCurrent ? tierColors.text : theme.primary }} />
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-                    {isCurrent ? (
-                      <div
-                        className="w-full py-2 rounded-lg text-xs font-medium text-center"
-                        style={{ background: tierColors.bg, color: tierColors.text, border: `1px solid ${tierColors.border}` }}
-                      >
-                        Current Plan
-                      </div>
-                    ) : isUpgrade ? (
-                      <button
-                        onClick={() => handleUpgrade(plan.id)}
-                        disabled={!!checkoutLoading}
-                        className="w-full py-2 rounded-lg text-xs font-medium transition-all"
-                        style={{
-                          background: checkoutLoading === plan.id ? theme.fieldBg : theme.buttonGradient,
-                          color: 'white',
-                          cursor: checkoutLoading ? 'not-allowed' : 'pointer',
-                          opacity: checkoutLoading && checkoutLoading !== plan.id ? 0.5 : 1,
-                        }}
-                      >
-                        {checkoutLoading === plan.id
-                          ? <span className="flex items-center justify-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Loading…</span>
-                          : `Upgrade to ${plan.name}`}
-                      </button>
-                    ) : null}
                   </div>
                 )
               })}
             </div>
           </div>
         )}
-      </Section>
+      </SettingsSection>
 
-      {/* ── Security ──────────────────────────────────────────────────────── */}
-      <Section title="Security" icon={<Shield className="w-4 h-4" />} theme={theme}>
+      {/* ── Security ─────────────────────────────────────────────────────── */}
+      <SettingsSection title="Security" icon={<Shield className="w-4 h-4" />} theme={theme}>
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div>
-            <Label theme={theme}>New Password</Label>
+            <label className="label label-text font-medium pb-1 uppercase tracking-widest text-xs">New Password</label>
             <div className="relative">
               <input
                 type={showNew ? 'text' : 'password'}
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
                 placeholder="Minimum 8 characters"
-                className="w-full px-4 py-3 pr-11 rounded-xl text-sm"
-                style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+                className="input input-bordered w-full pr-11 bg-base-300"
+                style={{ minHeight: '44px' }}
               />
               <button
                 type="button"
                 onClick={() => setShowNew(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5"
+                className="btn btn-ghost btn-sm btn-circle absolute right-2 top-1/2 -translate-y-1/2"
               >
-                {showNew
-                  ? <EyeOff className="w-4 h-4" style={{ color: theme.textMuted }} />
-                  : <Eye className="w-4 h-4" style={{ color: theme.textMuted }} />
-                }
+                {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
           <div>
-            <Label theme={theme}>Confirm New Password</Label>
+            <label className="label label-text font-medium pb-1 uppercase tracking-widest text-xs">Confirm New Password</label>
             <div className="relative">
               <input
-                type={showCurrent ? 'text' : 'password'}
+                type={showConfirm ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 placeholder="Repeat new password"
-                className="w-full px-4 py-3 pr-11 rounded-xl text-sm"
-                style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+                className="input input-bordered w-full pr-11 bg-base-300"
+                style={{ minHeight: '44px' }}
               />
               <button
                 type="button"
-                onClick={() => setShowCurrent(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5"
+                onClick={() => setShowConfirm(v => !v)}
+                className="btn btn-ghost btn-sm btn-circle absolute right-2 top-1/2 -translate-y-1/2"
               >
-                {showCurrent
-                  ? <EyeOff className="w-4 h-4" style={{ color: theme.textMuted }} />
-                  : <Eye className="w-4 h-4" style={{ color: theme.textMuted }} />
-                }
+                {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
-          <Button
+          <button
             type="submit"
             disabled={savingPassword || !newPassword || !confirmPassword}
-            theme={theme}
+            className="btn btn-primary gap-2"
+            style={{ minHeight: '44px' }}
           >
-            <Lock className="w-4 h-4 mr-2" />
+            <Lock className="w-4 h-4" />
             {savingPassword ? 'Updating…' : 'Update Password'}
-          </Button>
+          </button>
         </form>
-      </Section>
+      </SettingsSection>
     </div>
   )
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-function Section({ title, icon, theme, children }) {
+// ─── Section wrapper ──────────────────────────────────────────────────────────
+function SettingsSection({ title, icon, theme, children }) {
   return (
     <section className="mb-8">
       <div className="flex items-center gap-2 mb-4">
         <span style={{ color: theme.primary }}>{icon}</span>
-        <h2 className="text-lg font-semibold" style={{ color: theme.textBody }}>{title}</h2>
+        <h2 className="text-lg font-semibold text-base-content">{title}</h2>
       </div>
       <div
-        className="p-5 rounded-2xl"
+        className="card p-5"
         style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
       >
         {children}
@@ -433,66 +363,34 @@ function Section({ title, icon, theme, children }) {
   )
 }
 
-function UsageRow({ label, used, limit, theme, tierColors }) {
+// ─── Usage row with DaisyUI progress ─────────────────────────────────────────
+function UsageRow({ label, used, limit }) {
   const unlimited = limit === null || limit === undefined
-  const pct = unlimited ? 0 : Math.min((used / limit) * 100, 100)
-  const atLimit = !unlimited && used >= limit
+  const pct       = unlimited ? 0 : Math.min((used / limit) * 100, 100)
+  const atLimit   = !unlimited && used >= limit
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-sm" style={{ color: theme.textBody }}>{label}</span>
-        <span
-          className="text-xs font-medium tabular-nums"
-          style={{ color: atLimit ? '#f87171' : tierColors.text }}
-        >
+        <span className="text-sm text-base-content">{label}</span>
+        <span className={`text-xs font-medium tabular-nums ${atLimit ? 'text-error' : 'text-base-content/60'}`}>
           {unlimited ? `${used} used (unlimited)` : `${used} / ${limit}`}
         </span>
       </div>
       {!unlimited && (
-        <div className="h-2 rounded-full overflow-hidden" style={{ background: theme.fieldBg }}>
-          <div
-            className="h-full rounded-full transition-all"
-            style={{
-              width: `${pct}%`,
-              background: atLimit
-                ? 'linear-gradient(90deg, #b91c1c, #ef4444)'
-                : tierColors.text,
-            }}
+        <>
+          <progress
+            className={`progress w-full h-2 ${atLimit ? 'progress-error' : 'progress-primary'}`}
+            value={pct}
+            max={100}
           />
-        </div>
+          {atLimit && (
+            <p className="text-xs mt-1 text-error">
+              Monthly limit reached. Resets on the 1st.
+            </p>
+          )}
+        </>
       )}
-      {atLimit && (
-        <p className="text-xs mt-1" style={{ color: '#f87171' }}>
-          Monthly limit reached. Resets on the 1st.
-        </p>
-      )}
-    </div>
-  )
-}
-
-function Button({ children, onClick, type = 'button', disabled = false, theme, className = '' }) {
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${className}`}
-      style={{
-        background: disabled ? theme.fieldBg : theme.buttonGradient,
-        color: disabled ? theme.textMuted : 'white',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        border: disabled ? `1px solid ${theme.fieldBorder}` : 'none',
-      }}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Label({ theme, children }) {
-  return (
-    <div className="text-xs uppercase tracking-widest font-medium mb-1.5" style={{ color: theme.labelColor }}>
-      {children}
     </div>
   )
 }

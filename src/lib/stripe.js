@@ -25,7 +25,9 @@ export async function redirectToCheckout(priceId) {
 
 /**
  * Opens the Stripe Customer Portal for managing subscriptions and billing.
- * Requires the portal to be configured in the Stripe Dashboard.
+ * Requires the `stripe-portal` edge function to be deployed and the portal
+ * to be configured in the Stripe Dashboard
+ * (https://dashboard.stripe.com/settings/billing/portal).
  *
  * @throws {Error} if the portal session could not be created
  */

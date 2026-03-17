@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -104,6 +104,21 @@ const ART_STYLES = [
   ]},
 ]
 
+// Maps storyline form genre strings → ThemeContext genre keys.
+// Used to pre-fill the visual theme when navigating from a storyline with an attached prompt.
+const STORYLINE_GENRE_TO_THEME_KEY = {
+  'Isekai': 'anime',
+  'Shonen': 'anime',
+  'Seinen': 'anime',
+  'Fantasy': 'fantasy',
+  'Sci-fi': 'cyberpunk',
+  'Urban fantasy': 'default',
+  'Dark fantasy': 'horror',
+  'Romance': 'romance',
+  'Political intrigue': 'noir',
+  'Cultivation': 'fantasy',
+}
+
 const GENRE_VIBES = {
   action: 'powerful dynamic stances, intense battle-ready postures, determined expressions, cinematic energy',
   comedy: 'exaggerated comedic reactions, light-hearted casual poses, big expressive smiles, playful energy',
@@ -139,7 +154,8 @@ export default function Generate() {
   // Live preview: charId → Array<{ url, label }> built up as each image completes
   const [liveImages, setLiveImages] = useState({})
 
-  const resetKey = useLocationResetKey()
+  // TODO: wire resetKey into a key= prop on the form to force-reset state on navigation
+  const _resetKey = useLocationResetKey()
 
   const { data: storylines = [] } = useQuery({
     queryKey: ['storylines', userId],
@@ -153,21 +169,6 @@ export default function Generate() {
     queryFn: () => CharacterBatch.list(userId).then(list => list.slice(0, 5)),
     enabled: !!userId,
   })
-
-  // Maps storyline form genre strings → ThemeContext genre keys
-  // Used for pre-filling the genre when navigating from a storyline with an attached prompt.
-  const STORYLINE_GENRE_TO_THEME_KEY = {
-    'Isekai': 'anime',
-    'Shonen': 'anime',
-    'Seinen': 'anime',
-    'Fantasy': 'fantasy',
-    'Sci-fi': 'cyberpunk',
-    'Urban fantasy': 'default',
-    'Dark fantasy': 'horror',
-    'Romance': 'romance',
-    'Political intrigue': 'noir',
-    'Cultivation': 'fantasy',
-  }
 
   useEffect(() => {
     mountedRef.current = true
@@ -193,7 +194,7 @@ export default function Generate() {
       }
       }).catch(() => {})
     }
-  }, [searchParams, userId])
+  }, [searchParams, userId, setGenreKey])
 
   const handleStorylineReady = (config) => {
     if (config.genre) {
@@ -560,84 +561,88 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
   if (step === 1) {
     return (
       <div className="max-w-md mx-auto py-8 md:py-16 px-4">
-        <Card theme={theme}>
-          <h2 className="text-2xl font-bold mb-6 text-center" style={{
-            background: theme.titleGradient,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
-          }}>
-            Create New Storyline
-          </h2>
+        <div
+          className="card bg-base-200 border border-base-300"
+          style={{ background: theme.cardBg, borderColor: theme.cardBorder, backdropFilter: 'blur(12px)' }}
+        >
+          <div className="card-body">
+            <h2 className="text-2xl font-bold mb-6 text-center" style={{
+              background: theme.titleGradient,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}>
+              Create New Storyline
+            </h2>
 
-          <div className="flex flex-col gap-4">
-            <Button
-              onClick={() => setShowNewStorylineModal(true)}
-              theme={theme}
-              className="w-full py-4 text-lg"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              New Storyline
-            </Button>
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={() => setShowNewStorylineModal(true)}
+                className="btn btn-primary w-full text-lg"
+                style={{ minHeight: '44px', background: theme.buttonGradient, border: 'none' }}
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                New Storyline
+              </button>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t" style={{ borderColor: theme.fieldBorder }} />
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t" style={{ borderColor: theme.fieldBorder }} />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4" style={{ background: theme.cardBg, color: theme.textMuted }}>or</span>
+                </div>
               </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4" style={{ background: theme.cardBg, color: theme.textMuted }}>or</span>
-              </div>
+
+              <button
+                onClick={() => setShowExistingModal(true)}
+                className="btn btn-outline w-full text-lg"
+                style={{ minHeight: '44px', color: theme.textBody, borderColor: theme.fieldBorder }}
+                disabled={storylines.length === 0}
+              >
+                <FolderOpen className="w-5 h-5 mr-2" />
+                Existing Storyline
+              </button>
+
+              {/* Recent characters quick-resume */}
+              {recentBatches.length > 0 && (
+                <div className="pt-1">
+                  <div className="text-xs uppercase tracking-widest font-medium mb-2" style={{ color: theme.labelColor }}>
+                    Recent Characters
+                  </div>
+                  <div className="space-y-1.5">
+                    {recentBatches.map(batch => (
+                      <button
+                        key={batch.id}
+                        onClick={() => navigate(`/batch?id=${batch.id}`)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all hover:opacity-80"
+                        style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
+                      >
+                        {batch.reference_image_url ? (
+                          <img
+                            src={batch.reference_image_url}
+                            alt={batch.name}
+                            className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: theme.cardBg }}>
+                            <User className="w-4 h-4" style={{ color: theme.textMuted }} />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate" style={{ color: theme.textBody }}>{batch.name || 'Unnamed Character'}</div>
+                          <div className="text-xs truncate" style={{ color: theme.textMuted }}>
+                            {batch.image_count || 0} images · {new Date(batch.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <ChevronDown className="w-4 h-4 rotate-[-90deg] flex-shrink-0" style={{ color: theme.textMuted }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-
-            <Button
-              onClick={() => setShowExistingModal(true)}
-              theme={theme}
-              variant="outline"
-              className="w-full py-4 text-lg"
-              disabled={storylines.length === 0}
-            >
-              <FolderOpen className="w-5 h-5 mr-2" />
-              Existing Storyline
-            </Button>
-
-            {/* Recent characters quick-resume */}
-            {recentBatches.length > 0 && (
-              <div className="pt-1">
-                <div className="text-xs uppercase tracking-widest font-medium mb-2" style={{ color: theme.labelColor }}>
-                  Recent Characters
-                </div>
-                <div className="space-y-1.5">
-                  {recentBatches.map(batch => (
-                    <button
-                      key={batch.id}
-                      onClick={() => navigate(`/batch?id=${batch.id}`)}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all hover:opacity-80"
-                      style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
-                    >
-                      {batch.reference_image_url ? (
-                        <img
-                          src={batch.reference_image_url}
-                          alt={batch.name}
-                          className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: theme.cardBg }}>
-                          <User className="w-4 h-4" style={{ color: theme.textMuted }} />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate" style={{ color: theme.textBody }}>{batch.name || 'Unnamed Character'}</div>
-                        <div className="text-xs truncate" style={{ color: theme.textMuted }}>
-                          {batch.image_count || 0} images · {new Date(batch.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <ChevronDown className="w-4 h-4 rotate-[-90deg] flex-shrink-0" style={{ color: theme.textMuted }} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
-        </Card>
+        </div>
 
         {showNewStorylineModal && (
           <NewStorylineModal
@@ -664,13 +669,25 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
       {/* Config badge — wraps on narrow screens */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge theme={theme}>{storylineConfig.newStorylineName || 'Existing Storyline'}</Badge>
-          <Badge theme={theme} variant="secondary">{storylineConfig.count} images/character</Badge>
-          {storylineConfig.genre && <Badge theme={theme} variant="accent">{GENRES[storylineConfig.genre]?.label || storylineConfig.genre}</Badge>}
+          <span className="badge px-2 py-1 text-xs rounded-md" style={{ background: theme.primaryGlow, color: theme.primary }}>
+            {storylineConfig.newStorylineName || 'Existing Storyline'}
+          </span>
+          <span className="badge px-2 py-1 text-xs rounded-md" style={{ background: theme.fieldBg, color: theme.textMuted }}>
+            {storylineConfig.count} images/character
+          </span>
+          {storylineConfig.genre && (
+            <span className="badge px-2 py-1 text-xs rounded-md" style={{ background: `${theme.accent}20`, color: theme.accent }}>
+              {GENRES[storylineConfig.genre]?.label || storylineConfig.genre}
+            </span>
+          )}
         </div>
-        <Button onClick={() => { setStep(1); setStorylineConfig(null) }} theme={theme} variant="ghost" size="sm">
+        <button
+          onClick={() => { setStep(1); setStorylineConfig(null) }}
+          className="btn btn-ghost btn-sm"
+          style={{ color: theme.textMuted }}
+        >
           ← Change
-        </Button>
+        </button>
       </div>
 
       {/* Characters */}
@@ -694,10 +711,14 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
       </div>
 
       {/* Add character */}
-      <Button onClick={addCharacter} theme={theme} variant="outline" className="w-full py-6 border-dashed">
+      <button
+        onClick={addCharacter}
+        className="btn btn-outline w-full py-6 border-dashed"
+        style={{ minHeight: '44px', color: theme.textBody, borderColor: theme.fieldBorder }}
+      >
         <Plus className="w-5 h-5 mr-2" />
         Add Another Character
-      </Button>
+      </button>
 
       {/* Generate button */}
       <div className="mt-8">
@@ -705,15 +726,17 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
           const readyChars = characters.filter(c => (c.sourceImages && c.sourceImages.length > 0) || c.imageUrl)
           const allHaveImages = characters.every(c => (c.sourceImages && c.sourceImages.length > 0) || c.imageUrl)
           return (
-            <Button
+            <button
               onClick={handleForge}
-              theme={theme}
-              className="w-full py-4 text-lg"
+              className="btn btn-primary w-full text-lg"
+              style={{ minHeight: '44px', background: theme.buttonGradient, border: 'none' }}
               disabled={generating || !allHaveImages}
             >
-              {generating ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Sparkles className="w-5 h-5 mr-2" />}
+              {generating
+                ? <span className="loading loading-spinner loading-sm mr-2" />
+                : <Sparkles className="w-5 h-5 mr-2" />}
               Forge {readyChars.length} Character{readyChars.length !== 1 ? 's' : ''}
-            </Button>
+            </button>
           )
         })()}
       </div>
@@ -725,7 +748,10 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
   const [expanded, setExpanded] = useState(true)
 
   return (
-    <Card theme={theme} style={{ contain: 'content' }}>
+    <div
+      className="card bg-base-200 border border-base-300"
+      style={{ background: theme.cardBg, borderColor: theme.cardBorder, backdropFilter: 'blur(12px)', contain: 'content' }}
+    >
       <div
         className="flex items-center gap-4 cursor-pointer p-4"
         onClick={() => setExpanded(!expanded)}
@@ -751,10 +777,10 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium truncate">{character.name || `Character ${index + 1}`}</span>
             {character.status && (
-              <StatusBadge status={character.status} theme={theme} />
+              <StatusBadge status={character.status} />
             )}
             {failedImages.length > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md" style={{ background: '#ef444420', color: '#ef4444' }}>
+              <span className="badge badge-error inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md" style={{ background: '#ef444420', color: '#ef4444' }}>
                 <AlertCircle className="w-3 h-3" />
                 {failedImages.length} failed
               </span>
@@ -765,7 +791,7 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
         {canRemove && !generating && (
           <button
             onClick={e => { e.stopPropagation(); onRemove() }}
-            className="flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
+            className="btn btn-ghost flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
             style={{ minWidth: '44px', minHeight: '44px', color: theme.textMuted }}
             aria-label={`Remove character ${index + 1}`}
           >
@@ -780,7 +806,7 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
       {liveImages.length > 0 && (
         <div className="mx-4 mb-4 rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.cardBorder}`, background: theme.fieldBg }}>
           <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${theme.fieldBorder}` }}>
-            {character.status === 'generating' && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: theme.primary }} />}
+            {character.status === 'generating' && <span className="loading loading-spinner loading-xs" style={{ color: theme.primary }} />}
             {character.status === 'completed' && <Check className="w-3.5 h-3.5" style={{ color: theme.primary }} />}
             <span className="text-xs font-medium uppercase tracking-wider" style={{ color: theme.labelColor }}>
               {character.status === 'generating'
@@ -814,7 +840,7 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
                   className="rounded-lg flex items-center justify-center"
                   style={{ aspectRatio: '3/4', background: theme.cardBg, border: `1px dashed ${theme.fieldBorder}` }}
                 >
-                  <Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.textMuted, opacity: 0.5 }} />
+                  <span className="loading loading-spinner loading-xs" style={{ color: theme.textMuted, opacity: 0.5 }} />
                 </div>
               ))
             })()}
@@ -852,10 +878,11 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
                     border: '1px solid #ef444450',
                     cursor: generating ? 'not-allowed' : 'pointer',
                     opacity: generating ? 0.6 : 1,
+                    minHeight: '36px',
                   }}
                 >
                   {generating
-                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    ? <span className="loading loading-spinner loading-xs" />
                     : <RefreshCw className="w-3 h-3" />}
                   Retry
                 </button>
@@ -890,16 +917,25 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
             required
           />
 
-          <Input
-            label="Character Name"
-            value={character.name}
-            onChange={(e) => onUpdate({ name: e.target.value })}
-            placeholder={`Character ${index + 1}`}
-            theme={theme}
-          />
+          <div className="space-y-1">
+            <label className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+              Character Name
+            </label>
+            <input
+              type="text"
+              value={character.name}
+              onChange={(e) => onUpdate({ name: e.target.value })}
+              placeholder={`Character ${index + 1}`}
+              className="input input-bordered bg-base-300 w-full text-sm"
+              style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
+              autoCorrect="on"
+            />
+          </div>
 
           <div>
-            <Label theme={theme}>Archetypes</Label>
+            <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+              Archetypes
+            </div>
             <ArchetypePicker
               selected={character.archetypes || []}
               onChange={(archetypes) => onUpdate({ archetypes })}
@@ -907,13 +943,21 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
             />
           </div>
 
-          <Textarea
-            label="Character Arc"
-            value={character.characterArc}
-            onChange={(e) => onUpdate({ characterArc: e.target.value })}
-            placeholder="Describe the character's narrative journey..."
-            theme={theme}
-          />
+          <div className="space-y-1">
+            <label className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+              Character Arc
+            </label>
+            <textarea
+              value={character.characterArc}
+              onChange={(e) => onUpdate({ characterArc: e.target.value })}
+              placeholder="Describe the character's narrative journey..."
+              rows={3}
+              className="textarea textarea-bordered bg-base-300 w-full text-sm resize-y"
+              style={{ background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody, minHeight: '96px' }}
+              autoCorrect="on"
+              spellCheck="true"
+            />
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <Toggle
@@ -931,20 +975,36 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Select
-              label="Shot Type"
-              value={character.shotType || 'Full-body'}
-              options={['Portrait', 'Half-body', 'Full-body']}
-              onChange={(v) => onUpdate({ shotType: v })}
-              theme={theme}
-            />
-            <Select
-              label="Aspect Ratio"
-              value={character.aspectRatio || '3:4'}
-              options={ASPECT_RATIOS}
-              onChange={(v) => onUpdate({ aspectRatio: v })}
-              theme={theme}
-            />
+            <div className="space-y-1">
+              <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+                Shot Type
+              </div>
+              <select
+                value={character.shotType || 'Full-body'}
+                onChange={e => onUpdate({ shotType: e.target.value })}
+                className="select select-bordered bg-base-300 w-full text-sm"
+                style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
+              >
+                {['Portrait', 'Half-body', 'Full-body'].map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+                Aspect Ratio
+              </div>
+              <select
+                value={character.aspectRatio || '3:4'}
+                onChange={e => onUpdate({ aspectRatio: e.target.value })}
+                className="select select-bordered bg-base-300 w-full text-sm"
+                style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
+              >
+                {ASPECT_RATIOS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <Toggle
@@ -956,21 +1016,28 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
 
           {character.allowHeldItems && (
             <div className="space-y-3 pl-1 border-l-2" style={{ borderColor: theme.accent + '60' }}>
-              <Input
-                label="Permitted Items"
-                value={character.allowedItems || ''}
-                onChange={(e) => onUpdate({ allowedItems: e.target.value })}
-                placeholder="e.g., sword, book, flowers"
-                theme={theme}
-              />
+              <div className="space-y-1">
+                <label className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+                  Permitted Items
+                </label>
+                <input
+                  type="text"
+                  value={character.allowedItems || ''}
+                  onChange={(e) => onUpdate({ allowedItems: e.target.value })}
+                  placeholder="e.g., sword, book, flowers"
+                  className="input input-bordered bg-base-300 w-full text-sm"
+                  style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
+                  autoCorrect="on"
+                />
+              </div>
               <div>
-                <Label theme={theme}>
+                <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
                   <div className="flex items-center gap-1.5">
                     <Package className="w-3.5 h-3.5" />
                     Prop Reference Image
                     <span className="ml-1 px-1.5 py-0.5 rounded text-xs" style={{ background: theme.fieldBg, color: theme.textMuted }}>optional</span>
                   </div>
-                </Label>
+                </div>
                 <p className="text-xs mb-2" style={{ color: theme.textMuted }}>
                   Upload a photo of the prop/item to ensure accurate visual replication.
                 </p>
@@ -994,14 +1061,16 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
           />
         </div>
       )}
-    </Card>
+    </div>
   )
 }
 
 function LayerControls({ poseOverrides, expressionOverrides, outfitOverrides, onUpdate, theme }) {
   return (
     <div className="space-y-3">
-      <Label theme={theme}>Layer Overrides</Label>
+      <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+        Layer Overrides
+      </div>
       
       <TagInput
         label="Pose"
@@ -1079,20 +1148,24 @@ function TagInput({ label, presets, tags, onChange, theme }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && addTag(input)}
           placeholder={`Add custom ${label.toLowerCase()}...`}
-          className="flex-1 px-3 rounded-lg text-sm"
-          style={{ height: '44px', background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
-          autocorrect="on"
+          className="input input-bordered bg-base-300 flex-1 text-sm"
+          style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
+          autoCorrect="on"
         />
-        <Button onClick={() => addTag(input)} theme={theme} size="sm" variant="outline">
+        <button
+          onClick={() => addTag(input)}
+          className="btn btn-outline btn-sm"
+          style={{ minHeight: '44px', color: theme.textBody, borderColor: theme.fieldBorder }}
+        >
           <Plus className="w-4 h-4" aria-hidden="true" />
-        </Button>
+        </button>
       </div>
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
           {tags.map(tag => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md"
+              className="badge inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md"
               style={{ background: theme.primaryGlow, color: theme.primary }}
             >
               {tag}
@@ -1129,10 +1202,24 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
   return (
     <Modal theme={theme} onClose={onClose} title="New Storyline">
       <div className="space-y-4">
-        <Input label="Storyline Name" value={name} onChange={(e) => setName(e.target.value)} theme={theme} placeholder="My Story" />
+        <div className="space-y-1">
+          <label className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+            Storyline Name
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="My Story"
+            className="input input-bordered bg-base-300 w-full text-sm"
+            style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
+          />
+        </div>
 
         <div>
-          <Label theme={theme}>Images per Character</Label>
+          <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+            Images per Character
+          </div>
           <input
             type="number"
             min="1"
@@ -1142,11 +1229,11 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
               const v = Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1))
               setCount(v)
             }}
-            className="w-full px-3 rounded-xl text-sm"
+            className="input input-bordered bg-base-300 w-full text-sm"
             style={{
               height: '44px',
               background: theme.fieldBg,
-              border: `1px solid ${theme.fieldBorder}`,
+              borderColor: theme.fieldBorder,
               color: theme.textBody,
             }}
             aria-label="Images per character"
@@ -1155,12 +1242,14 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
         </div>
 
         <div>
-          <Label theme={theme}>Genre</Label>
+          <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+            Genre
+          </div>
           <select
             value={genre}
             onChange={(e) => setGenre(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg"
-            style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+            className="select select-bordered bg-base-300 w-full"
+            style={{ background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
           >
             {Object.entries(GENRES).map(([key, g]) => (
               <option key={key} value={key}>{g.emoji} {g.label}</option>
@@ -1172,12 +1261,14 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
 
         {!keepIntegrity && (
           <div>
-            <Label theme={theme}>Art Style</Label>
+            <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+              Art Style
+            </div>
             <select
               value={artStyle}
               onChange={(e) => setArtStyle(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg"
-              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+              className="select select-bordered bg-base-300 w-full"
+              style={{ background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
             >
               <option value="">Select style...</option>
               {ART_STYLES.map(cat => (
@@ -1191,9 +1282,14 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
           </div>
         )}
 
-        <Button onClick={handleConfirm} theme={theme} className="w-full" disabled={!name.trim()}>
+        <button
+          onClick={handleConfirm}
+          className="btn btn-primary w-full"
+          style={{ minHeight: '44px', background: theme.buttonGradient, border: 'none' }}
+          disabled={!name.trim()}
+        >
           Create Storyline
-        </Button>
+        </button>
       </div>
     </Modal>
   )
@@ -1207,10 +1303,10 @@ function ExistingStorylineModal({ theme, storylines, onClose, onConfirm }) {
           <button
             key={sl.id}
             onClick={() => onConfirm({ storylineId: sl.id, newStorylineName: null, count: 5, genre: null, artStyle: null })}
-            className="w-full p-3 rounded-lg text-left transition-all"
+            className="w-full p-3 rounded-lg text-left transition-all hover:opacity-80"
             style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
           >
-            <div className="font-medium">{sl.name}</div>
+            <div className="font-medium" style={{ color: theme.textBody }}>{sl.name}</div>
             <div className="text-xs" style={{ color: theme.textMuted }}>
               {sl.batch_ids?.length || 0} characters • Created {new Date(sl.created_at).toLocaleDateString()}
             </div>
@@ -1221,103 +1317,6 @@ function ExistingStorylineModal({ theme, storylines, onClose, onConfirm }) {
   )
 }
 
-function Card({ children, theme, className = '', style = {} }) {
-  return (
-    <div
-      className={`rounded-2xl p-4 md:p-6 ${className}`}
-      style={{
-        background:      theme.cardBg,
-        border:          `1px solid ${theme.cardBorder}`,
-        backdropFilter:  'blur(12px)',
-        ...style,
-      }}
-    >
-      {children}
-    </div>
-  )
-}
-
-function Button({ children, onClick, theme, variant = 'primary', className = '', disabled = false, size }) {
-  let bg, color, border
-  if (variant === 'primary')   { bg = theme.buttonGradient; color = 'white' }
-  else if (variant === 'outline') { bg = 'transparent'; color = theme.textBody; border = `1px solid ${theme.fieldBorder}` }
-  else if (variant === 'ghost')   { bg = 'transparent'; color = theme.textMuted }
-  else if (variant === 'secondary') { bg = theme.fieldBg; color = theme.textBody }
-
-  const h = size === 'sm' ? '36px' : '44px'
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center justify-center px-4 rounded-xl font-medium transition-all ${className}`}
-      style={{ minHeight: h, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, background: bg, color, border }}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Input({ label, value, onChange, placeholder, theme, type = 'text' }) {
-  return (
-    <div className="space-y-1">
-      {label && <Label theme={theme}>{label}</Label>}
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="w-full px-3 rounded-xl text-sm"
-        style={{ height: '44px', background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
-        autocorrect="on"
-      />
-    </div>
-  )
-}
-
-function Textarea({ label, value, onChange, placeholder, theme }) {
-  return (
-    <div className="space-y-1">
-      {label && <Label theme={theme}>{label}</Label>}
-      <textarea
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        rows={3}
-        className="w-full px-3 py-2 rounded-xl text-sm resize-y"
-        style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody, minHeight: '96px' }}
-        autocorrect="on"
-        spellCheck="true"
-      />
-    </div>
-  )
-}
-
-function Label({ theme, children }) {
-  return (
-    <div
-      className="uppercase tracking-widest font-medium mb-1"
-      style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}
-    >
-      {children}
-    </div>
-  )
-}
-
-function Badge({ children, theme, variant = 'default' }) {
-  const colors = {
-    default: { bg: theme.primaryGlow, color: theme.primary },
-    secondary: { bg: theme.fieldBg, color: theme.textMuted },
-    accent: { bg: `${theme.accent}20`, color: theme.accent },
-  }
-  const c = colors[variant]
-  return (
-    <span className="px-2 py-1 text-xs rounded-md" style={{ background: c.bg, color: c.color }}>
-      {children}
-    </span>
-  )
-}
-
 function Toggle({ label, checked, onChange, theme }) {
   return (
     <label
@@ -1325,42 +1324,15 @@ function Toggle({ label, checked, onChange, theme }) {
       style={{ minHeight: '44px' }}
     >
       <span className="text-sm" style={{ color: theme.textBody }}>{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className="relative w-11 h-6 rounded-full transition-colors flex-shrink-0"
-        style={{ background: checked ? theme.primary : theme.fieldBg }}
+      <input
+        type="checkbox"
+        className="toggle toggle-primary"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        style={{ '--tglbg': checked ? theme.primary : theme.fieldBg }}
         aria-label={label}
-      >
-        <span
-          className="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform"
-          style={{ transform: checked ? 'translateX(20px)' : 'translateX(0)' }}
-          aria-hidden="true"
-        />
-      </button>
+      />
     </label>
-  )
-}
-
-function Select({ label, value, options, onChange, theme }) {
-  return (
-    <div className="space-y-1">
-      {label && <Label theme={theme}>{label}</Label>}
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full px-3 rounded-xl text-sm"
-        style={{ height: '44px', background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
-      >
-        {options.map(opt => {
-          const v = typeof opt === 'object' ? opt.value : opt
-          const l = typeof opt === 'object' ? opt.label : opt
-          return <option key={v} value={v}>{l}</option>
-        })}
-      </select>
-    </div>
   )
 }
 
@@ -1421,10 +1393,10 @@ function Modal({ children, theme, onClose, title }) {
 
       {/* Desktop centered dialog */}
       <div className="hidden md:flex absolute inset-0 items-center justify-center p-4">
-        <div className="relative w-full max-w-md rounded-2xl p-6" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
+        <div className="modal-box relative w-full max-w-md rounded-2xl p-6" style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}>
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 flex items-center justify-center rounded-lg hover:bg-white/10"
+            className="btn btn-ghost btn-sm btn-circle absolute top-4 right-4 flex items-center justify-center rounded-lg hover:bg-white/10"
             style={{ minWidth: '44px', minHeight: '44px' }}
             aria-label="Close"
           >
@@ -1489,10 +1461,10 @@ function MultiUploadZone({ theme, values, onChange, required = false }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label theme={theme}>
+        <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
           Source Images
           {required && <span className="ml-1" style={{ color: missingRequired ? '#ef4444' : theme.accent }}>*</span>}
-        </Label>
+        </div>
         {hasImages && (
           <span className="text-xs" style={{ color: theme.textMuted }}>{values.length} image{values.length !== 1 ? 's' : ''}</span>
         )}
@@ -1555,7 +1527,7 @@ function MultiUploadZone({ theme, values, onChange, required = false }) {
 }
 
 // Single-image upload zone — used for prop reference
-function SingleUploadZone({ theme, value, onChange, label, hint, icon: Icon = Upload }) {
+function SingleUploadZone({ theme, value, onChange, hint, icon: UploadIcon = Upload }) {
   const inputRef = useRef(null)
 
   const handleFile = async (file) => {
@@ -1596,7 +1568,7 @@ function SingleUploadZone({ theme, value, onChange, label, hint, icon: Icon = Up
         </div>
       ) : (
         <div>
-          <Icon className="w-6 h-6 mx-auto mb-1" style={{ color: theme.textMuted }} />
+          <UploadIcon className="w-6 h-6 mx-auto mb-1" style={{ color: theme.textMuted }} />
           {hint && <p className="text-xs" style={{ color: theme.textMuted }}>{hint}</p>}
         </div>
       )}
@@ -1632,18 +1604,29 @@ function ArchetypePicker({ selected, onChange, theme }) {
   )
 }
 
-function StatusBadge({ status, theme }) {
-  const colors = {
+function StatusBadge({ status }) {
+  const variantMap = {
+    analyzing: 'badge-info',
+    generating: 'badge-warning',
+    completed: 'badge-success',
+    failed: 'badge-error',
+  }
+  const colorMap = {
     analyzing: { bg: '#3b82f620', color: '#3b82f6' },
     generating: { bg: '#f59e0b20', color: '#f59e0b' },
     completed: { bg: '#10b98120', color: '#10b981' },
     failed: { bg: '#ef444420', color: '#ef4444' },
   }
-  const c = colors[status] || colors.analyzing
+  const c = colorMap[status] || colorMap.analyzing
 
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md" style={{ background: c.bg, color: c.color }}>
-      {status === 'analyzing' || status === 'generating' ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+    <span
+      className={`badge ${variantMap[status] || 'badge-info'} inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md`}
+      style={{ background: c.bg, color: c.color }}
+    >
+      {(status === 'analyzing' || status === 'generating') && (
+        <span className="loading loading-spinner loading-xs" />
+      )}
       {status}
     </span>
   )
@@ -1654,9 +1637,9 @@ function useLocationResetKey() {
   const [resetKey, setResetKey] = useState(0)
 
   useEffect(() => {
-    if (location.state?.reset) {
-      setResetKey(location.state.reset)
-    }
+    if (!location.state?.reset) return
+    const id = requestAnimationFrame(() => setResetKey(location.state.reset))
+    return () => cancelAnimationFrame(id)
   }, [location.state])
 
   return resetKey
@@ -1724,5 +1707,3 @@ CRITICAL SPRITE RULES:
 - ${heldItemsRule}${propNote}
 - ${backgroundRule}`
 }
-
-

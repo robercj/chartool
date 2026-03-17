@@ -1,6 +1,20 @@
+// ─── useDraftPersistence ──────────────────────────────────────────────────────
+// Dual-layer character draft persistence: localStorage (immediate, no latency)
+// + Supabase DB (debounced 2 s, requires auth).
+//
+// On mount: hydrates from localStorage first for instant UX, then overwrites
+// with the DB record if one exists (DB is the source of truth).
+//
+// Auto-saves on: debounced state changes, page hide (visibilitychange), and
+// warns on tab close if there are unsaved changes (beforeunload).
+//
+// Exports: useDraftPersistence(draftId, userId) and useDraftList(userId)
+// ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CharacterDraft } from '../storage';
 
+// Strip undefined, null, and function values before JSON serialisation.
+// Prevents JSON.stringify from silently dropping those keys.
 function sanitizeForStorage(data) {
   const sanitized = {};
   for (const [key, value] of Object.entries(data)) {
@@ -150,9 +164,22 @@ export function useDraftPersistence(draftId, userId) {
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && isDirty && localState) {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+        saveToStorage(localState);
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty, localState]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isDirty, localState, saveToStorage]);
 
   useEffect(() => {
     return () => {

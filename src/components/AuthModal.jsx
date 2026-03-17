@@ -12,157 +12,82 @@ export default function AuthModal({ onClose }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email,           setEmail]           = useState('');
+  const [password,        setPassword]        = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [displayName,     setDisplayName]     = useState('');
+  const [showPassword,    setShowPassword]    = useState(false);
+  const [showConfirm,     setShowConfirm]     = useState(false);
 
   const clearMessages = () => { setError(''); setSuccess(''); };
-
-  const switchMode = (m) => { setMode(m); clearMessages(); };
+  const switchMode    = (m) => { setMode(m); clearMessages(); };
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    clearMessages();
-    setLoading(true);
-    try {
-      await signIn({ email, password });
-      onClose?.();
-    } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setLoading(false);
-    }
+    e.preventDefault(); clearMessages(); setLoading(true);
+    try { await signIn({ email, password }); onClose?.(); }
+    catch (err) { setError(err.message || 'Login failed. Please check your credentials.'); }
+    finally { setLoading(false); }
   };
 
   const handleRegister = async (e) => {
-    e.preventDefault();
-    clearMessages();
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
-    }
+    e.preventDefault(); clearMessages();
+    if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
+    if (password.length < 8)          { setError('Password must be at least 8 characters.'); return; }
     setLoading(true);
     try {
       await signUp({ email, password, displayName });
       setSuccess('Account created! Check your email to confirm your address, then sign in.');
       setMode('login');
-    } catch (err) {
-      setError(err.message || 'Registration failed.');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.message || 'Registration failed.'); }
+    finally { setLoading(false); }
   };
 
   const handleForgot = async (e) => {
-    e.preventDefault();
-    clearMessages();
-    setLoading(true);
-    try {
-      await resetPassword(email);
-      setSuccess('Password reset email sent. Check your inbox.');
-    } catch (err) {
-      setError(err.message || 'Failed to send reset email.');
-    } finally {
-      setLoading(false);
-    }
+    e.preventDefault(); clearMessages(); setLoading(true);
+    try { await resetPassword(email); setSuccess('Password reset email sent. Check your inbox.'); }
+    catch (err) { setError(err.message || 'Failed to send reset email.'); }
+    finally { setLoading(false); }
   };
 
   const handleGoogle = async () => {
-    clearMessages();
-    setLoading(true);
-    try {
-      await signInWithGoogle();
-      // Page will redirect; no need to close modal
-    } catch (err) {
-      setError(err.message || 'Google sign-in failed.');
-      setLoading(false);
-    }
-  };
-
-  const inputStyle = {
-    width: '100%',
-    padding: '0.75rem 1rem 0.75rem 2.5rem',
-    borderRadius: '0.75rem',
-    fontSize: '0.875rem',
-    background: theme.fieldBg,
-    border: `1px solid ${theme.fieldBorder}`,
-    color: theme.textBody,
-    outline: 'none',
-  };
-
-  const btnPrimary = {
-    width: '100%',
-    padding: '0.75rem',
-    borderRadius: '0.75rem',
-    fontWeight: 600,
-    background: theme.buttonGradient,
-    color: 'white',
-    cursor: loading ? 'not-allowed' : 'pointer',
-    opacity: loading ? 0.7 : 1,
-    transition: 'all 0.2s',
-    fontSize: '0.875rem',
-  };
-
-  const btnGoogle = {
-    width: '100%',
-    padding: '0.75rem',
-    borderRadius: '0.75rem',
-    fontWeight: 500,
-    background: 'transparent',
-    color: theme.textBody,
-    border: `1px solid ${theme.fieldBorder}`,
-    cursor: loading ? 'not-allowed' : 'pointer',
-    transition: 'all 0.2s',
-    fontSize: '0.875rem',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '0.5rem',
+    clearMessages(); setLoading(true);
+    try { await signInWithGoogle(); }
+    catch (err) { setError(err.message || 'Google sign-in failed.'); setLoading(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    /* DaisyUI modal — bottom on mobile, middle on sm+ */
+    <dialog className="modal modal-bottom sm:modal-middle" open>
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="modal-backdrop bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal — responsive padding: tighter on mobile */}
       <div
-        className="relative w-full max-w-md rounded-2xl p-5 md:p-8 shadow-2xl"
+        className="modal-box w-full max-w-md p-5 md:p-8"
         style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}` }}
       >
-        {/* Close */}
+        {/* Close button */}
         {onClose && (
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors"
-            style={{ minWidth: '44px', minHeight: '44px' }}
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" style={{ color: theme.textMuted }} aria-hidden="true" />
-          </button>
+          <form method="dialog">
+            <button
+              onClick={onClose}
+              className="btn btn-sm btn-circle btn-ghost absolute right-3 top-3"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </form>
         )}
 
         {/* Logo */}
         <div className="flex items-center gap-2 mb-6">
           <Sparkles className="w-5 h-5" style={{ color: theme.primary }} />
           <span
+            className="font-bold text-lg"
             style={{
-              background: theme.logoGradient,
+              background:           theme.logoGradient,
               WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              fontWeight: 700,
-              fontSize: '1.125rem',
+              WebkitTextFillColor:  'transparent',
+              backgroundClip:       'text',
             }}
           >
             Character Forge
@@ -171,265 +96,215 @@ export default function AuthModal({ onClose }) {
 
         {/* Title */}
         <h2 className="text-2xl font-bold mb-1" style={{ color: theme.textBody }}>
-          {mode === 'login' && 'Welcome back'}
+          {mode === 'login'    && 'Welcome back'}
           {mode === 'register' && 'Create account'}
-          {mode === 'forgot' && 'Reset password'}
+          {mode === 'forgot'   && 'Reset password'}
         </h2>
-        <p className="text-sm mb-6" style={{ color: theme.textMuted }}>
-          {mode === 'login' && 'Sign in to access your storylines and characters.'}
+        <p className="text-sm mb-6 opacity-70" style={{ color: theme.textMuted }}>
+          {mode === 'login'    && 'Sign in to access your storylines and characters.'}
           {mode === 'register' && 'Start for free — no credit card required.'}
-          {mode === 'forgot' && "We'll send a reset link to your email."}
+          {mode === 'forgot'   && "We'll send a reset link to your email."}
         </p>
 
-        {/* Error / Success messages */}
+        {/* Alerts */}
         {error && (
-          <div
-            className="flex items-start gap-2 p-3 rounded-xl mb-4 text-sm"
-            style={{ background: 'rgba(216,0,50,0.12)', border: '1px solid rgba(216,0,50,0.3)', color: '#f87171' }}
-          >
-            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            {error}
+          <div role="alert" className="alert alert-error mb-4 text-sm py-3">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
         {success && (
-          <div
-            className="flex items-start gap-2 p-3 rounded-xl mb-4 text-sm"
-            style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ade80' }}
-          >
-            <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            {success}
+          <div role="alert" className="alert alert-success mb-4 text-sm py-3">
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{success}</span>
           </div>
         )}
 
-        {/* ── Login form ──────────────────────────────────────────────────── */}
+        {/* ── Login ─────────────────────────────────────────────────────────── */}
         {mode === 'login' && (
           <form onSubmit={handleLogin} className="space-y-4">
-            <Field icon={<Mail className="w-4 h-4" />} theme={theme}>
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                style={inputStyle}
-              />
-            </Field>
-
-            <Field
+            <InputField
+              icon={<Mail className="w-4 h-4" />}
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              theme={theme}
+            />
+            <InputField
               icon={<Lock className="w-4 h-4" />}
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
               theme={theme}
               trailing={
-                <button type="button" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
-                  {showPassword
-                    ? <EyeOff className="w-4 h-4" style={{ color: theme.textMuted }} />
-                    : <Eye className="w-4 h-4" style={{ color: theme.textMuted }} />
-                  }
+                <button type="button" className="btn btn-ghost btn-xs btn-circle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               }
-            >
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                style={{ ...inputStyle, paddingRight: '2.5rem' }}
-              />
-            </Field>
+            />
 
             <div className="text-right">
               <button
                 type="button"
                 onClick={() => switchMode('forgot')}
-                className="text-xs hover:underline"
-                style={{ color: theme.accent }}
+                className="btn btn-link btn-xs p-0"
+                style={{ color: theme.primary }}
               >
                 Forgot password?
               </button>
             </div>
 
-            <button type="submit" disabled={loading} style={btnPrimary}>
+            <button type="submit" disabled={loading} className="btn btn-primary btn-block" style={{ minHeight: '44px' }}>
+              {loading ? <span className="loading loading-spinner loading-sm" /> : null}
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
 
-            <Divider theme={theme} />
+            <div className="divider text-xs opacity-50">or</div>
 
-            <button type="button" onClick={handleGoogle} disabled={loading} style={btnGoogle}>
-              <GoogleIcon />
-              Continue with Google
-            </button>
+            <GoogleBtn onClick={handleGoogle} disabled={loading} theme={theme} />
 
-            <p className="text-center text-sm" style={{ color: theme.textMuted }}>
+            <p className="text-center text-sm opacity-70" style={{ color: theme.textMuted }}>
               Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => switchMode('register')}
-                className="font-medium hover:underline"
-                style={{ color: theme.primary }}
-              >
+              <button type="button" onClick={() => switchMode('register')} className="btn btn-link btn-xs p-0 font-medium" style={{ color: theme.primary }}>
                 Sign up free
               </button>
             </p>
           </form>
         )}
 
-        {/* ── Register form ────────────────────────────────────────────────── */}
+        {/* ── Register ──────────────────────────────────────────────────────── */}
         {mode === 'register' && (
           <form onSubmit={handleRegister} className="space-y-4">
-            <Field icon={<User className="w-4 h-4" />} theme={theme}>
-              <input
-                type="text"
-                placeholder="Display name"
-                value={displayName}
-                onChange={e => setDisplayName(e.target.value)}
-                autoComplete="name"
-                style={inputStyle}
-              />
-            </Field>
-
-            <Field icon={<Mail className="w-4 h-4" />} theme={theme}>
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                style={inputStyle}
-              />
-            </Field>
-
-            <Field
+            <InputField
+              icon={<User className="w-4 h-4" />}
+              type="text"
+              placeholder="Display name"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              autoComplete="name"
+              theme={theme}
+            />
+            <InputField
+              icon={<Mail className="w-4 h-4" />}
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              theme={theme}
+            />
+            <InputField
               icon={<Lock className="w-4 h-4" />}
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Password (min 8 characters)"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              autoComplete="new-password"
               theme={theme}
               trailing={
-                <button type="button" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
-                  {showPassword
-                    ? <EyeOff className="w-4 h-4" style={{ color: theme.textMuted }} />
-                    : <Eye className="w-4 h-4" style={{ color: theme.textMuted }} />
-                  }
+                <button type="button" className="btn btn-ghost btn-xs btn-circle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               }
-            >
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Password (min 8 characters)"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                style={{ ...inputStyle, paddingRight: '2.5rem' }}
-              />
-            </Field>
-
-            <Field
+            />
+            <InputField
               icon={<Lock className="w-4 h-4" />}
+              type={showConfirm ? 'text' : 'password'}
+              placeholder="Confirm password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              required
+              autoComplete="new-password"
               theme={theme}
               trailing={
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)} tabIndex={-1}>
-                  {showConfirm
-                    ? <EyeOff className="w-4 h-4" style={{ color: theme.textMuted }} />
-                    : <Eye className="w-4 h-4" style={{ color: theme.textMuted }} />
-                  }
+                <button type="button" className="btn btn-ghost btn-xs btn-circle" onClick={() => setShowConfirm(!showConfirm)} tabIndex={-1}>
+                  {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               }
-            >
-              <input
-                type={showConfirm ? 'text' : 'password'}
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                style={{ ...inputStyle, paddingRight: '2.5rem' }}
-              />
-            </Field>
+            />
 
-            {/* Free tier blurb */}
-            <div
-              className="text-xs p-3 rounded-xl"
-              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textMuted }}
-            >
+            {/* Free tier info */}
+            <div className="text-xs p-3 rounded-xl opacity-80" style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textMuted }}>
               Free plan includes <strong style={{ color: theme.textBody }}>15 image generations</strong> and{' '}
               <strong style={{ color: theme.textBody }}>3 storyline prompts</strong> per month.
             </div>
 
-            <button type="submit" disabled={loading} style={btnPrimary}>
+            <button type="submit" disabled={loading} className="btn btn-primary btn-block" style={{ minHeight: '44px' }}>
+              {loading ? <span className="loading loading-spinner loading-sm" /> : null}
               {loading ? 'Creating account…' : 'Create Free Account'}
             </button>
 
-            <Divider theme={theme} />
+            <div className="divider text-xs opacity-50">or</div>
+            <GoogleBtn onClick={handleGoogle} disabled={loading} theme={theme} />
 
-            <button type="button" onClick={handleGoogle} disabled={loading} style={btnGoogle}>
-              <GoogleIcon />
-              Continue with Google
-            </button>
-
-            <p className="text-center text-sm" style={{ color: theme.textMuted }}>
+            <p className="text-center text-sm opacity-70" style={{ color: theme.textMuted }}>
               Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => switchMode('login')}
-                className="font-medium hover:underline"
-                style={{ color: theme.primary }}
-              >
+              <button type="button" onClick={() => switchMode('login')} className="btn btn-link btn-xs p-0 font-medium" style={{ color: theme.primary }}>
                 Sign in
               </button>
             </p>
           </form>
         )}
 
-        {/* ── Forgot password form ─────────────────────────────────────────── */}
+        {/* ── Forgot password ────────────────────────────────────────────────── */}
         {mode === 'forgot' && (
           <form onSubmit={handleForgot} className="space-y-4">
-            <Field icon={<Mail className="w-4 h-4" />} theme={theme}>
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                style={inputStyle}
-              />
-            </Field>
-
-            <button type="submit" disabled={loading} style={btnPrimary}>
+            <InputField
+              icon={<Mail className="w-4 h-4" />}
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              theme={theme}
+            />
+            <button type="submit" disabled={loading} className="btn btn-primary btn-block" style={{ minHeight: '44px' }}>
+              {loading ? <span className="loading loading-spinner loading-sm" /> : null}
               {loading ? 'Sending…' : 'Send Reset Link'}
             </button>
-
-            <p className="text-center text-sm" style={{ color: theme.textMuted }}>
-              <button
-                type="button"
-                onClick={() => switchMode('login')}
-                className="font-medium hover:underline"
-                style={{ color: theme.primary }}
-              >
+            <p className="text-center text-sm">
+              <button type="button" onClick={() => switchMode('login')} className="btn btn-link btn-xs p-0 font-medium" style={{ color: theme.primary }}>
                 Back to Sign In
               </button>
             </p>
           </form>
         )}
       </div>
-    </div>
+    </dialog>
   );
 }
 
-// ─── Sub-components ─────────────────────────────────────────────────────────
-function Field({ icon, trailing, theme, children }) {
+// ─── Shared input with leading icon ──────────────────────────────────────────
+function InputField({ icon, trailing, theme, ...inputProps }) {
   return (
     <div className="relative">
       <span
-        className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+        className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10"
         style={{ color: theme.textMuted }}
       >
         {icon}
       </span>
-      {children}
+      <input
+        {...inputProps}
+        className="input input-bordered w-full pl-9 pr-10 text-sm"
+        style={{
+          background:  theme.fieldBg,
+          borderColor: theme.fieldBorder,
+          color:       theme.textBody,
+          minHeight:   '44px',
+        }}
+      />
       {trailing && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer">
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 z-10">
           {trailing}
         </span>
       )}
@@ -437,19 +312,25 @@ function Field({ icon, trailing, theme, children }) {
   );
 }
 
-function Divider({ theme }) {
+// ─── Google button ────────────────────────────────────────────────────────────
+function GoogleBtn({ onClick, disabled, theme }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex-1 h-px" style={{ background: theme.fieldBorder }} />
-      <span className="text-xs" style={{ color: theme.textMuted }}>or</span>
-      <div className="flex-1 h-px" style={{ background: theme.fieldBorder }} />
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="btn btn-outline btn-block gap-2"
+      style={{ borderColor: theme.fieldBorder, color: theme.textBody, minHeight: '44px' }}
+    >
+      <GoogleIcon />
+      Continue with Google
+    </button>
   );
 }
 
 function GoogleIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24">
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>

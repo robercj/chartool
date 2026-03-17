@@ -10,13 +10,12 @@ export default function CharacterListPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [characters, setCharacters] = useState([]);
-  const [drafts, setDrafts] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('characters');
+  const [drafts,     setDrafts]     = useState([]);
+  const [isLoading,  setIsLoading]  = useState(true);
+  const [activeTab,  setActiveTab]  = useState('characters');
 
   useEffect(() => {
     if (!user) return;
-
     const loadData = async () => {
       try {
         const [chars, drfts] = await Promise.all([
@@ -32,16 +31,13 @@ export default function CharacterListPage() {
         setIsLoading(false);
       }
     };
-
     loadData();
   }, [user]);
 
   const handleDeleteDraft = async (draftId, e) => {
     e.preventDefault();
     e.stopPropagation();
-    
     if (!confirm('Are you sure you want to delete this draft?')) return;
-
     try {
       await CharacterDraft.delete(draftId);
       setDrafts(prev => prev.filter(d => d.id !== draftId));
@@ -52,188 +48,190 @@ export default function CharacterListPage() {
     }
   };
 
-  const handleNewCharacter = () => {
-    navigate('/characters/generate');
-  };
-
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-base-100">
+        <span className="loading loading-spinner loading-lg text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-base-100">
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <Sparkles className="w-8 h-8 text-indigo-400" />
+            <h1 className="text-3xl font-bold text-base-content flex items-center gap-3">
+              <Sparkles className="w-8 h-8 text-primary" />
               Characters
             </h1>
-            <p className="text-gray-400 mt-1">
+            <p className="text-base-content/60 mt-1">
               Manage your created characters and drafts
             </p>
           </div>
-          
           <button
-            onClick={handleNewCharacter}
-            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors"
+            onClick={() => navigate('/characters/generate')}
+            className="btn btn-primary gap-2"
+            style={{ minHeight: '44px' }}
           >
             <Plus className="w-5 h-5" />
             New Character
           </button>
         </div>
 
-        <div className="flex gap-4 mb-6 border-b border-gray-800">
+        {/* Tabs — DaisyUI tab component */}
+        <div role="tablist" className="tabs tabs-bordered mb-6">
           <button
+            role="tab"
             onClick={() => setActiveTab('characters')}
-            className={`pb-3 px-1 font-medium transition-colors ${
-              activeTab === 'characters'
-                ? 'text-indigo-400 border-b-2 border-indigo-400'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            className={`tab tab-bordered ${activeTab === 'characters' ? 'tab-active text-primary' : ''}`}
           >
             Finalized ({characters.length})
           </button>
           <button
+            role="tab"
             onClick={() => setActiveTab('drafts')}
-            className={`pb-3 px-1 font-medium transition-colors ${
-              activeTab === 'drafts'
-                ? 'text-indigo-400 border-b-2 border-indigo-400'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            className={`tab tab-bordered ${activeTab === 'drafts' ? 'tab-active text-primary' : ''}`}
           >
             Drafts ({drafts.length})
           </button>
         </div>
 
+        {/* Finalized characters */}
         {activeTab === 'characters' && (
-          <div>
-            {characters.length === 0 ? (
-              <div className="text-center py-16">
-                <Sparkles className="w-16 h-16 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-xl font-medium text-gray-300 mb-2">No characters yet</h3>
-                <p className="text-gray-500 mb-6">Create your first character to get started</p>
-                <button
-                  onClick={handleNewCharacter}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors"
+          characters.length === 0 ? (
+            <EmptyState
+              icon={<Sparkles className="w-16 h-16 text-base-content/20 mx-auto mb-4" />}
+              title="No characters yet"
+              description="Create your first character to get started"
+              onAction={() => navigate('/characters/generate')}
+              actionLabel="Create Character"
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {characters.map(char => (
+                <Link
+                  key={char.id}
+                  to={`/characters/${char.id}`}
+                  className="card bg-base-200 border border-base-300 overflow-hidden hover:border-primary/40 transition-colors group no-underline"
                 >
-                  <Plus className="w-5 h-5" />
-                  Create Character
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {characters.map(char => (
-                  <Link
-                    key={char.id}
-                    to={`/characters/${char.id}`}
-                    className="block bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-indigo-500/50 transition-colors group"
-                  >
-                    <div className="aspect-[3/4] bg-gray-800 relative">
-                      {char.generated_image_url ? (
-                        <img
-                          src={char.generated_image_url}
-                          alt={char.character_name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Image className="w-12 h-12 text-gray-700" />
-                        </div>
-                      )}
-                      <div className="absolute top-3 right-3">
-                        <span className="px-2 py-1 bg-green-900/80 text-green-300 text-xs rounded-full flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          Finalized
-                        </span>
+                  <figure className="aspect-[3/4] bg-base-300 relative">
+                    {char.generated_image_url ? (
+                      <img
+                        src={char.generated_image_url}
+                        alt={char.character_name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Image className="w-12 h-12 text-base-content/20" />
                       </div>
+                    )}
+                    <div className="absolute top-3 right-3">
+                      <span className="badge badge-success gap-1">
+                        <Check className="w-3 h-3" />
+                        Finalized
+                      </span>
                     </div>
-                    <div className="p-4">
-                      <h3 className="font-semibold text-white group-hover:text-indigo-400 transition-colors">
-                        {char.character_name || 'Unnamed Character'}
-                      </h3>
-                      <p className="text-sm text-gray-400 mt-1">
-                        {char.archetype || char.character_role || 'Character'}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Created {formatDistanceToNow(new Date(char.created_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+                  </figure>
+                  <div className="card-body p-4 gap-1">
+                    <h3 className="card-title text-base group-hover:text-primary transition-colors">
+                      {char.character_name || 'Unnamed Character'}
+                    </h3>
+                    <p className="text-sm text-base-content/60">
+                      {char.archetype || char.character_role || 'Character'}
+                    </p>
+                    <p className="text-xs text-base-content/40 mt-1">
+                      Created {formatDistanceToNow(new Date(char.created_at), { addSuffix: true })}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )
         )}
 
+        {/* Drafts */}
         {activeTab === 'drafts' && (
-          <div>
-            {drafts.length === 0 ? (
-              <div className="text-center py-16">
-                <Clock className="w-16 h-16 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-xl font-medium text-gray-300 mb-2">No drafts</h3>
-                <p className="text-gray-500 mb-6">Start creating a character to save drafts</p>
-                <button
-                  onClick={handleNewCharacter}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors"
+          drafts.length === 0 ? (
+            <EmptyState
+              icon={<Clock className="w-16 h-16 text-base-content/20 mx-auto mb-4" />}
+              title="No drafts"
+              description="Start creating a character to save drafts"
+              onAction={() => navigate('/characters/generate')}
+              actionLabel="Create Character"
+            />
+          ) : (
+            <div className="space-y-3">
+              {drafts.map(draft => (
+                <Link
+                  key={draft.id}
+                  to={`/characters/generate/${draft.id}`}
+                  className="flex items-center gap-4 p-4 card bg-base-200 border border-base-300 hover:border-primary/40 transition-colors group no-underline"
                 >
-                  <Plus className="w-5 h-5" />
-                  Create Character
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {drafts.map(draft => (
-                  <Link
-                    key={draft.id}
-                    to={`/characters/generate/${draft.id}`}
-                    className="flex items-center gap-4 p-4 bg-gray-900 border border-gray-800 rounded-xl hover:border-indigo-500/50 transition-colors group"
-                  >
-                    <div className="w-16 h-16 bg-gray-800 rounded-lg flex-shrink-0 overflow-hidden">
-                      {draft.generated_image_url ? (
-                        <img
-                          src={draft.generated_image_url}
-                          alt={draft.character_name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Sparkles className="w-6 h-6 text-gray-700" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-white group-hover:text-indigo-400 transition-colors truncate">
-                        {draft.character_name || 'Untitled Draft'}
-                      </h3>
-                      <p className="text-sm text-gray-400 truncate">
-                        {draft.archetype || draft.character_role || 'Character in progress'}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Last modified {formatDistanceToNow(new Date(draft.last_modified_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => handleDeleteDraft(draft.id, e)}
-                        className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                        aria-label="Delete draft"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                      <ChevronRight className="w-5 h-5 text-gray-600 group-hover:text-indigo-400 transition-colors" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+                  <div className="w-16 h-16 bg-base-300 rounded-xl flex-shrink-0 overflow-hidden">
+                    {draft.generated_image_url ? (
+                      <img
+                        src={draft.generated_image_url}
+                        alt={draft.character_name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Sparkles className="w-6 h-6 text-base-content/20" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-base-content group-hover:text-primary transition-colors truncate">
+                      {draft.character_name || 'Untitled Draft'}
+                    </h3>
+                    <p className="text-sm text-base-content/60 truncate">
+                      {draft.archetype || draft.character_role || 'Character in progress'}
+                    </p>
+                    <p className="text-xs text-base-content/40 mt-1">
+                      Last modified {formatDistanceToNow(new Date(draft.last_modified_at), { addSuffix: true })}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => handleDeleteDraft(draft.id, e)}
+                      className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
+                      aria-label="Delete draft"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                    <ChevronRight className="w-5 h-5 text-base-content/30 group-hover:text-primary transition-colors" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Empty state helper ───────────────────────────────────────────────────────
+function EmptyState({ icon, title, description, onAction, actionLabel }) {
+  return (
+    <div className="text-center py-16">
+      {icon}
+      <h3 className="text-xl font-medium text-base-content mb-2">{title}</h3>
+      <p className="text-base-content/50 mb-6">{description}</p>
+      <button
+        onClick={onAction}
+        className="btn btn-primary gap-2"
+        style={{ minHeight: '44px' }}
+      >
+        <Plus className="w-5 h-5" />
+        {actionLabel}
+      </button>
     </div>
   );
 }

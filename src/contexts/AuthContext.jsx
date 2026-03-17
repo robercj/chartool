@@ -56,7 +56,15 @@ export function AuthProvider({ children }) {
       if (session?.user) loadProfile(session.user.id);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // TOKEN_REFRESHED fires on tab focus — don't reload the profile for it,
+      // the session is already valid and re-running loadProfile sets loadingProfile=true
+      // which unmounts protected pages mid-flow.
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(session);
+        return;
+      }
+
       setSession(session);
       if (session?.user) {
         loadProfile(session.user.id);
@@ -118,11 +126,9 @@ export function AuthProvider({ children }) {
     if (!tier) return { allowed: false, reason: 'Not authenticated', current: 0, limit: 0 };
 
     const current = usage[type] ?? 0;
-    const today = new Date();
 
-    // Daily cap (Enterprise)
-    const dailyLimit = type === 'image' ? tier.daily_image_limit : tier.daily_story_limit;
-    // Monthly cap (Free / Pro)
+    // Monthly cap (Free / Pro). Enterprise uses daily_image_limit / daily_story_limit
+    // but those require a separate daily counter; not yet tracked client-side.
     const monthlyLimit = type === 'image' ? tier.monthly_image_limit : tier.monthly_story_limit;
 
     if (monthlyLimit !== null && current >= monthlyLimit) {
@@ -193,6 +199,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');

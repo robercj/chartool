@@ -14,34 +14,30 @@ export default function PromptPreviewPanel({
   const [isValid, setIsValid] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const seed = characterData?.seed ?? null;
+  const seed       = characterData?.seed ?? null;
   const seedLocked = characterData?.seed_locked ?? false;
 
   const jsonPreview = useMemo(() => {
-    try {
-      return JSON.stringify(characterData, null, 2);
-    } catch {
-      return '';
-    }
+    try { return JSON.stringify(characterData, null, 2); }
+    catch { return ''; }
   }, [characterData]);
 
   const handleJsonChange = useCallback((e) => {
     const newValue = e.target.value;
     setJsonString(newValue);
-    
     try {
       const parsed = JSON.parse(newValue);
       setIsValid(true);
       setErrorMessage('');
       onJsonChange(parsed);
-    } catch (e) {
+    } catch (err) {
       setIsValid(false);
-      setErrorMessage(e.message);
+      setErrorMessage(err.message);
     }
   }, [onJsonChange]);
 
   const handleSeedChange = useCallback((e) => {
-    const value = e.target.value;
+    const value    = e.target.value;
     const numValue = value === '' ? null : parseInt(value, 10);
     onSeedChange(numValue);
   }, [onSeedChange]);
@@ -54,37 +50,36 @@ export default function PromptPreviewPanel({
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Prompt Preview</h3>
-        <div className="flex items-center gap-2">
-          {isValid ? (
-            <span className="flex items-center gap-1.5 text-sm text-green-400">
-              <Check className="w-4 h-4" />
-              Valid JSON
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 text-sm text-red-400">
-              <AlertCircle className="w-4 h-4" />
-              Invalid: {errorMessage}
-            </span>
-          )}
-        </div>
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="text-lg font-semibold text-base-content">Prompt Preview</h3>
+        {isValid ? (
+          <span className="badge badge-success gap-1">
+            <Check className="w-3.5 h-3.5" />
+            Valid JSON
+          </span>
+        ) : (
+          <span className="badge badge-error gap-1 text-xs max-w-xs truncate">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            {errorMessage}
+          </span>
+        )}
       </div>
 
-      <div className="relative">
-        <textarea
-          value={displayJson}
-          onChange={handleJsonChange}
-          disabled={disabled}
-          className="w-full h-64 p-4 font-mono text-sm bg-gray-900 border border-gray-700 rounded-lg text-gray-200 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
-          aria-label="Character JSON prompt editor"
-          spellCheck={false}
-        />
-      </div>
+      {/* JSON editor */}
+      <textarea
+        value={displayJson}
+        onChange={handleJsonChange}
+        disabled={disabled}
+        className="textarea textarea-bordered w-full h-64 font-mono text-sm resize-y bg-base-300"
+        aria-label="Character JSON prompt editor"
+        spellCheck={false}
+      />
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+      {/* Seed controls */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-xl bg-base-200 border border-base-300">
         <div className="flex items-center gap-3">
-          <label htmlFor="seed-input" className="text-sm font-medium text-gray-300">
+          <label htmlFor="seed-input" className="label-text font-medium text-sm whitespace-nowrap">
             Seed:
           </label>
           <input
@@ -94,55 +89,41 @@ export default function PromptPreviewPanel({
             onChange={handleSeedChange}
             placeholder="Random"
             disabled={disabled}
-            className="w-32 px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-md text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+            className="input input-bordered input-sm w-32 bg-base-300"
           />
         </div>
-        
+
         <button
           type="button"
           onClick={handleSeedLockToggle}
           disabled={disabled}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-colors ${
-            seedLocked
-              ? 'bg-amber-600/20 border-amber-500/50 text-amber-400'
-              : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
-          } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`btn btn-sm gap-2 ${seedLocked ? 'btn-warning btn-soft' : 'btn-ghost border border-base-300'}`}
         >
-          {seedLocked ? (
-            <>
-              <Lock className="w-4 h-4" />
-              <span className="text-sm">Locked</span>
-            </>
-          ) : (
-            <>
-              <Unlock className="w-4 h-4" />
-              <span className="text-sm">Unlocked</span>
-            </>
-          )}
+          {seedLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+          {seedLocked ? 'Locked' : 'Unlocked'}
         </button>
-        
-        <p className="text-xs text-gray-400 sm:ml-auto">
-          {seedLocked 
-            ? 'Seed locked — only your prompt changes will affect this image.'
-            : 'Seed unlocked — each generation will be unique.'
-          }
+
+        <p className="text-xs opacity-60 sm:ml-auto">
+          {seedLocked
+            ? 'Seed locked — only prompt changes affect this image.'
+            : 'Seed unlocked — each generation will be unique.'}
         </p>
       </div>
 
+      {/* Generate button */}
       <button
         onClick={onGenerate}
         disabled={disabled || !isValid || isGenerating}
-        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:cursor-not-allowed"
+        className="btn btn-primary btn-block gap-2"
+        style={{ minHeight: '48px' }}
       >
         {isGenerating ? (
           <>
-            <RefreshCw className="w-5 h-5 animate-spin" />
+            <span className="loading loading-spinner loading-sm" />
             Generating Character...
           </>
         ) : (
-          <>
-            Generate Character Image
-          </>
+          'Generate Character Image'
         )}
       </button>
     </div>
