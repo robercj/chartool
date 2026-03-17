@@ -16,7 +16,7 @@
 -- ── 1. Prompt history table ───────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS character_prompt_history (
-  id                         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   character_id               UUID        NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
   saved_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   save_type                  TEXT        NOT NULL CHECK (save_type IN ('save', 'save_as')),
