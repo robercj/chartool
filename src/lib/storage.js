@@ -286,6 +286,42 @@ export const StorylinePrompt = {
   },
 };
 
+// ─── PromptHistory ────────────────────────────────────────────────────────────
+// DB table: public.character_prompt_history
+// Written only on confirmed Save or Save As — never on regeneration alone.
+export const PromptHistory = {
+  /** Fetch all history entries for a character, newest first. */
+  async list(characterId) {
+    const { data, error } = await supabase
+      .from('character_prompt_history')
+      .select('*')
+      .eq('character_id', characterId)
+      .order('saved_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /** Write a new history entry on Save or Save As. */
+  async create(characterId, entry) {
+    const { data: created, error } = await supabase
+      .from('character_prompt_history')
+      .insert({ ...entry, character_id: characterId })
+      .select()
+      .single();
+    if (error) throw error;
+    return created;
+  },
+
+  /** Update the optional user-supplied label on an entry. */
+  async updateLabel(id, label) {
+    const { error } = await supabase
+      .from('character_prompt_history')
+      .update({ label })
+      .eq('id', id);
+    if (error) throw error;
+  },
+};
+
 // ─── SavedPrompt (no-op stub) ─────────────────────────────────────────────────
 // There is no saved_prompts DB table. This stub exists solely to satisfy imports
 // in Generate.jsx that were written before the feature was deprioritised.
@@ -462,5 +498,26 @@ export const Character = {
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data || [];
+  },
+
+  /** Check whether a character name already exists for this user.
+   *  Used by the Save As flow for client-side uniqueness validation.
+   *  @param {string}      userId
+   *  @param {string}      name         The candidate name (case-sensitive exact match)
+   *  @param {string|null} excludeId    The current character's own ID — excluded so
+   *                                    a user can "Save As" with the same name they
+   *                                    already have without a false collision.
+   *  @returns {Promise<boolean>}        true if the name is already taken
+   */
+  async nameExists(userId, name, excludeId = null) {
+    if (!name?.trim()) return false;
+    let q = supabase
+      .from('characters')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('character_name', name.trim());
+    if (excludeId) q = q.neq('id', excludeId);
+    const { data } = await q;
+    return (data || []).length > 0;
   },
 };

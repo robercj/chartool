@@ -10,6 +10,7 @@ import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Generate from './pages/Generate'
 import GenerateCharacter from './pages/GenerateCharacter'
+import CharacterDetail from './pages/CharacterDetail'
 import CharacterList from './pages/CharacterList'
 import Gallery from './pages/Gallery'
 import StorylineDetail from './pages/StorylineDetail'
@@ -54,7 +55,7 @@ createRoot(document.getElementById('root')).render(
                   <Route path="/characters"            element={<Protected><CharacterList /></Protected>} />
                   <Route path="/characters/generate"   element={<Protected><GenerateCharacter /></Protected>} />
                   <Route path="/characters/generate/:draftId" element={<Protected><GenerateCharacter /></Protected>} />
-                  <Route path="/characters/:characterId" element={<Protected><GenerateCharacter /></Protected>} />
+                  <Route path="/characters/:characterId" element={<Protected><CharacterDetail /></Protected>} />
                   <Route path="/gallery"               element={<Protected><Gallery /></Protected>} />
                   <Route path="/storyline"             element={<Protected><StorylineDetail /></Protected>} />
                   <Route path="/storyline/new"         element={<Protected><StorylineForm /></Protected>} />

@@ -801,10 +801,11 @@ function CharacterWizardCard({
   draggable: isDraggable, isBeingDragged, onDragStart, onDragEnd,
 }) {
   const name   = character.character_name?.trim() || 'Untitled Draft'
+  // §3.1 — amber "Draft" for incomplete, muted "Complete" for finalized
   const STATUS = {
-    draft:       { label: 'Draft',       cls: 'badge-neutral' },
-    in_progress: { label: 'In Progress', cls: 'badge-info'    },
-    finalized:   { label: 'Finalized',   cls: 'badge-success' },
+    draft:       { label: 'Draft',    cls: 'bg-amber-500 text-black'            },
+    in_progress: { label: 'Draft',    cls: 'bg-amber-500 text-black'            },
+    finalized:   { label: 'Complete', cls: 'bg-base-content/20 text-base-content/70' },
   }
   const status = STATUS[character.creation_status] || STATUS.draft
 
@@ -873,9 +874,9 @@ function CharacterWizardCard({
           style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}
         >
           <div className="font-medium text-white truncate text-sm">{name}</div>
-          <div className="mt-1">
-            <span className={`badge badge-xs ${status.cls}`}>{status.label}</span>
-          </div>
+        <div className="mt-1">
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
+        </div>
         </div>
 
         {/* Hover arrow */}

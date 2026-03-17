@@ -163,12 +163,14 @@ export default function CharacterListPage() {
                           <Image className="w-12 h-12 text-base-content/20" />
                         </div>
                       )}
-                      <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
-                        <span className="badge badge-success gap-1">
-                          <Check className="w-3 h-3" />
-                          Finalized
+                      {/* §3.1 — muted "Complete" pill (bottom-left) + optional Prompt button (top-right) */}
+                      <div className="absolute bottom-3 left-3">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-base-content/20 text-base-content/70">
+                          Complete
                         </span>
-                        {promptText && (
+                      </div>
+                      {promptText && (
+                        <div className="absolute top-3 right-3">
                           <button
                             onClick={(e) => openPromptModal(char.character_name || 'Character', promptText, e)}
                             className="badge badge-neutral gap-1 cursor-pointer hover:badge-primary transition-colors"
@@ -177,8 +179,8 @@ export default function CharacterListPage() {
                             <FileText className="w-3 h-3" />
                             Prompt
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </figure>
                     <div className="card-body p-4 gap-1">
                       <h3 className="card-title text-base group-hover:text-primary transition-colors">
