@@ -61,9 +61,56 @@ CREATE POLICY "Users can update their own character history labels"
   );
 
 -- ── 2. Character name uniqueness per user ──────────────────────────────────────
--- Only enforces uniqueness where character_name is non-null (avoids blocking
--- partially created records that have no name yet).
+-- Before creating the index, deduplicate any existing collisions by renaming
+-- older duplicates to "Name (2)", "Name (3)", etc. The newest record (highest
+-- created_at) keeps the original name.
 
+DO $$
+DECLARE
+  dup_rec   RECORD;
+  older_rec RECORD;
+  counter   INT;
+  new_name  TEXT;
+BEGIN
+  -- Iterate over every (user_id, character_name) pair that appears more than once
+  FOR dup_rec IN
+    SELECT user_id, character_name
+    FROM   characters
+    WHERE  character_name IS NOT NULL
+    GROUP  BY user_id, character_name
+    HAVING COUNT(*) > 1
+  LOOP
+    counter := 2;
+    -- Process duplicates oldest-first (skip the newest row which keeps its name)
+    FOR older_rec IN
+      SELECT id
+      FROM   characters
+      WHERE  user_id       = dup_rec.user_id
+        AND  character_name = dup_rec.character_name
+      ORDER  BY created_at DESC
+      OFFSET 1   -- the first row (newest) is left unchanged
+    LOOP
+      -- Find a suffix that does not already exist for this user
+      LOOP
+        new_name := dup_rec.character_name || ' (' || counter || ')';
+        EXIT WHEN NOT EXISTS (
+          SELECT 1 FROM characters
+          WHERE  user_id       = dup_rec.user_id
+            AND  character_name = new_name
+        );
+        counter := counter + 1;
+      END LOOP;
+
+      UPDATE characters
+        SET character_name = new_name
+      WHERE id = older_rec.id;
+
+      counter := counter + 1;
+    END LOOP;
+  END LOOP;
+END $$;
+
+-- Now safe to create the unique index
 CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_user_id_character_name
   ON characters (user_id, character_name)
   WHERE character_name IS NOT NULL;
