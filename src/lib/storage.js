@@ -365,6 +365,19 @@ export const CharacterDraft = {
     if (error) throw error;
     return data || [];
   },
+
+  /** Bulk-update assigned_story_id for a set of draft IDs.
+   *  @param {string[]} ids
+   *  @param {string|null} assigned_story_id  null = unassign
+   */
+  async assignBulk(ids, assigned_story_id) {
+    if (!ids || ids.length === 0) return;
+    const { error } = await supabase
+      .from('character_drafts')
+      .update({ assigned_story_id, last_modified_at: new Date().toISOString() })
+      .in('id', ids);
+    if (error) throw error;
+  },
 };
 
 // ─── Character ───────────────────────────────────────────────────────────────
@@ -424,6 +437,20 @@ export const Character = {
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data || [];
+  },
+
+  /** Bulk-update assigned_story_id for a set of character IDs.
+   *  Requires the "Users can update their own characters" RLS policy (migration 008).
+   *  @param {string[]} ids
+   *  @param {string|null} assigned_story_id  null = unassign
+   */
+  async assignBulk(ids, assigned_story_id) {
+    if (!ids || ids.length === 0) return;
+    const { error } = await supabase
+      .from('characters')
+      .update({ assigned_story_id })
+      .in('id', ids);
+    if (error) throw error;
   },
 
   async unassigned(userId) {
