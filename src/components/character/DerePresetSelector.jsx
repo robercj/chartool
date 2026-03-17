@@ -36,23 +36,26 @@ export default function DerePresetSelector({
                 onMouseLeave={() => setHoveredId(null)}
                 disabled={disabled}
                 className={`btn btn-sm w-full justify-between gap-1 ${
-                  isSelected ? 'btn-primary' : 'btn-ghost border border-base-300'
+                  isSelected
+                    ? 'btn-primary'
+                    : 'btn-ghost border-2 border-base-content/25 shadow-sm'
                 } ${disabled ? 'btn-disabled' : ''}`}
-                style={{ minHeight: '40px' }}
+                style={
+                  // Unselected hover: red accent background matching primary/tooltip colour
+                  !isSelected && isHovered && !disabled
+                    ? { backgroundColor: '#E94560', borderColor: '#E94560', color: 'white' }
+                    : {}
+                }
                 aria-pressed={isSelected}
               >
                 <span className="text-sm font-medium truncate">{preset.label}</span>
                 {isSelected && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
               </button>
 
-              {/* Hover/selected tooltip */}
-              {(isHovered || isSelected) && (
+              {/* Tooltip: show on hover only — NOT pinned when selected */}
+              {isHovered && (
                 <div
-                  className={`absolute z-20 left-0 right-0 bottom-full mb-2 p-3 rounded-xl border shadow-xl text-xs space-y-1.5 ${
-                    isSelected
-                      ? 'bg-primary/10 border-primary/40 text-primary-content'
-                      : 'bg-base-200 border-base-300 text-base-content'
-                  }`}
+                  className="absolute z-20 left-0 right-0 bottom-full mb-2 p-3 rounded-xl border shadow-xl text-xs space-y-1.5 bg-base-200 border-base-300 text-base-content"
                   role="tooltip"
                 >
                   <div>

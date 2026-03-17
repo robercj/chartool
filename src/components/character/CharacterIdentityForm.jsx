@@ -13,7 +13,7 @@ import {
   TONE_OPTIONS,
   ROLE_OPTIONS,
 } from '../../lib/constants/DERE_PRESETS';
-import { BookOpen, User, Heart, Brain, MessageSquare, History } from 'lucide-react';
+import { BookOpen, User, Heart, Brain, MessageSquare, History, Users, X, Plus } from 'lucide-react';
 
 // Shared DaisyUI class strings
 const INPUT_CLS    = 'input input-bordered w-full bg-base-300 text-base-content';
@@ -36,6 +36,24 @@ export default function CharacterIdentityForm({
 
   const handleFieldChange = (field, value) => {
     onChange({ ...formData, [field]: value });
+  };
+
+  // ── Relationship (Social Web) helpers ─────────────────────────────────────
+  const relationships = formData.relationships || [];
+
+  const addRelationship = () => {
+    handleFieldChange('relationships', [...relationships, { entity: '', relationship: '', notes: '' }]);
+  };
+
+  const removeRelationship = (index) => {
+    handleFieldChange('relationships', relationships.filter((_, i) => i !== index));
+  };
+
+  const updateRelationship = (index, field, value) => {
+    handleFieldChange(
+      'relationships',
+      relationships.map((rel, i) => i === index ? { ...rel, [field]: value } : rel)
+    );
   };
 
   const personalityMode = useMemo(() => {
@@ -283,19 +301,25 @@ export default function CharacterIdentityForm({
           placeholder="Intentional paradoxes that add depth..." />
       </section>
 
-      {/* ── Backstory ────────────────────────────────────────────────────── */}
+      {/* ── Backstory & Context ──────────────────────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-xl font-semibold text-base-content flex items-center gap-2">
           <History className="w-5 h-5 text-primary" />
           Backstory &amp; Context
         </h2>
 
+        {/* Order: Backstory Summary → Knowledge Domain → Formative Event */}
         <Field id="backstory" label="Backstory Summary">
           <textarea id="backstory" className={TEXTAREA_CLS} rows={4} disabled={disabled}
             value={formData.backstory_summary || ''}
             placeholder="The character's background narrative..."
             onChange={(e) => handleFieldChange('backstory_summary', e.target.value)} />
         </Field>
+
+        <PillTagInput id="knowledge-domain" label="Knowledge Domain" disabled={disabled}
+          value={formData.knowledge_domain || []}
+          onChange={(domains) => handleFieldChange('knowledge_domain', domains)}
+          placeholder="Areas of expertise..." />
 
         <Field id="formative-event" label="Formative Event">
           <textarea id="formative-event" className={TEXTAREA_CLS} rows={3} disabled={disabled}
@@ -304,44 +328,76 @@ export default function CharacterIdentityForm({
             onChange={(e) => handleFieldChange('formative_event', e.target.value)} />
         </Field>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Field id="rel-protagonist" label="Relationship to Protagonist">
-            <input id="rel-protagonist" type="text" className={INPUT_CLS} disabled={disabled}
-              value={formData.relationship_to_protagonist || ''} placeholder="e.g., Ally, Rival, Mentor..."
-              onChange={(e) => handleFieldChange('relationship_to_protagonist', e.target.value)} />
-          </Field>
-          <Field id="rel-authority" label="Relationship to Authority">
-            <input id="rel-authority" type="text" className={INPUT_CLS} disabled={disabled}
-              value={formData.relationship_to_authority || ''} placeholder="e.g., Rebellious, Loyal..."
-              onChange={(e) => handleFieldChange('relationship_to_authority', e.target.value)} />
-          </Field>
-          <Field id="rel-peers" label="Relationship to Peers">
-            <input id="rel-peers" type="text" className={INPUT_CLS} disabled={disabled}
-              value={formData.relationship_to_peers || ''} placeholder="e.g., Popular, Isolated..."
-              onChange={(e) => handleFieldChange('relationship_to_peers', e.target.value)} />
-          </Field>
-        </div>
+        {/* World Context removed (v2.0) */}
+      </section>
 
-        <div className="max-w-md">
-          <Field id="rel-love-interest" label="Relationship to Love Interest">
-            <input id="rel-love-interest" type="text" className={INPUT_CLS} disabled={disabled}
-              value={formData.relationship_to_love_interest || ''}
-              placeholder="e.g., tsundere dynamics, enemies to lovers..."
-              onChange={(e) => handleFieldChange('relationship_to_love_interest', e.target.value)} />
-          </Field>
-        </div>
+      {/* ── Social Web ──────────────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold text-base-content flex items-center gap-2">
+          <Users className="w-5 h-5 text-primary" />
+          Social Web
+        </h2>
+        <p className="text-sm text-base-content/50">
+          Define the character's key relationships. Each entry describes their connection to a person, faction, or group.
+        </p>
 
-        <Field id="world-context" label="World Context">
-          <textarea id="world-context" className={TEXTAREA_CLS} rows={3} disabled={disabled}
-            value={formData.world_context || ''}
-            placeholder="Setting, time period, rules of their world..."
-            onChange={(e) => handleFieldChange('world_context', e.target.value)} />
-        </Field>
+        {/* Relationship list — scrollable if > 5 items */}
+        {relationships.length > 0 && (
+          <div className={`space-y-3 ${relationships.length > 5 ? 'max-h-96 overflow-y-auto pr-1' : ''}`}>
+            {relationships.map((rel, index) => (
+              <div
+                key={index}
+                className="flex items-start gap-2 p-3 bg-base-200 rounded-xl border border-base-300"
+              >
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={rel.entity || ''}
+                    onChange={(e) => updateRelationship(index, 'entity', e.target.value)}
+                    placeholder="Entity / Faction"
+                    disabled={disabled}
+                    className={INPUT_CLS + ' input-sm'}
+                  />
+                  <input
+                    type="text"
+                    value={rel.relationship || ''}
+                    onChange={(e) => updateRelationship(index, 'relationship', e.target.value)}
+                    placeholder="Relationship"
+                    disabled={disabled}
+                    className={INPUT_CLS + ' input-sm'}
+                  />
+                  <input
+                    type="text"
+                    value={rel.notes || ''}
+                    onChange={(e) => updateRelationship(index, 'notes', e.target.value)}
+                    placeholder="Notes / Backstory"
+                    disabled={disabled}
+                    className={INPUT_CLS + ' input-sm'}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeRelationship(index)}
+                  disabled={disabled}
+                  className="btn btn-ghost btn-sm btn-square text-base-content/50 hover:text-error flex-shrink-0 mt-0.5"
+                  aria-label="Remove relationship"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
-        <PillTagInput id="knowledge-domain" label="Knowledge Domain" disabled={disabled}
-          value={formData.knowledge_domain || []}
-          onChange={(domains) => handleFieldChange('knowledge_domain', domains)}
-          placeholder="Areas of expertise..." />
+        <button
+          type="button"
+          onClick={addRelationship}
+          disabled={disabled}
+          className="btn btn-ghost btn-sm gap-2 border border-dashed border-base-content/30 hover:border-primary hover:text-primary"
+        >
+          <Plus className="w-4 h-4" />
+          Relationship
+        </button>
       </section>
 
       {/* ── Voice ────────────────────────────────────────────────────────── */}
@@ -374,12 +430,7 @@ export default function CharacterIdentityForm({
           onChange={(quirks) => handleFieldChange('verbal_quirks', quirks)}
           placeholder="Catchphrases, tics, avoidance words..." />
 
-        <Field id="internal-monologue" label="Internal Monologue Style">
-          <textarea id="internal-monologue" className={TEXTAREA_CLS} rows={2} disabled={disabled}
-            value={formData.internal_monologue_style || ''}
-            placeholder="How they narrate their own thoughts..."
-            onChange={(e) => handleFieldChange('internal_monologue_style', e.target.value)} />
-        </Field>
+        {/* Internal Monologue Style removed (v2.0) */}
       </section>
     </div>
   );

@@ -370,3 +370,112 @@ export async function generateCharacterImage({ prompt, seed = null }, signal = n
     jobId: result?.request_id,
   };
 }
+
+// ─── Identity Prompt Generation: Claude ───────────────────────────────────────
+// Generates the AI roleplay system prompt from identity fields ONLY.
+// Fires at Identity step completion (Step 1 "Continue") — before any image exists.
+// Excludes all appearance fields, world_context, and internal_monologue_style.
+//
+// @param {object} identityData  Full formData object; appearance fields are stripped internally
+// @returns {Promise<string>}    Prose character roleplay prompt (system-prompt-ready)
+export async function generateCharacterIdentityPrompt(identityData) {
+  // Whitelist: only identity-relevant keys are sent to Claude
+  const IDENTITY_KEYS = new Set([
+    'character_name', 'character_role', 'archetype', 'narrative_function',
+    'age', 'sex', 'gender_expression', 'species_or_race', 'nationality_or_origin',
+    'social_class', 'occupation_or_role', 'dere_presets', 'custom_personality_modifier',
+    'personality_mode', 'surface_traits', 'hidden_traits',
+    'emotional_triggers_positive', 'emotional_triggers_negative',
+    'speech_pattern', 'behavioral_tendencies', 'moral_alignment',
+    'values_and_beliefs', 'fears_and_insecurities',
+    'surface_goal', 'deep_desire', 'internal_conflict',
+    'backstory_summary', 'knowledge_domain', 'formative_event',
+    'relationships',
+    'tone_of_voice', 'verbal_quirks', 'consistency_anchors', 'contradiction_points',
+  ]);
+
+  const summary = {};
+  for (const key of IDENTITY_KEYS) {
+    const v = identityData[key];
+    if (v === null || v === undefined || v === '') continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) continue;
+    summary[key] = v;
+  }
+
+  const systemPrompt = `You are a character profile writer specializing in AI roleplay system prompts. Your task is to generate a high-fidelity character roleplay prompt — a ready-to-use system prompt for an AI language model — from the provided character identity data.
+
+The prompt must cover all of the following in rich, immersive prose:
+1. Core identity (name, role, archetype, narrative function)
+2. Personality breakdown (surface traits, hidden traits, dere type behaviors if applicable — describe specific surface mannerisms AND the hidden emotional truth beneath them)
+3. Psychological profile (desires, fears, internal conflict, moral alignment, values)
+4. Speech and voice patterns (tone, verbal quirks, sentence structure, specific language habits)
+5. Backstory and context (backstory summary, formative event, knowledge domains)
+6. Social relationships (how they relate to others based on the relationships array)
+7. Behavioral guidelines with concrete response examples
+
+Rules:
+- Write in third person for background facts; present tense for behavioral instructions
+- Do NOT leave any provided field unused — every data point must appear somewhere
+- Where fields are empty, infer plausible, internally consistent details from context
+- Do NOT use headers, bullet lists, or markdown — output continuous, immersive prose only
+- Output ONLY the roleplay system prompt text. No preamble, no explanation.`;
+
+  const userMessage = `Generate a character roleplay system prompt from this identity data:
+
+${JSON.stringify(summary, null, 2)}`;
+
+  const data = await callEdgeFunction('anthropic-proxy', {
+    _generation_type: 'character_identity_prompt',
+    model: 'claude-sonnet-4-5',
+    max_tokens: 4000,
+    temperature: 1.0,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+
+  return data.content?.[0]?.text || '';
+}
+
+// ─── Appearance Description Generation: Claude ────────────────────────────────
+// Generates a prose appearance description suitable as an image generation prompt.
+// Fires when the user clicks "Generate Appearance Description" in Step 2.
+// Uses appearance form values ONLY — no identity fields.
+//
+// @param {object} appearanceData  The formData.appearance object
+// @returns {Promise<string>}      Prose appearance description for fal.ai image generation
+export async function generateAppearanceDescription(appearanceData) {
+  const systemPrompt = `You are a character visual design specialist. Your task is to write a vivid, detailed prose description of a character's physical appearance for use as an AI image generation prompt (fal.ai / FLUX model).
+
+From the provided appearance data, write a single cohesive paragraph that includes:
+1. Body type, height, and build
+2. Hair color, style, and texture
+3. Eye color and shape
+4. Facial features and skin tone
+5. Clothing style and signature outfit details
+6. Accessories and props
+7. Visual motifs and distinctive elements
+8. Art style reference if specified (e.g. "anime illustration", "manga style", "painterly")
+
+Rules:
+- Write in vivid, descriptive prose — specific and evocative
+- Include art-style tags naturally (e.g. "rendered in a manga illustration style")
+- Do NOT include NSFW or inappropriate content
+- Keep under 200 words — image prompts must be concise
+- Output ONLY the description text. No headers, no JSON, no explanation.`;
+
+  const userMessage = `Create an appearance description for image generation from these appearance details:
+
+${JSON.stringify(appearanceData, null, 2)}`;
+
+  const data = await callEdgeFunction('anthropic-proxy', {
+    _generation_type: 'character_appearance_description',
+    model: 'claude-sonnet-4-5',
+    max_tokens: 1000,
+    temperature: 0.8,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+
+  return data.content?.[0]?.text || '';
+}

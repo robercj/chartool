@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { Sparkles, Plus, Clock, Check, ChevronRight, Trash2, Image } from 'lucide-react';
+import { Sparkles, Plus, Clock, Check, ChevronRight, Trash2, Image, FileText, Copy, X } from 'lucide-react';
 import { Character, CharacterDraft } from '../lib/storage';
 
 export default function CharacterListPage() {
@@ -13,6 +13,14 @@ export default function CharacterListPage() {
   const [drafts,     setDrafts]     = useState([]);
   const [isLoading,  setIsLoading]  = useState(true);
   const [activeTab,  setActiveTab]  = useState('characters');
+
+  // Prompt modal state
+  const [promptModal, setPromptModal] = useState({
+    isOpen: false,
+    characterName: '',
+    prompt: '',
+  });
+  const [promptCopied, setPromptCopied] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -48,6 +56,29 @@ export default function CharacterListPage() {
     }
   };
 
+  // Open the prompt modal (works for both finalized chars and drafts)
+  const openPromptModal = useCallback((characterName, prompt, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPromptCopied(false);
+    setPromptModal({ isOpen: true, characterName, prompt });
+  }, []);
+
+  const closePromptModal = useCallback(() => {
+    setPromptModal(prev => ({ ...prev, isOpen: false }));
+    setPromptCopied(false);
+  }, []);
+
+  const handleCopyPrompt = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(promptModal.prompt);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    } catch {
+      toast.error('Failed to copy to clipboard');
+    }
+  }, [promptModal.prompt]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-base-100">
@@ -81,7 +112,7 @@ export default function CharacterListPage() {
           </button>
         </div>
 
-        {/* Tabs — DaisyUI tab component */}
+        {/* Tabs */}
         <div role="tablist" className="tabs tabs-bordered mb-6">
           <button
             role="tab"
@@ -111,44 +142,58 @@ export default function CharacterListPage() {
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {characters.map(char => (
-                <Link
-                  key={char.id}
-                  to={`/characters/${char.id}`}
-                  className="card bg-base-200 border border-base-300 overflow-hidden hover:border-primary/40 transition-colors group no-underline"
-                >
-                  <figure className="aspect-[3/4] bg-base-300 relative">
-                    {char.generated_image_url ? (
-                      <img
-                        src={char.generated_image_url}
-                        alt={char.character_name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Image className="w-12 h-12 text-base-content/20" />
+              {characters.map(char => {
+                // Show Prompt button if character has a prompt (character_prompt or character_manifest)
+                const promptText = char.character_prompt || char.character_manifest || null;
+                return (
+                  <Link
+                    key={char.id}
+                    to={`/characters/${char.id}`}
+                    className="card bg-base-200 border border-base-300 overflow-hidden hover:border-primary/40 transition-colors group no-underline"
+                  >
+                    <figure className="aspect-[3/4] bg-base-300 relative">
+                      {char.generated_image_url ? (
+                        <img
+                          src={char.generated_image_url}
+                          alt={char.character_name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Image className="w-12 h-12 text-base-content/20" />
+                        </div>
+                      )}
+                      <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
+                        <span className="badge badge-success gap-1">
+                          <Check className="w-3 h-3" />
+                          Finalized
+                        </span>
+                        {promptText && (
+                          <button
+                            onClick={(e) => openPromptModal(char.character_name || 'Character', promptText, e)}
+                            className="badge badge-neutral gap-1 cursor-pointer hover:badge-primary transition-colors"
+                            aria-label="View character prompt"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Prompt
+                          </button>
+                        )}
                       </div>
-                    )}
-                    <div className="absolute top-3 right-3">
-                      <span className="badge badge-success gap-1">
-                        <Check className="w-3 h-3" />
-                        Finalized
-                      </span>
+                    </figure>
+                    <div className="card-body p-4 gap-1">
+                      <h3 className="card-title text-base group-hover:text-primary transition-colors">
+                        {char.character_name || 'Unnamed Character'}
+                      </h3>
+                      <p className="text-sm text-base-content/60">
+                        {char.archetype || char.character_role || 'Character'}
+                      </p>
+                      <p className="text-xs text-base-content/40 mt-1">
+                        Created {formatDistanceToNow(new Date(char.created_at), { addSuffix: true })}
+                      </p>
                     </div>
-                  </figure>
-                  <div className="card-body p-4 gap-1">
-                    <h3 className="card-title text-base group-hover:text-primary transition-colors">
-                      {char.character_name || 'Unnamed Character'}
-                    </h3>
-                    <p className="text-sm text-base-content/60">
-                      {char.archetype || char.character_role || 'Character'}
-                    </p>
-                    <p className="text-xs text-base-content/40 mt-1">
-                      Created {formatDistanceToNow(new Date(char.created_at), { addSuffix: true })}
-                    </p>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )
         )}
@@ -198,6 +243,17 @@ export default function CharacterListPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* Prompt button — only shown when character_prompt is available */}
+                    {draft.character_prompt && (
+                      <button
+                        onClick={(e) => openPromptModal(draft.character_name || 'Draft', draft.character_prompt, e)}
+                        className="btn btn-ghost btn-sm gap-1.5 text-base-content/50 hover:text-primary"
+                        aria-label="View character prompt"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span className="hidden sm:inline text-xs">Prompt</span>
+                      </button>
+                    )}
                     <button
                       onClick={(e) => handleDeleteDraft(draft.id, e)}
                       className="btn btn-ghost btn-sm btn-square text-error hover:bg-error/10"
@@ -213,6 +269,76 @@ export default function CharacterListPage() {
           )
         )}
       </div>
+
+      {/* ── Character Prompt Modal ─────────────────────────────────────────── */}
+      {promptModal.isOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={closePromptModal}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60" aria-hidden="true" />
+
+          {/* Modal panel */}
+          <div
+            className="relative z-10 w-full max-w-2xl bg-base-100 rounded-2xl border border-base-300 shadow-2xl flex flex-col max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Character Prompt"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-base-300 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-semibold text-base-content flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-primary" />
+                  Character Prompt
+                </h2>
+                <p className="text-sm text-base-content/50 mt-0.5">
+                  {promptModal.characterName}
+                </p>
+              </div>
+              <button
+                onClick={closePromptModal}
+                className="btn btn-ghost btn-sm btn-square"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Prompt text — read-only, scrollable */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <pre className="text-sm text-base-content/80 whitespace-pre-wrap font-sans leading-relaxed">
+                {promptModal.prompt}
+              </pre>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-base-300 flex-shrink-0">
+              <button
+                onClick={handleCopyPrompt}
+                className={`btn btn-sm gap-2 ${promptCopied ? 'btn-success' : 'btn-primary'}`}
+              >
+                {promptCopied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copy Prompt
+                  </>
+                )}
+              </button>
+              <button onClick={closePromptModal} className="btn btn-ghost btn-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

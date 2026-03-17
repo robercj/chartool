@@ -6,7 +6,7 @@ export default function PromptPreviewPanel({
   onJsonChange,
   onSeedChange,
   onSeedLockToggle,
-  onGenerate,
+  onGenerate = null,   // optional — omit to hide the generate button
   isGenerating = false,
   disabled = false,
 }) {
@@ -110,22 +110,24 @@ export default function PromptPreviewPanel({
         </p>
       </div>
 
-      {/* Generate button */}
-      <button
-        onClick={onGenerate}
-        disabled={disabled || !isValid || isGenerating}
-        className="btn btn-primary btn-block gap-2"
-        style={{ minHeight: '48px' }}
-      >
-        {isGenerating ? (
-          <>
-            <span className="loading loading-spinner loading-sm" />
-            Generating Character...
-          </>
-        ) : (
-          'Generate Character Image'
-        )}
-      </button>
+      {/* Generate button — only rendered when onGenerate is provided (Step 3 legacy path) */}
+      {onGenerate && (
+        <button
+          onClick={onGenerate}
+          disabled={disabled || !isValid || isGenerating}
+          className="btn btn-primary btn-block gap-2"
+          style={{ minHeight: '48px' }}
+        >
+          {isGenerating ? (
+            <>
+              <span className="loading loading-spinner loading-sm" />
+              Generating Character...
+            </>
+          ) : (
+            'Generate Character Image'
+          )}
+        </button>
+      )}
     </div>
   );
 }
