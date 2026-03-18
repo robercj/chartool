@@ -6,7 +6,7 @@ import {
   FolderOpen, Images, Plus, Trash2, FolderInput, ImagePlus,
   BookOpen, ChevronRight, BookMarked, X as XIcon,
   Sparkles, FileText, Copy, Check,
-  MoreVertical, FolderMinus, CheckSquare,
+  MoreVertical, FolderMinus, CheckSquare, ChevronDown,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -80,6 +80,18 @@ export default function Gallery() {
   // ── Context menu ─────────────────────────────────────────────────────────────
   // Tracks which character card's ⋮ menu is open by character ID
   const [ctxCharId, setCtxCharId] = useState(null)
+
+  // ── Expanded storyline folders (accordion) ───────────────────────────────────
+  const [expandedStoryIds, setExpandedStoryIds] = useState(new Set())
+
+  const toggleStoryExpand = useCallback((storyId) => {
+    setExpandedStoryIds(prev => {
+      const next = new Set(prev)
+      if (next.has(storyId)) next.delete(storyId)
+      else next.add(storyId)
+      return next
+    })
+  }, [])
 
   // ── Drag and drop ─────────────────────────────────────────────────────────────
   // dragging: { chars: CharObject[] } | null
@@ -406,13 +418,6 @@ export default function Gallery() {
     ...(char.character_prompt  ? [{ key: 'prompt', label: 'View Prompt', icon: FileText }] : []),
     ...(char.isDraft            ? [{ key: 'delete', label: 'Delete',      icon: Trash2, danger: true }] : []),
   ]
-  const assignedCtxItems = (char) => [
-    { key: 'remove', label: 'Remove from Story', icon: FolderMinus  },
-    { key: 'select', label: 'Select',            icon: CheckSquare  },
-    { key: 'view',   label: 'View Character',    icon: ChevronRight },
-    ...(char.character_prompt ? [{ key: 'prompt', label: 'View Prompt', icon: FileText }] : []),
-  ]
-
   // Filtered stories for picker search
   const filteredStoriesForPicker = storylines.filter(s =>
     !pickerSearch || s.name.toLowerCase().includes(pickerSearch.toLowerCase())
@@ -486,92 +491,57 @@ export default function Gallery() {
                 Storylines
               </h2>
               <div className="grid gap-4" style={STORY_GRID}>
-                {storylines.map(sl => (
-                  <StorylineCard
-                    key={sl.id}
-                    storyline={sl}
-                    theme={theme}
-                    dragActive={!!dragging}
-                    isDragOver={dragOverStoryId === sl.id}
-                    onDragOver={e => handleStoryDragOver(e, sl.id)}
-                    onDragLeave={handleStoryDragLeave}
-                    onDrop={e => handleStoryDrop(e, sl)}
-                    onClick={() => navigate(`/storyline?id=${sl.id}`)}
-                    onDelete={() => setPendingDelete({ type: 'storyline', id: sl.id, name: sl.name })}
-                  />
-                ))}
+                {storylines.map(sl => {
+                  const assignedChars = assignedWizardChars.get(sl.id) || []
+                  const isExpanded    = expandedStoryIds.has(sl.id)
+                  const inSelMode     = selMode === sl.id
+                  const selectedInSec = inSelMode ? assignedChars.filter(c => selIds.has(c.id)) : []
+
+                  return (
+                    <StorylineCard
+                      key={sl.id}
+                      storyline={sl}
+                      theme={theme}
+                      dragActive={!!dragging}
+                      isDragOver={dragOverStoryId === sl.id}
+                      onDragOver={e => handleStoryDragOver(e, sl.id)}
+                      onDragLeave={handleStoryDragLeave}
+                      onDrop={e => handleStoryDrop(e, sl)}
+                      onClick={() => navigate(`/storyline?id=${sl.id}`)}
+                      onDelete={() => setPendingDelete({ type: 'storyline', id: sl.id, name: sl.name })}
+                      // accordion props
+                      assignedChars={assignedChars}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => toggleStoryExpand(sl.id)}
+                      // selection inside folder
+                      inSelMode={inSelMode}
+                      selIds={selIds}
+                      selCount={selCount}
+                      onEnterSelMode={() => enterSelectionMode(sl.id)}
+                      onSelectAll={() => setSelIds(new Set(assignedChars.map(c => c.id)))}
+                      onDeselectAll={deselectAll}
+                      onRemoveSelected={() => doMoveChars(selectedInSec, null, 'Standalone')}
+                      onExitSelMode={exitSelectionMode}
+                      onToggleSel={toggleSel}
+                      // character card interactions
+                      ctxCharId={ctxCharId}
+                      onCtxOpen={(e, charId) => { e.stopPropagation(); setCtxCharId(ctxCharId === charId ? null : charId) }}
+                      onCtxAction={handleCtxAction}
+                      onPromptClick={openPrompt}
+                      onCharClick={(char) => navigate(char.isDraft ? `/characters/generate/${char.id}` : `/characters/${char.id}`)}
+                    />
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {/* ── Wizard Characters ───────────────────────────────────────── */}
+          {/* ── Standalone Characters (unassigned only) ─────────────────── */}
           {hasWizardChars && (
             <div className="mb-8">
               <h2 className="text-xs uppercase tracking-widest font-medium mb-4 text-base-content/50">
-                Characters
+                Standalone Characters
               </h2>
-
-              {/* Assigned — grouped by story */}
-              {[...assignedWizardChars.entries()].map(([storyId, chars]) => {
-                const story          = storylines.find(s => s.id === storyId)
-                const inSelMode      = selMode === storyId
-                const selectedInSec  = inSelMode ? chars.filter(c => selIds.has(c.id)) : []
-
-                return (
-                  <div key={storyId} className="mb-6">
-                    {inSelMode ? (
-                      // Selection toolbar for this story group
-                      <SelectionToolbar
-                        count={selCount}
-                        total={chars.length}
-                        actionLabel="Remove from Story"
-                        actionIcon={FolderMinus}
-                        onSelectAll={() => setSelIds(new Set(chars.map(c => c.id)))}
-                        onDeselectAll={deselectAll}
-                        onAction={() => doMoveChars(selectedInSec, null, 'Standalone')}
-                        onCancel={exitSelectionMode}
-                      />
-                    ) : (
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-medium text-base-content/60 flex items-center gap-2">
-                          <BookOpen className="w-4 h-4 flex-shrink-0" />
-                          {story?.name || 'Unknown Story'}
-                          <span className="text-xs text-base-content/30 font-normal">
-                            ({chars.length} character{chars.length !== 1 ? 's' : ''})
-                          </span>
-                        </h3>
-                        {chars.length > 0 && (
-                          <button
-                            onClick={() => enterSelectionMode(storyId)}
-                            className="btn btn-ghost btn-xs gap-1.5 text-base-content/50 hover:text-base-content"
-                          >
-                            <CheckSquare className="w-3.5 h-3.5" />
-                            Select
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <div className="grid gap-3" style={CHAR_GRID}>
-                      {chars.map(char => (
-                        <CharacterWizardCard
-                          key={`${char.isDraft ? 'draft' : 'char'}-${char.id}`}
-                          character={char}
-                          theme={theme}
-                          selectable={inSelMode}
-                          isSelected={inSelMode && selIds.has(char.id)}
-                          onSelect={() => toggleSel(char.id)}
-                          ctxOpen={ctxCharId === char.id}
-                          onCtxOpen={e => { e.stopPropagation(); setCtxCharId(ctxCharId === char.id ? null : char.id) }}
-                          ctxItems={assignedCtxItems(char)}
-                          onCtxAction={action => handleCtxAction(action, char)}
-                          onPromptClick={() => openPrompt(char.character_name || 'Character', char.character_prompt)}
-                          onClick={() => navigate(char.isDraft ? `/characters/generate/${char.id}` : `/characters/${char.id}`)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
 
               {/* Standalone (unassigned wizard characters) */}
               <div>
@@ -591,15 +561,10 @@ export default function Gallery() {
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-medium text-base-content/60 flex items-center gap-2">
                       <Sparkles className="w-4 h-4 flex-shrink-0" />
-                      {assignedWizardChars.size > 0 ? 'Standalone' : null}
-                      <span className={assignedWizardChars.size > 0 ? 'text-xs text-base-content/30 font-normal' : 'text-sm text-base-content/60'}>
-                        {assignedWizardChars.size > 0
-                          ? `(${unassignedWizardChars.length} character${unassignedWizardChars.length !== 1 ? 's' : ''})`
-                          : `${unassignedWizardChars.length} character${unassignedWizardChars.length !== 1 ? 's' : ''}`
-                        }
+                      <span className="text-xs text-base-content/30 font-normal">
+                        {unassignedWizardChars.length} character{unassignedWizardChars.length !== 1 ? 's' : ''}
                       </span>
                     </h3>
-                    {/* §9.1 — "Select" button; hidden when count is 0 */}
                     {unassignedWizardChars.length > 0 && (
                       <button
                         onClick={() => enterSelectionMode('unassigned')}
@@ -612,7 +577,7 @@ export default function Gallery() {
                   </div>
                 )}
 
-                {/* §9.3 — empty state when all unassigned are now assigned */}
+                {/* Empty state when all characters are assigned */}
                 {unassignedWizardChars.length === 0 && assignedWizardChars.size > 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center rounded-xl border border-dashed border-base-300">
                     <Check className="w-8 h-8 mb-3 text-success/60" />
@@ -926,8 +891,18 @@ function CharacterWizardCard({
   )
 }
 
-// ─── Storyline Card (updated with drag-drop affordance) ───────────────────────
-function StorylineCard({ storyline, theme, onClick, onDelete, dragActive, isDragOver, onDragOver, onDragLeave, onDrop }) {
+// ─── Storyline Card (with inline accordion for assigned characters) ────────────
+function StorylineCard({
+  storyline, theme, onClick, onDelete,
+  dragActive, isDragOver, onDragOver, onDragLeave, onDrop,
+  // accordion
+  assignedChars, isExpanded, onToggleExpand,
+  // selection inside folder
+  inSelMode, selIds, selCount,
+  onEnterSelMode, onSelectAll, onDeselectAll, onRemoveSelected, onExitSelMode, onToggleSel,
+  // character card interactions
+  ctxCharId, onCtxOpen, onCtxAction, onPromptClick, onCharClick,
+}) {
   const { data: batches = [] } = useQuery({
     queryKey: ['storyline-batches', storyline.id],
     queryFn:  () => CharacterBatch.forStoryline(storyline.id),
@@ -946,6 +921,9 @@ function StorylineCard({ storyline, theme, onClick, onDelete, dragActive, isDrag
     enabled: batches.length > 0,
   })
 
+  const charCount = assignedChars.length
+  const canExpand = charCount > 0
+
   // Drop zone border styling during an active drag
   const dropBorderStyle = dragActive
     ? isDragOver
@@ -953,70 +931,193 @@ function StorylineCard({ storyline, theme, onClick, onDelete, dragActive, isDrag
       : { border: `1px solid rgba(233,69,96,0.4)`, animation: 'pulse 2s infinite' }
     : {}
 
+  // Clicking the folder card: if it has characters, toggle expand; otherwise navigate
+  const handleCardClick = (e) => {
+    if (canExpand) {
+      e.stopPropagation()
+      onToggleExpand()
+    } else {
+      onClick()
+    }
+  }
+
+  // Build ctx items for assigned chars
+  const assignedCtxItemsFor = (char) => [
+    { key: 'remove', label: 'Remove from Story', icon: FolderMinus  },
+    { key: 'select', label: 'Select',            icon: CheckSquare  },
+    { key: 'view',   label: 'View Character',    icon: ChevronRight },
+    ...(char.character_prompt ? [{ key: 'prompt', label: 'View Prompt', icon: FileText }] : []),
+  ]
+
   return (
+    // Wrapper: col-span-full when expanded so accordion content uses full width
     <div
-      className="relative rounded-2xl overflow-hidden cursor-pointer group"
-      style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}`, aspectRatio: '1 / 1', ...dropBorderStyle, transition: 'border 0.15s, box-shadow 0.15s' }}
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onClick()}
-      aria-label={`Open storyline: ${storyline.name}`}
-      aria-dropeffect={dragActive ? 'move' : undefined}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
+      className={isExpanded ? 'col-span-full' : ''}
+      style={{ minWidth: 0 }}
     >
-      <div className="absolute inset-0 grid grid-cols-2 gap-0.5">
-        {previewImages.length > 0 ? (
-          previewImages.map((img, i) => (
-            <img key={i} src={img.url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
-          ))
-        ) : (
-          Array(4).fill(0).map((_, i) => (
-            <div key={i} className="w-full h-full flex items-center justify-center bg-base-300">
-              <BookOpen className="w-6 h-6 md:w-8 md:h-8 text-base-content/20" />
-            </div>
-          ))
-        )}
-      </div>
+      {/* ── Folder card row ─────────────────────────────────────────────── */}
+      <div className={isExpanded ? 'flex items-stretch gap-4' : undefined}>
 
-      {/* "Drop to assign" overlay — shown when hovering during drag */}
-      {isDragOver && (
-        <div className="absolute inset-0 flex items-center justify-center bg-primary/20 z-10">
-          <div className="bg-primary text-primary-content text-sm font-semibold px-4 py-2 rounded-xl shadow-lg">
-            Drop to assign
+        {/* The visual folder card */}
+        <div
+          className="relative rounded-2xl overflow-hidden cursor-pointer group flex-shrink-0"
+          style={{
+            background:   theme.cardBg,
+            border:       `1px solid ${theme.cardBorder}`,
+            aspectRatio:  '1 / 1',
+            width:        isExpanded ? '200px' : undefined,
+            ...dropBorderStyle,
+            transition:   'border 0.15s, box-shadow 0.15s',
+          }}
+          onClick={handleCardClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') handleCardClick(e)
+          }}
+          aria-label={canExpand
+            ? `${isExpanded ? 'Collapse' : 'Expand'} storyline: ${storyline.name}`
+            : `Open storyline: ${storyline.name}`}
+          aria-expanded={canExpand ? isExpanded : undefined}
+          aria-dropeffect={dragActive ? 'move' : undefined}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          <div className="absolute inset-0 grid grid-cols-2 gap-0.5">
+            {previewImages.length > 0 ? (
+              previewImages.map((img, i) => (
+                <img key={i} src={img.url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+              ))
+            ) : (
+              Array(4).fill(0).map((_, i) => (
+                <div key={i} className="w-full h-full flex items-center justify-center bg-base-300">
+                  <BookOpen className="w-6 h-6 md:w-8 md:h-8 text-base-content/20" />
+                </div>
+              ))
+            )}
           </div>
-        </div>
-      )}
 
-      <div className="absolute inset-x-0 bottom-0 p-3" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}>
-        <div className="font-medium text-white truncate text-sm">{storyline.name}</div>
-        <div className="flex items-center gap-1.5 text-xs text-white/60">
-          <span>{batches.length} characters</span>
-          {storyline.storyline_prompt_id && (
-            <span className="flex items-center gap-0.5 text-white/80">
-              <BookMarked className="w-3 h-3" />
-              prompt
-            </span>
+          {/* "Drop to assign" overlay */}
+          {isDragOver && (
+            <div className="absolute inset-0 flex items-center justify-center bg-primary/20 z-10">
+              <div className="bg-primary text-primary-content text-sm font-semibold px-4 py-2 rounded-xl shadow-lg">
+                Drop to assign
+              </div>
+            </div>
+          )}
+
+          {/* Bottom info overlay */}
+          <div className="absolute inset-x-0 bottom-0 p-3" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}>
+            <div className="font-medium text-white truncate text-sm">{storyline.name}</div>
+            <div className="flex items-center gap-1.5 text-xs text-white/60">
+              <span>{charCount} character{charCount !== 1 ? 's' : ''}</span>
+              {storyline.storyline_prompt_id && (
+                <span className="flex items-center gap-0.5 text-white/80">
+                  <BookMarked className="w-3 h-3" />
+                  prompt
+                </span>
+              )}
+              {canExpand && (
+                <span className="ml-auto flex items-center gap-0.5 text-white/80">
+                  <ChevronDown
+                    className="w-3.5 h-3.5 transition-transform"
+                    style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Hover arrow — only when not expanded and no drag */}
+          {!isDragOver && !isExpanded && (
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none">
+              {canExpand
+                ? <ChevronDown className="w-10 h-10 text-white" />
+                : <ChevronRight className="w-10 h-10 text-white" />
+              }
+            </div>
+          )}
+
+          {/* Delete button */}
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            className="btn btn-square absolute top-2 left-2 z-10 bg-black/60 hover:bg-error border-none text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            style={{ width: '44px', height: '44px' }}
+            aria-label={`Delete storyline: ${storyline.name}`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+
+          {/* "Open storyline" button — only visible when expanded */}
+          {isExpanded && (
+            <button
+              onClick={e => { e.stopPropagation(); onClick() }}
+              className="btn btn-square absolute top-2 right-2 z-10 bg-black/60 hover:bg-primary border-none text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              style={{ width: '44px', height: '44px' }}
+              aria-label={`Open storyline page: ${storyline.name}`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           )}
         </div>
+
+        {/* ── Expanded character panel ──────────────────────────────────── */}
+        {isExpanded && (
+          <div className="flex-1 min-w-0">
+            {/* Selection toolbar or sub-header */}
+            {inSelMode ? (
+              <SelectionToolbar
+                count={selCount}
+                total={assignedChars.length}
+                actionLabel="Remove from Story"
+                actionIcon={FolderMinus}
+                onSelectAll={onSelectAll}
+                onDeselectAll={onDeselectAll}
+                onAction={onRemoveSelected}
+                onCancel={onExitSelMode}
+              />
+            ) : (
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-base-content/60 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 flex-shrink-0" />
+                  {storyline.name}
+                  <span className="text-xs text-base-content/30 font-normal">
+                    ({charCount} character{charCount !== 1 ? 's' : ''})
+                  </span>
+                </h3>
+                <button
+                  onClick={onEnterSelMode}
+                  className="btn btn-ghost btn-xs gap-1.5 text-base-content/50 hover:text-base-content"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  Select
+                </button>
+              </div>
+            )}
+
+            {/* Character cards grid */}
+            <div className="grid gap-3" style={CHAR_GRID}>
+              {assignedChars.map(char => (
+                <CharacterWizardCard
+                  key={`${char.isDraft ? 'draft' : 'char'}-${char.id}`}
+                  character={char}
+                  theme={theme}
+                  selectable={inSelMode}
+                  isSelected={inSelMode && selIds.has(char.id)}
+                  onSelect={() => onToggleSel(char.id)}
+                  ctxOpen={ctxCharId === char.id}
+                  onCtxOpen={e => onCtxOpen(e, char.id)}
+                  ctxItems={assignedCtxItemsFor(char)}
+                  onCtxAction={action => onCtxAction(action, char)}
+                  onPromptClick={() => onPromptClick(char.character_name || 'Character', char.character_prompt)}
+                  onClick={() => onCharClick(char)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-
-      {!isDragOver && (
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none">
-          <ChevronRight className="w-10 h-10 text-white" />
-        </div>
-      )}
-
-      <button
-        onClick={e => { e.stopPropagation(); onDelete() }}
-        className="btn btn-square absolute top-2 left-2 z-10 bg-black/60 hover:bg-error border-none text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-        style={{ width: '44px', height: '44px' }}
-        aria-label={`Delete storyline: ${storyline.name}`}
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
     </div>
   )
 }
