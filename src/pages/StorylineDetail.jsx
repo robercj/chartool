@@ -3,12 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  ArrowLeft, Trash2, ImagePlus, Loader2, FolderInput, Images, BookOpen, BookMarked
+  ArrowLeft, Trash2, ImagePlus, Images, BookOpen, BookMarked,
+  Sparkles, ChevronRight, MoreVertical,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useProgress } from '../contexts/ProgressContext'
-import { Storyline, CharacterBatch, GeneratedImage } from '../lib/storage'
+import { Storyline, CharacterBatch, GeneratedImage, Character, CharacterDraft } from '../lib/storage'
 import { generateImage } from '../lib/anthropic'
 
 export default function StorylineDetail() {
@@ -34,6 +35,24 @@ export default function StorylineDetail() {
     queryFn: () => CharacterBatch.forStoryline(storylineId),
     enabled: !!storylineId,
   })
+
+  // Wizard characters assigned to this storyline
+  const { data: assignedChars = [] } = useQuery({
+    queryKey: ['storyline-wizard-chars', storylineId],
+    queryFn: () => Character.forStoryline(storylineId),
+    enabled: !!storylineId,
+  })
+  const { data: assignedDrafts = [] } = useQuery({
+    queryKey: ['storyline-wizard-drafts', storylineId],
+    queryFn: () => CharacterDraft.forStoryline(storylineId),
+    enabled: !!storylineId,
+  })
+
+  // Merge finalized + drafts into one list (drafts first so they appear at top)
+  const wizardChars = [
+    ...assignedChars.map(c => ({ ...c, isDraft: false })),
+    ...assignedDrafts.map(d => ({ ...d, isDraft: true })),
+  ]
 
   const [showGroupShotModal, setShowGroupShotModal] = useState(false)
   const [groupShotCount, setGroupShotCount] = useState(3)
@@ -154,7 +173,7 @@ COMPOSITION RULES:
               {storyline.name}
             </h1>
             <p className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>
-              {batches.length} character{batches.length !== 1 ? 's' : ''} • Created {new Date(storyline.created_at).toLocaleDateString()}
+              {wizardChars.length} character{wizardChars.length !== 1 ? 's' : ''} • Created {new Date(storyline.created_at).toLocaleDateString()}
             </p>
           </div>
         </div>
@@ -232,35 +251,58 @@ COMPOSITION RULES:
       )}
 
       {/* ── Character Grid ── */}
-      {batches.length === 0 ? (
+      {wizardChars.length === 0 && batches.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 md:py-20 text-center">
           <BookOpen className="w-16 h-16 mb-4 text-base-content/30" aria-hidden="true" />
           <h3 className="text-xl font-medium mb-2 text-base-content">No characters yet</h3>
-          <p className="text-sm mb-4 text-base-content/60">Add characters to this storyline</p>
+          <p className="text-sm mb-4 text-base-content/60">
+            Drag a character from the Gallery onto this storyline, or create a new one.
+          </p>
           <button
-            onClick={() => navigate(`/generate?storylineId=${storylineId}`)}
+            onClick={() => navigate(`/gallery`)}
             className="btn btn-primary btn-sm"
             style={{ minHeight: '44px' }}
           >
             <ImagePlus className="w-4 h-4 mr-2" aria-hidden="true" />
-            Add Characters
+            Go to Gallery
           </button>
         </div>
       ) : (
-        /* CSS Grid auto-fill — 1 col mobile → 2 col sm → 3+ on wider */
-        <div
-          className="grid gap-4"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))' }}
-        >
-          {batches.map(batch => (
-            <BatchCard
-              key={batch.id}
-              batch={batch}
-              theme={theme}
-              onClick={() => navigate(`/batch?id=${batch.id}`)}
-            />
-          ))}
-        </div>
+        <>
+          {/* Wizard characters assigned to this storyline */}
+          {wizardChars.length > 0 && (
+            <div
+              className="grid gap-4 mb-6"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))' }}
+            >
+              {wizardChars.map(char => (
+                <WizardCharCard
+                  key={`${char.isDraft ? 'draft' : 'char'}-${char.id}`}
+                  character={char}
+                  theme={theme}
+                  onClick={() => navigate(char.isDraft ? `/characters/generate/${char.id}` : `/characters/${char.id}`)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Legacy batch characters */}
+          {batches.length > 0 && (
+            <div
+              className="grid gap-4"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))' }}
+            >
+              {batches.map(batch => (
+                <BatchCard
+                  key={batch.id}
+                  batch={batch}
+                  theme={theme}
+                  onClick={() => navigate(`/batch?id=${batch.id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Group Shot Modal */}
@@ -316,6 +358,57 @@ COMPOSITION RULES:
           </div>
         </dialog>
       )}
+    </div>
+  )
+}
+
+// ─── Wizard Character Card (minimal — portrait, name, status) ─────────────────
+function WizardCharCard({ character, theme, onClick }) {
+  const name = character.character_name?.trim() || 'Untitled Draft'
+  const STATUS = {
+    draft:       { label: 'Draft',    cls: 'bg-amber-500 text-black' },
+    in_progress: { label: 'Draft',    cls: 'bg-amber-500 text-black' },
+    finalized:   { label: 'Complete', cls: 'bg-base-content/20 text-base-content/70' },
+  }
+  const status = STATUS[character.creation_status] || STATUS.draft
+
+  return (
+    <div
+      className="relative rounded-2xl overflow-hidden cursor-pointer group"
+      style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}`, aspectRatio: '3 / 4' }}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onClick()}
+      aria-label={`Open character: ${name}`}
+    >
+      {character.generated_image_url ? (
+        <img
+          src={character.generated_image_url}
+          alt={name}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-base-300">
+          <Sparkles className="w-10 h-10 text-base-content/20" />
+        </div>
+      )}
+
+      <div
+        className="absolute inset-x-0 bottom-0 p-3"
+        style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}
+      >
+        <div className="font-medium text-white truncate text-sm">{name}</div>
+        <div className="mt-1">
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
+        </div>
+      </div>
+
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 pointer-events-none">
+        <ChevronRight className="w-8 h-8 text-white" />
+      </div>
     </div>
   )
 }
