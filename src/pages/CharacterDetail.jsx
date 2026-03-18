@@ -3,7 +3,7 @@
 // Accessible only for finalized characters. Draft / in_progress characters
 // are silently redirected to the creation flow (/characters/generate/:id).
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Component, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -47,14 +47,38 @@ const SECTION_FIELDS = {
 };
 const ALL_IDENTITY_FIELDS = Object.values(SECTION_FIELDS).flat();
 
+// ─── Ensure a value is always an array (guards against DB returning strings/nulls) ──
+function toArr(v) { return Array.isArray(v) ? v : v ? [v] : []; }
+
 // ─── Transform DB record → edit-form state ────────────────────────────────────
 function buildEditData(char) {
+  const app = char.appearance && typeof char.appearance === 'object' ? char.appearance : {};
   return {
     ...char,
-    emotional_triggers_positive: char.emotional_triggers?.positive || [],
-    emotional_triggers_negative: char.emotional_triggers?.negative || [],
-    relationships: char.relationships || [],
-    appearance: char.appearance || {},
+    // Scalar arrays — coerce to Array in case DB stored a string
+    dere_presets:                 toArr(char.dere_presets),
+    surface_traits:               toArr(char.surface_traits),
+    hidden_traits:                toArr(char.hidden_traits),
+    values_and_beliefs:           toArr(char.values_and_beliefs),
+    fears_and_insecurities:       toArr(char.fears_and_insecurities),
+    behavioral_tendencies:        toArr(char.behavioral_tendencies),
+    consistency_anchors:          toArr(char.consistency_anchors),
+    contradiction_points:         toArr(char.contradiction_points),
+    knowledge_domain:             toArr(char.knowledge_domain),
+    verbal_quirks:                toArr(char.verbal_quirks),
+    relationships:                toArr(char.relationships),
+    emotional_triggers_positive:  toArr(char.emotional_triggers?.positive),
+    emotional_triggers_negative:  toArr(char.emotional_triggers?.negative),
+    // Appearance object — ensure sub-arrays are arrays too
+    appearance: {
+      ...app,
+      hair_color:       toArr(app.hair_color),
+      eye_color:        toArr(app.eye_color),
+      facial_features:  toArr(app.facial_features),
+      accessories:      toArr(app.accessories),
+      props:            toArr(app.props),
+      visual_motifs:    toArr(app.visual_motifs),
+    },
   };
 }
 
@@ -136,8 +160,53 @@ function Field({ label, htmlFor, children }) {
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+// Catches render errors so the page shows a useful message instead of going blank.
+class CharacterDetailErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error('[CharacterDetail] render error:', error, info?.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-4 text-center">
+          <AlertTriangle className="w-12 h-12 text-error" />
+          <h2 className="text-lg font-semibold text-base-content">Something went wrong loading this character.</h2>
+          <p className="text-sm text-base-content/60 max-w-md">
+            {this.state.error?.message || 'An unexpected error occurred.'}
+          </p>
+          <p className="text-xs text-base-content/40">Check the browser console for the full stack trace.</p>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ─── Exported wrapper ─────────────────────────────────────────────────────────
 export default function CharacterDetail() {
+  return (
+    <CharacterDetailErrorBoundary>
+      <CharacterDetailInner />
+    </CharacterDetailErrorBoundary>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+function CharacterDetailInner() {
   const { characterId } = useParams();
   const navigate        = useNavigate();
   const queryClient     = useQueryClient();
@@ -496,10 +565,10 @@ export default function CharacterDetail() {
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col lg:flex-row bg-base-100" style={{ minHeight: 'calc(100vh - 64px)' }}>
+    <div className="flex bg-base-100" style={{ height: 'calc(100vh - 64px)' }}>
 
       {/* ── LEFT PANEL — saved snapshot ─────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[22%] flex-shrink-0 border-r border-base-300 bg-base-200 overflow-hidden" style={{ height: 'calc(100vh - 64px)', position: 'sticky', top: '64px' }}>
+      <div className="hidden lg:flex flex-col w-[22%] flex-shrink-0 border-r border-base-300 bg-base-200 overflow-hidden">
         <div className="flex-1 overflow-y-auto">
 
           {/* Portrait */}
@@ -571,7 +640,7 @@ export default function CharacterDetail() {
       </div>
 
       {/* ── CENTER PANEL — edit surface ──────────────────────────────────── */}
-      <div className="flex-1 flex flex-col lg:overflow-hidden" style={{ minHeight: 'calc(100vh - 64px)' }}>
+      <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Mobile sticky header */}
         <div className="lg:hidden sticky top-0 z-10 bg-base-100 border-b border-base-300 px-4 py-3 flex items-center gap-3">
@@ -594,7 +663,7 @@ export default function CharacterDetail() {
         </div>
 
         {/* Scrollable form */}
-        <div className="flex-1 lg:overflow-y-auto p-4 lg:p-6">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6">
           <h1 className="text-xl font-bold text-base-content mb-6">Edit Character</h1>
 
           {/* ── Section 1: Identity & Role ─────────────────────────────── */}
@@ -1005,7 +1074,7 @@ export default function CharacterDetail() {
       </div>
 
       {/* ── RIGHT PANEL — live prompt view ───────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[28%] flex-shrink-0 border-l border-base-300 bg-base-200 overflow-hidden" style={{ height: 'calc(100vh - 64px)', position: 'sticky', top: '64px' }}>
+      <div className="hidden lg:flex flex-col w-[28%] flex-shrink-0 border-l border-base-300 bg-base-200 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm text-base-content">Character Prompt</h3>
