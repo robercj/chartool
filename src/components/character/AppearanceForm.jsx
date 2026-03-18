@@ -1,19 +1,15 @@
-import { ChevronDown, ChevronUp, Palette, User } from 'lucide-react';
+import { Palette, User } from 'lucide-react';
 import PillTagInput from './PillTagInput';
 import PromptPreviewPanel from './PromptPreviewPanel';
 import { BODY_TYPES } from '../../lib/constants/DERE_PRESETS';
 
-// Shared input class for appearance fields
 const FIELD_CLS = 'input input-bordered w-full bg-base-300 text-base-content';
 const LABEL_CLS = 'label label-text font-medium pb-1';
 
 export default function AppearanceForm({
-  isExpanded,
-  onToggle,
   appearanceData,
   onChange,
   disabled = false,
-  // Optional: character data for JSON preview + seed controls inside the collapsible
   characterData = null,
   onJsonChange = null,
   onSeedChange = null,
@@ -24,32 +20,13 @@ export default function AppearanceForm({
   };
 
   return (
-    // Bug fix: add 'collapse-open' when expanded so DaisyUI correctly
-    // reveals collapse-content (DaisyUI v5 uses grid-template-rows for animation;
-    // without this class the content area stays at height 0).
-    <div className={`collapse collapse-arrow border border-base-300 rounded-xl bg-base-200 ${isExpanded ? 'collapse-open' : ''}`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={disabled}
-        className="collapse-title flex items-center gap-2 font-medium text-base-content min-h-[56px]"
-        aria-expanded={isExpanded}
-      >
+    <div className="border border-base-300 rounded-xl bg-base-200 p-4 space-y-6">
+      <h2 className="text-lg font-semibold text-base-content flex items-center gap-2">
         <User className="w-5 h-5 text-primary flex-shrink-0" />
-        + Add Detailed Appearance
-        <span className="ml-auto">
-          {isExpanded
-            ? <ChevronUp className="w-5 h-5 opacity-60" />
-            : <ChevronDown className="w-5 h-5 opacity-60" />
-          }
-        </span>
-      </button>
+        Detailed Appearance
+      </h2>
 
-      {/* collapse-content is always rendered so DaisyUI's animation works correctly.
-          The actual form fields are conditionally shown via the collapse-open class above. */}
-      <div className="collapse-content p-4 space-y-6">
-
-        {/* Body & Structure */}
+      {/* Body & Structure */}
         <section className="space-y-4">
           <h3 className="text-base font-semibold text-base-content">Body &amp; Structure</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -234,7 +211,6 @@ export default function AppearanceForm({
             />
           </div>
         )}
-      </div>
     </div>
   );
 }

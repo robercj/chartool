@@ -61,7 +61,6 @@ export default function GenerateCharacterPage() {
   const { user }        = useAuth();
 
   const [formData,                     setFormData]                     = useState(INITIAL_FORM_STATE);
-  const [appearanceExpanded,           setAppearanceExpanded]           = useState(false);
   const [imageHistory,                 setImageHistory]                 = useState([]);
   const [showExitModal,                setShowExitModal]                = useState(false);
   const [pendingNavigation,            setPendingNavigation]            = useState(null);
@@ -450,8 +449,6 @@ export default function GenerateCharacterPage() {
           {phase === 2 && !showImageContext && (
             <>
               <AppearanceForm
-                isExpanded={appearanceExpanded}
-                onToggle={() => setAppearanceExpanded(!appearanceExpanded)}
                 appearanceData={formData.appearance || {}}
                 onChange={handleAppearanceChange}
                 disabled={anyBusy}
