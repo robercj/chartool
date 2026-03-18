@@ -85,7 +85,7 @@ export default function CharacterIdentityForm({
           >
             <option value="">Unassigned (Standalone Character)</option>
             {stories.map(story => (
-              <option key={story.id} value={story.id}>{story.title || 'Untitled Story'}</option>
+              <option key={story.id} value={story.id}>{story.name || 'Untitled Story'}</option>
             ))}
           </select>
         </div>
