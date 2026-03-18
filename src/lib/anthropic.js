@@ -202,6 +202,11 @@ export async function callLLM({ prompt, imageUrls = [], responseSchema = null, g
 // @param {AbortSignal} [signal]
 // @returns {Promise<string>} CDN URL of the generated image
 export async function generateImage({ prompt, referenceImageUrl, referenceImageUrls, propImageUrl, aspectRatio = '3:4' }, signal = null) {
+  if (import.meta.env.VITE_MOCK_BACKEND === 'true') {
+    const { mockGenerateSprites } = await import('./mockBackend');
+    return mockGenerateSprites(prompt);
+  }
+
   const sourceImages = [];
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     sourceImages.push(...referenceImageUrls.filter(Boolean));
@@ -235,6 +240,9 @@ export async function generateImage({ prompt, referenceImageUrl, referenceImageU
 // @param {AbortSignal} [signal]
 // @returns {Promise<string>} CDN URL of the processed image (PNG with alpha)
 export async function removeImageBackground(imageUrl, signal = null) {
+  if (import.meta.env.VITE_MOCK_BACKEND === 'true') {
+    return imageUrl;
+  }
   const result = await callEdgeFunction('fal-rembg', { image_url: imageUrl }, signal);
   const outputUrl = result?.image?.url;
   if (!outputUrl) throw new Error('Background removal returned no image');
@@ -244,6 +252,11 @@ export async function removeImageBackground(imageUrl, signal = null) {
 // ─── Character Prompt Synthesis: Claude ───────────────────────────────────────
 // Synthesizes a fal.ai image prompt from the full character JSON
 export async function synthesizeCharacterImagePrompt(characterData) {
+  if (import.meta.env.VITE_MOCK_BACKEND === 'true') {
+    await new Promise((r) => setTimeout(r, 600));
+    return "pixel art character, teal hair, blue eyes, light skin, white shirt with heart emblem, standing pose, soft lighting, anime style";
+  }
+
   const systemPrompt = `You are a character visual design specialist. Your task is to create a detailed, vivid image generation prompt for an AI image generator (fal.ai nanoBanana2/FLUX model).
 
 Based on the character description provided, create a single paragraph prompt that includes:
@@ -455,6 +468,11 @@ ${JSON.stringify(summary, null, 2)}`;
 // @param {string} imageInput  base64 data URL or HTTP(S) URL
 // @returns {Promise<{ consistencyPrompt: string, identityLock: object|null }>}
 export async function analyzeReferenceImage(imageInput) {
+  if (import.meta.env.VITE_MOCK_BACKEND === 'true') {
+    const { mockAnalyzeReferenceImage } = await import('./mockBackend');
+    return mockAnalyzeReferenceImage(imageInput);
+  }
+
   const content = []
 
   if (imageInput.startsWith('data:')) {
