@@ -19,7 +19,7 @@ const TIER_BADGE = {
 
 // ─── Nav items definition ─────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { to: '/generate',            icon: ImagePlus,         label: 'Generate Images',    matchFn: (p) => p === '/generate' },
+  { to: '/sprites/generate',    icon: ImagePlus,         label: 'Generate Sprites',   matchFn: (p) => p === '/sprites/generate' },
   { to: '/characters/generate', icon: Sparkles,          label: 'Generate Character', matchFn: (p) => p.startsWith('/characters') },
   { to: '/storyline/new',       icon: BookMarked,        label: 'Generate Storyline', matchFn: (p) => p.startsWith('/storyline/new') || p.startsWith('/storyline/result') },
   { to: '/gallery',             icon: Images,            label: 'Gallery',            matchFn: (p) => p === '/gallery' || p.startsWith('/storyline?') || p.startsWith('/batch?') },
@@ -86,10 +86,10 @@ export default function Layout({ children }) {
 
   const handleGenerateClick = () => {
     setMobileMenuOpen(false);
-    if (location.pathname === '/generate') {
-      navigate('/generate', { state: { reset: Date.now() } });
+    if (location.pathname === '/sprites/generate') {
+      navigate('/sprites/generate', { state: { reset: Date.now() } });
     } else {
-      navigate('/generate');
+      navigate('/sprites/generate');
     }
   };
 
@@ -194,7 +194,7 @@ export default function Layout({ children }) {
                 <li key={item.to}>
                   <Link
                     to={item.to}
-                    onClick={item.to === '/generate' ? handleGenerateClick : undefined}
+                    onClick={item.to === '/sprites/generate' ? handleGenerateClick : undefined}
                     className="rounded-xl flex items-center gap-2 text-sm font-medium transition-all"
                     style={{
                       minHeight:  '44px',
@@ -415,7 +415,7 @@ export default function Layout({ children }) {
           <ul className="menu w-full p-0 gap-1">
             {NAV_ITEMS.map((item, idx) => {
               const isActive = item.matchFn(location.pathname);
-              const isGenerate = item.to === '/generate';
+                  const isGenerate = item.to === '/sprites/generate';
               return (
                 <li key={item.to}>
                   <Link

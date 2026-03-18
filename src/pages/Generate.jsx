@@ -10,7 +10,7 @@ import {
 import { useTheme, GENRES } from '../contexts/ThemeContext'
 import { useProgress } from '../contexts/ProgressContext'
 import { useAuth } from '../contexts/AuthContext'
-import { Storyline, CharacterBatch, GeneratedImage, SavedPrompt } from '../lib/storage'
+import { Storyline, CharacterBatch, GeneratedImage } from '../lib/storage'
 import { callLLM, generateImage, removeImageBackground, LimitError } from '../lib/anthropic'
 
 const ARCHETYPES = [

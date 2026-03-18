@@ -209,7 +209,7 @@ COMPOSITION RULES:
             </button>
           )}
           <button
-            onClick={() => navigate(`/generate?storylineId=${storylineId}`)}
+            onClick={() => navigate('/sprites/generate')}
             className="btn btn-primary btn-sm"
             style={{ minHeight: '44px' }}
           >

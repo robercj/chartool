@@ -8,7 +8,7 @@ import { ProgressProvider } from './contexts/ProgressContext'
 import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
-import Generate from './pages/Generate'
+import GenerateSprites from './pages/GenerateSprites'
 import GenerateCharacter from './pages/GenerateCharacter'
 import CharacterDetail from './pages/CharacterDetail'
 import CharacterList from './pages/CharacterList'
@@ -49,9 +49,13 @@ createRoot(document.getElementById('root')).render(
             <BrowserRouter>
               <Layout>
                 <Routes>
-                  <Route path="/" element={<Navigate to="/generate" replace />} />
+                  {/* Root redirect → canonical sprites route */}
+                  <Route path="/" element={<Navigate to="/sprites/generate" replace />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
-                  <Route path="/generate"              element={<Protected><Generate /></Protected>} />
+                  {/* New canonical route */}
+                  <Route path="/sprites/generate"      element={<Protected><GenerateSprites /></Protected>} />
+                  {/* Legacy route — permanent redirect to new canonical path */}
+                  <Route path="/generate"              element={<Navigate to="/sprites/generate" replace />} />
                   <Route path="/characters"            element={<Protected><CharacterList /></Protected>} />
                   <Route path="/characters/generate"   element={<Protected><GenerateCharacter /></Protected>} />
                   <Route path="/characters/generate/:draftId" element={<Protected><GenerateCharacter /></Protected>} />

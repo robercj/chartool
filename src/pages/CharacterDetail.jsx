@@ -12,6 +12,7 @@ import {
   Copy, RefreshCw, Save, History, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle, Sparkles, X, Plus, RotateCcw,
   Pencil, Clock, Loader2, Image as ImageIcon, Lock, Unlock,
+  Download, Trash2, ZoomIn, LockKeyhole,
 } from 'lucide-react';
 import { useAuth }  from '../contexts/AuthContext';
 import { Character, PromptHistory } from '../lib/storage';
@@ -656,7 +657,25 @@ function CharacterDetailInner() {
 
         {/* Scrollable form */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+
+          {/* ── §9: Primary image display — cosmetic, all characters ─────── */}
+          {savedChar.generated_image_url && (
+            <PrimaryImageDisplay
+              url={savedChar.generated_image_url}
+              name={savedChar.character_name}
+            />
+          )}
+
           <h1 className="text-xl font-bold text-base-content mb-6">Edit Character</h1>
+
+          {/* ── §8: Character Consistency Prompt — sprites flow ──────────── */}
+          {savedChar.character_consistency_prompt && (
+            <ConsistencyPromptSection
+              prompt={savedChar.character_consistency_prompt}
+              sectionExpanded={sectionExpanded}
+              onToggle={toggleSection}
+            />
+          )}
 
           {/* ── Section 1: Identity & Role ─────────────────────────────── */}
           <CollapsibleSection id="identity-role" title="Identity & Role" isDirty={sectionDirty['identity-role']}
@@ -965,6 +984,15 @@ function CharacterDetailInner() {
               value={editData.appearance?.visual_motifs || []}
               onChange={v => handleAppearanceChange('visual_motifs', v)} />
           </CollapsibleSection>
+
+          {/* ── §7: Sprite Images section — bottom of detail page ────────── */}
+          {Array.isArray(savedChar.sprite_images) && savedChar.sprite_images.length > 0 && (
+            <SpriteImagesSection
+              characterId={characterId}
+              spriteImages={savedChar.sprite_images}
+              queryClient={queryClient}
+            />
+          )}
         </div>
 
         {/* ── STICKY ACTION BAR ────────────────────────────────────────── */}
@@ -1367,6 +1395,302 @@ function HistoryDrawer({ entries, onClose, onCopy, onRestore, characterId }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── §9: PrimaryImageDisplay ─────────────────────────────────────────────────
+// Cosmetic-only large image display above Edit Character. Applies to ALL
+// characters regardless of creation_source. Clicking opens a lightbox modal.
+function PrimaryImageDisplay({ url, name }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  return (
+    <>
+      <div className="mb-6">
+        <button
+          onClick={() => setLightboxOpen(true)}
+          className="w-full relative rounded-2xl overflow-hidden block group"
+          aria-label={`View ${name} full size`}
+          style={{ maxHeight: '360px' }}
+        >
+          <img
+            src={url}
+            alt={name}
+            className="w-full object-contain"
+            style={{ maxHeight: '360px', display: 'block' }}
+          />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+            <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </button>
+      </div>
+
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <div
+            className="relative max-w-2xl w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setLightboxOpen(false)}
+              className="absolute -top-10 right-0 btn btn-ghost btn-sm text-white gap-1"
+            >
+              <X className="w-4 h-4" /> Close
+            </button>
+            <img
+              src={url}
+              alt={name}
+              className="w-full rounded-2xl"
+              style={{ objectFit: 'contain', maxHeight: '80vh' }}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── §8: ConsistencyPromptSection ────────────────────────────────────────────
+// Collapsible read-only section displaying the character_consistency_prompt.
+// Shown only when the field is non-null. Applies to all characters.
+function ConsistencyPromptSection({ prompt, sectionExpanded, onToggle }) {
+  const id = 'consistency-prompt';
+  const isExpanded = sectionExpanded[id] ?? false;
+
+  return (
+    <div className="border border-base-300 rounded-xl overflow-hidden mb-4">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center gap-3 px-5 py-4 bg-base-200 hover:bg-base-300 transition-colors text-left"
+        aria-expanded={isExpanded}
+      >
+        <LockKeyhole className="w-4 h-4 text-primary flex-shrink-0" />
+        <span className="flex-1 font-semibold text-sm text-base-content">Character Consistency Prompt</span>
+        <span className="badge badge-ghost badge-sm mr-1">Read only</span>
+        {isExpanded
+          ? <ChevronUp  className="w-4 h-4 opacity-50 flex-shrink-0" />
+          : <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0" />
+        }
+      </button>
+      {isExpanded && (
+        <div className="p-5 bg-base-100">
+          <p className="text-xs text-base-content/50 mb-3 flex items-center gap-1.5">
+            <LockKeyhole className="w-3 h-3" />
+            This prompt is immutable — it was generated once from your reference image and cannot be changed.
+          </p>
+          <textarea
+            readOnly
+            value={prompt}
+            className="textarea textarea-bordered w-full bg-base-200 text-base-content/70 text-xs leading-relaxed resize-none cursor-text"
+            rows={8}
+            style={{ userSelect: 'text' }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── §7: SpriteImagesSection ─────────────────────────────────────────────────
+// Responsive image grid of generated sprite images. Shown at bottom of detail
+// page only when sprite_images is non-empty. Each thumbnail has download +
+// delete buttons, and clicking the image opens an enlarged view.
+function SpriteImagesSection({ characterId, spriteImages, queryClient }) {
+  const [enlargedUrl, setEnlargedUrl]       = useState(null);
+  const [deleteTargetUrl, setDeleteTargetUrl] = useState(null);
+  const [isDeleting, setIsDeleting]         = useState(false);
+  const [deleteError, setDeleteError]       = useState(null);
+
+  const handleDownload = async (url) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `sprite-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Download failed. Try right-clicking the image to save.');
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetUrl) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await Character.deleteSpriteImage(characterId, deleteTargetUrl);
+      queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+      setDeleteTargetUrl(null);
+      if (enlargedUrl === deleteTargetUrl) setEnlargedUrl(null);
+      toast.success('Image deleted.');
+    } catch (err) {
+      console.error('Delete sprite image failed:', err);
+      setDeleteError("Couldn't delete image. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="border border-base-300 rounded-xl overflow-hidden mb-4">
+        <div className="flex items-center gap-3 px-5 py-4 bg-base-200">
+          <ImageIcon className="w-4 h-4 text-primary flex-shrink-0" />
+          <span className="flex-1 font-semibold text-sm text-base-content">
+            Images
+          </span>
+          <span className="text-xs text-base-content/50">
+            {spriteImages.length} image{spriteImages.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        <div className="p-4 bg-base-100">
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}
+          >
+            {spriteImages.map((img, i) => (
+              <SpriteImageThumbnail
+                key={img.url || i}
+                img={img}
+                onDownload={() => handleDownload(img.url)}
+                onDelete={() => setDeleteTargetUrl(img.url)}
+                onEnlarge={() => setEnlargedUrl(img.url)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Enlarged image modal */}
+      {enlargedUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setEnlargedUrl(null)}
+        >
+          <div
+            className="relative max-w-2xl w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Download — top left */}
+            <button
+              onClick={() => handleDownload(enlargedUrl)}
+              className="absolute top-3 left-3 z-10 btn btn-sm btn-ghost bg-black/50 hover:bg-black/70 text-white gap-1"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            {/* Delete — top right */}
+            <button
+              onClick={() => { setDeleteTargetUrl(enlargedUrl); setEnlargedUrl(null); }}
+              className="absolute top-3 right-3 z-10 btn btn-sm btn-error btn-soft gap-1"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <img
+              src={enlargedUrl}
+              alt="Sprite"
+              className="w-full rounded-2xl"
+              style={{ objectFit: 'contain', maxHeight: '80vh' }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTargetUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => { if (!isDeleting) setDeleteTargetUrl(null); }}
+        >
+          <div
+            className="w-full max-w-sm bg-base-100 rounded-2xl border border-base-300 shadow-2xl p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-base-content">Delete this image?</h2>
+            <p className="text-sm text-base-content/60">
+              This action cannot be undone. Deleted images will not restore any used image credits.
+            </p>
+            {deleteError && (
+              <p className="text-sm text-error flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                {deleteError}
+              </p>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { setDeleteTargetUrl(null); setDeleteError(null); }}
+                disabled={isDeleting}
+                className="btn btn-ghost flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={isDeleting}
+                className="btn btn-error flex-1 gap-2"
+              >
+                {isDeleting && <span className="loading loading-spinner loading-sm" />}
+                Delete Image
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── SpriteImageThumbnail ────────────────────────────────────────────────────
+// Single image card within the sprite images grid.
+function SpriteImageThumbnail({ img, onDownload, onDelete, onEnlarge }) {
+  return (
+    <div
+      className="relative rounded-xl overflow-hidden group"
+      style={{ aspectRatio: 'auto' }}
+    >
+      {/* Clickable image area */}
+      <button
+        onClick={onEnlarge}
+        className="w-full block"
+        aria-label="View enlarged"
+      >
+        <img
+          src={img.url}
+          alt="Sprite"
+          className="w-full object-cover rounded-xl"
+        />
+      </button>
+
+      {/* Download — top left */}
+      <button
+        onClick={e => { e.stopPropagation(); onDownload(); }}
+        className="absolute top-2 left-2 btn btn-xs btn-ghost bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-lg
+          md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+        aria-label="Download image"
+        style={{ minWidth: '28px', minHeight: '28px' }}
+      >
+        <Download className="w-3.5 h-3.5" />
+      </button>
+
+      {/* Delete — top right */}
+      <button
+        onClick={e => { e.stopPropagation(); onDelete(); }}
+        className="absolute top-2 right-2 btn btn-xs btn-error btn-soft p-1.5 rounded-lg
+          md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+        aria-label="Delete image"
+        style={{ minWidth: '28px', minHeight: '28px' }}
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }

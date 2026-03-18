@@ -437,6 +437,58 @@ ${JSON.stringify(summary, null, 2)}`;
   return data.content?.[0]?.text || '';
 }
 
+// ─── analyzeReferenceImage ────────────────────────────────────────────────────
+// Runs Claude vision analysis on a reference image to produce the character
+// consistency prompt used by the sprites generation pipeline.
+//
+// Accepts:
+//   imageInput — base64 data URL (data:image/...;base64,...) for uploads
+//              — OR a plain CDN/HTTP URL (fetched server-side by sending as URL
+//                 source type to the Anthropic API via the proxy)
+//
+// @param {string} imageInput  base64 data URL or HTTP(S) URL
+// @returns {Promise<string>}  Character consistency prompt text
+export async function analyzeReferenceImage(imageInput) {
+  const content = []
+
+  if (imageInput.startsWith('data:')) {
+    // base64 data URL path (Mode A — user upload)
+    const [meta, imageData] = imageInput.split(',')
+    const mediaType = meta.match(/:(.*?);/)[1]
+    content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } })
+  } else {
+    // Remote URL path (Mode B — CDN image)
+    // Anthropic API supports URL sources directly
+    content.push({ type: 'image', source: { type: 'url', url: imageInput } })
+  }
+
+  content.push({
+    type: 'text',
+    text: `Analyze this character image in thorough detail to create a character consistency prompt for AI image generation. Describe:
+- Physical appearance: body type, height/build, skin tone, distinctive features
+- Hair: color, style, length, texture
+- Eyes: color, shape, expression
+- Clothing: exact colors, patterns, style, layers, any insignia or details
+- Accessories: jewelry, bags, weapons, tools, hats, glasses, etc.
+- Art style: anime/manga style, line weight, shading technique, color palette
+- Any unique design elements, motifs, or identifiers
+
+Be extremely specific and detailed so this character can be recreated consistently across many image variations. Write in a direct, descriptive style suitable for an image generation prompt.`,
+  })
+
+  const systemPrompt = 'You are a character visual analyst. Produce a detailed, specific character consistency description for use as an image generation reference prompt. Output only the description — no preamble, no explanation.'
+
+  const data = await callEdgeFunction('anthropic-proxy', {
+    _generation_type: 'image',
+    model: 'claude-sonnet-4-5',
+    max_tokens: 2000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content }],
+  })
+
+  return data.content?.[0]?.text || ''
+}
+
 // ─── Appearance Description Generation: Claude ────────────────────────────────
 // Generates a prose appearance description suitable as an image generation prompt.
 // Fires when the user clicks "Generate Appearance Description" in Step 2.

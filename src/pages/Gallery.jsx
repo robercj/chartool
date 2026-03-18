@@ -444,7 +444,7 @@ export default function Gallery() {
             New Storyline
           </button>
           <button
-            onClick={() => navigate('/generate')}
+            onClick={() => navigate('/sprites/generate')}
             className="btn btn-outline btn-sm gap-2"
             style={{ minHeight: '44px', borderColor: theme.fieldBorder, color: theme.textBody }}
           >

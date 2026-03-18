@@ -322,18 +322,6 @@ export const PromptHistory = {
   },
 };
 
-// ─── SavedPrompt (no-op stub) ─────────────────────────────────────────────────
-// There is no saved_prompts DB table. This stub exists solely to satisfy imports
-// in Generate.jsx that were written before the feature was deprioritised.
-// Remove this and the import in Generate.jsx when cleaning up the Generate page.
-export const SavedPrompt = {
-  async list() { return []; },
-  async get() { return null; },
-  async create(_userId, data) { return { ...data, id: crypto.randomUUID(), created_at: new Date().toISOString() }; },
-  async update() {},
-  async delete() {},
-};
-
 // ─── Settings (localStorage only — not user data) ────────────────────────────
 // Legacy: no longer used. seedSettings.js was removed; API keys live in Supabase
 // Edge Function secrets only. This module is kept to avoid breaking any consumers
@@ -519,5 +507,52 @@ export const Character = {
     if (excludeId) q = q.neq('id', excludeId);
     const { data } = await q;
     return (data || []).length > 0;
+  },
+
+  /** Append a sprite image entry to the character's sprite_images JSONB array.
+   *  Performs a read-modify-write. The entry shape is:
+   *    { url, generated_at, seed, params_snapshot }
+   *  @param {string} id     Character UUID
+   *  @param {object} entry  Sprite image entry object
+   */
+  async addSpriteImage(id, entry) {
+    // Fetch current sprite_images array
+    const { data: char, error: fetchErr } = await supabase
+      .from('characters')
+      .select('sprite_images')
+      .eq('id', id)
+      .single();
+    if (fetchErr) throw fetchErr;
+
+    const existing = Array.isArray(char.sprite_images) ? char.sprite_images : [];
+    const updated = [...existing, entry];
+
+    const { error } = await supabase
+      .from('characters')
+      .update({ sprite_images: updated })
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  /** Remove a sprite image entry from the character's sprite_images array by URL.
+   *  @param {string} id   Character UUID
+   *  @param {string} url  URL of the image to remove
+   */
+  async deleteSpriteImage(id, url) {
+    const { data: char, error: fetchErr } = await supabase
+      .from('characters')
+      .select('sprite_images')
+      .eq('id', id)
+      .single();
+    if (fetchErr) throw fetchErr;
+
+    const existing = Array.isArray(char.sprite_images) ? char.sprite_images : [];
+    const updated = existing.filter(img => img.url !== url);
+
+    const { error } = await supabase
+      .from('characters')
+      .update({ sprite_images: updated })
+      .eq('id', id);
+    if (error) throw error;
   },
 };

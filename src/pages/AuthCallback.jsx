@@ -8,7 +8,7 @@ export default function AuthCallback() {
 
   useEffect(() => {
     supabase.auth.exchangeCodeForSession(window.location.href).finally(() => {
-      navigate('/generate', { replace: true });
+      navigate('/sprites/generate', { replace: true });
     });
   }, [navigate]);
 
