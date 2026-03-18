@@ -60,6 +60,9 @@ export default function GenerateSprites() {
   const [newCharName, setNewCharName] = useState('')
   const [nameError, setNameError] = useState(null)
   const [nameChecking, setNameChecking] = useState(false)
+  // readyToAnalyze: set true when BOTH name is valid AND image is uploaded.
+  // The analysis effect watches this flag to fire exactly once per valid pair.
+  const [readyToAnalyze, setReadyToAnalyze] = useState(false)
 
   // ── Shared image state ────────────────────────────────────────────────────
   // referenceImageBase64: data URL (data:image/...;base64,...) for the analysis call
@@ -117,6 +120,8 @@ export default function GenerateSprites() {
   )
 
   // ── Debounced name uniqueness check for Mode A ────────────────────────────
+  // After the check resolves, if the name is now valid AND an image is already
+  // uploaded but analysis hasn't started yet, trigger analysis immediately.
   useEffect(() => {
     if (mode !== 'new' || !newCharName.trim()) {
       setNameError(null)
@@ -126,10 +131,13 @@ export default function GenerateSprites() {
       setNameChecking(true)
       try {
         const taken = await Character.nameExists(userId, newCharName.trim())
-        setNameError(taken
-          ? `You already have a character named "${newCharName.trim()}". Please choose a different name.`
-          : null
-        )
+        if (taken) {
+          setNameError(`You already have a character named "${newCharName.trim()}". Please choose a different name.`)
+        } else {
+          setNameError(null)
+          // Name is now valid — if image is ready and analysis hasn't run yet, start it
+          setReadyToAnalyze(true)
+        }
       } finally {
         setNameChecking(false)
       }
@@ -143,6 +151,7 @@ export default function GenerateSprites() {
     setNewCharName('')
     setNameError(null)
     setNameChecking(false)
+    setReadyToAnalyze(false)
     setReferenceImageBase64(null)
     setReferenceImageUrl(null)
     setReferenceImageFile(null)
@@ -158,6 +167,24 @@ export default function GenerateSprites() {
     setLiveImages([])
     setGenerationError(null)
   }, [])
+
+  // ── Gate: fire analysis only when BOTH name is valid AND image is uploaded ──
+  // This effect watches readyToAnalyze (flipped true by the name check or by
+  // image upload, whichever completes last) and starts analysis exactly once.
+  useEffect(() => {
+    if (!readyToAnalyze) return
+    if (mode !== 'new') return
+    // Re-check both conditions synchronously before firing
+    if (!referenceImageBase64) return
+    if (!newCharName.trim() || nameError || nameChecking) return
+    if (analysisStatus === 'running' || analysisStatus === 'done') return
+
+    // All conditions met — reset the flag and fire analysis
+    setReadyToAnalyze(false)
+    runAnalysis(referenceImageBase64, null)
+  // runAnalysis is stable (no deps change it); including it would cause re-runs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyToAnalyze, referenceImageBase64, newCharName, nameError, nameChecking, analysisStatus, mode])
 
   // ── Upload reference image to Supabase Storage ────────────────────────────
   const uploadReferenceImage = async (file) => {
@@ -183,7 +210,9 @@ export default function GenerateSprites() {
   }
 
   // ── Handle file input for Mode A ──────────────────────────────────────────
-  const handleFileSelect = async (file) => {
+  // Stores the file and base64 preview. Does NOT start analysis here — analysis
+  // is gated on BOTH a valid name AND a valid image being present simultaneously.
+  const handleFileSelect = (file) => {
     if (!file) return
     const allowedTypes = ['image/png', 'image/jpeg', 'image/webp']
     if (!allowedTypes.includes(file.type)) {
@@ -191,24 +220,29 @@ export default function GenerateSprites() {
       return
     }
 
+    // Reset analysis state for this new image
     setReferenceImageFile(file)
     setAnalysisStatus(null)
     setAnalysisError(null)
     setConsistencyPrompt(null)
     setCreatedCharacter(null)
+    setReadyToAnalyze(false)
 
-    // Convert to base64 for analysis
+    // Convert to base64 (for preview + analysis call)
     const reader = new FileReader()
-    reader.onload = async (e) => {
-      const base64DataUrl = e.target.result
-      setReferenceImageBase64(base64DataUrl)
-      // Start analysis immediately
-      await runAnalysis(base64DataUrl, null)
+    reader.onload = (e) => {
+      setReferenceImageBase64(e.target.result)
+      // Signal that the image side is ready — the gate effect will check the
+      // name side and fire analysis if both conditions are now satisfied.
+      setReadyToAnalyze(true)
     }
     reader.readAsDataURL(file)
   }
 
   // ── Run Claude image analysis ─────────────────────────────────────────────
+  // Mode A: after analysis succeeds, immediately create the character record
+  //         so it is visible in the Gallery before generation runs.
+  // Mode B: persist the consistency prompt on the existing character record.
   const runAnalysis = async (imageBase64, existingCharacter) => {
     setAnalysisStatus('running')
     setAnalysisError(null)
@@ -218,18 +252,20 @@ export default function GenerateSprites() {
       setConsistencyPrompt(result)
       setAnalysisStatus('done')
 
-      // For Mode A: character record is created here (before generation)
-      // For Mode B: update the existing character's consistency prompt
       if (existingCharacter) {
-        // Mode B — persist the prompt on the existing character
+        // ── Mode B: persist prompt on existing character ──────────────────
         await Character.update(existingCharacter.id, {
           character_consistency_prompt: result,
         })
         queryClient.invalidateQueries({ queryKey: ['characters', userId] })
         queryClient.invalidateQueries({ queryKey: ['character', existingCharacter.id] })
         setSelectedCharacter(prev => ({ ...prev, character_consistency_prompt: result }))
+      } else {
+        // ── Mode A: create character record immediately after analysis ─────
+        // Use the current name + file from state at the time analysis finishes.
+        // referenceImageFile is captured via closure from the enclosing scope.
+        await createCharacterRecord(result, imageBase64)
       }
-      // Mode A record creation happens in handleGenerate (after name + analysis)
     } catch (err) {
       if (!mountedRef.current) return
       console.error('Image analysis failed:', err)
@@ -293,12 +329,11 @@ export default function GenerateSprites() {
   }
 
   // ── Readiness checks ──────────────────────────────────────────────────────
+  // canGenerateNew requires the character record to already exist in the DB
+  // (createdCharacter non-null), which happens after analysis completes.
   const canGenerateNew = (
     mode === 'new' &&
-    newCharName.trim().length > 0 &&
-    !nameError &&
-    !nameChecking &&
-    referenceImageBase64 !== null &&
+    createdCharacter !== null &&
     analysisStatus === 'done'
   )
 
@@ -311,19 +346,20 @@ export default function GenerateSprites() {
 
   const canGenerate = canGenerateNew || canGenerateExisting
 
-  // ── Create character record (Mode A) ──────────────────────────────────────
-  const ensureCharacterRecord = async () => {
-    if (mode === 'existing') return selectedCharacter
-    if (createdCharacter) return createdCharacter
-
-    // Upload reference image to storage
-    let storedUrl = referenceImageBase64 // fallback: use base64 data URL
+  // ── Create character record immediately after analysis (Mode A) ──────────
+  // Called directly from runAnalysis on success. Uploads the reference image to
+  // storage first so the record has a persistent URL for the Gallery thumbnail.
+  // The record is created BEFORE any sprite generation occurs.
+  const createCharacterRecord = async (prompt, imageBase64) => {
+    // Upload the reference image file to Supabase Storage for a persistent URL.
+    // Fall back to the base64 data URL only if storage upload fails.
+    let storedUrl = imageBase64
     if (referenceImageFile) {
       try {
-        storedUrl = await uploadReferenceImage(referenceImageFile) || referenceImageBase64
+        storedUrl = await uploadReferenceImage(referenceImageFile) || imageBase64
       } catch (uploadErr) {
         console.warn('Storage upload failed, using base64 fallback:', uploadErr)
-        storedUrl = referenceImageBase64
+        storedUrl = imageBase64
       }
     }
 
@@ -332,16 +368,29 @@ export default function GenerateSprites() {
       creation_source:              'sprites',
       creation_status:              'finalized',
       reference_image_url:          storedUrl,
-      generated_image_url:          storedUrl, // reference serves as primary thumbnail
-      character_consistency_prompt: consistencyPrompt,
+      generated_image_url:          storedUrl, // reference image is the primary Gallery thumbnail
+      character_consistency_prompt: prompt,
       character_prompt:             null,
       appearance_description:       null,
       sprite_images:                null,
     })
 
+    if (!mountedRef.current) return
     setCreatedCharacter(record)
+    // Immediately refresh the characters list so the Gallery shows this record
     queryClient.invalidateQueries({ queryKey: ['characters', userId] })
+    toast.success(`Character "${record.character_name}" added to your Gallery.`)
     return record
+  }
+
+  // ── Resolve the active character record for generation ────────────────────
+  // By the time the user clicks Generate, the record must already exist (Mode A)
+  // or be the selected character (Mode B). This is now just a guard/lookup.
+  const resolveCharacterForGeneration = () => {
+    if (mode === 'existing') return selectedCharacter
+    if (createdCharacter) return createdCharacter
+    // Should not reach here — Generate button is disabled until createdCharacter exists
+    throw new Error('Character record not yet created. Please wait for analysis to complete.')
   }
 
   // ── Main generation handler ───────────────────────────────────────────────
@@ -356,8 +405,8 @@ export default function GenerateSprites() {
     let successCount = 0
 
     try {
-      // Step 1: Ensure character record exists
-      const character = await ensureCharacterRecord()
+      // Step 1: Resolve the character record (already created before generation)
+      const character = resolveCharacterForGeneration()
 
       const charName = character.character_name || 'Character'
       const refImageBase64 = referenceImageBase64
