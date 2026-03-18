@@ -187,33 +187,6 @@ export default function StorylineForm() {
 
     if (genres.length === 0) errs.genres = 'Select at least one genre.'
     if (!openingSituation.trim()) errs.openingSituation = 'Opening situation is required.'
-    if (!protagonistStatus.trim()) errs.protagonistStatus = 'Protagonist status is required.'
-    if (!abilitiesCurrent.trim()) errs.abilitiesCurrent = 'Abilities — current state is required.'
-
-    const npcErrors = []
-    if (npcs.length < 3) {
-      errs.npcs = 'At least 3 NPCs are required.'
-    } else {
-      npcs.forEach((npc, i) => {
-        const e = {}
-        if (!npc.name.trim()) e.name = 'Name required'
-        if (!npc.role.trim()) e.role = 'Role required'
-        if (Object.keys(e).length > 0) npcErrors[i] = e
-      })
-      if (npcErrors.length > 0) errs.npcFields = npcErrors
-    }
-
-    const factionErrors = []
-    if (factions.length < 2) {
-      errs.factions = 'At least 2 factions are required.'
-    } else {
-      factions.forEach((faction, i) => {
-        const e = {}
-        if (!faction.name.trim()) e.name = 'Faction name required'
-        if (Object.keys(e).length > 0) factionErrors[i] = e
-      })
-      if (factionErrors.length > 0) errs.factionFields = factionErrors
-    }
 
     return errs
   }
@@ -384,7 +357,7 @@ export default function StorylineForm() {
             Generate Storyline
           </h1>
           <p className="text-base-content/60" style={{ fontSize: 'var(--font-size-label)' }}>
-            Build a structured roleplay prompt from your world premise
+            Build a structured roleplay prompt from your world premise, you can provide as much or as little information as you like and the generator will fill in any blanks, however, the more rich of a vision you provide the better the outcome will be and the more true to your vision.
           </p>
         </div>
         <BookMarked className="w-7 h-7 flex-shrink-0" style={{ color: theme.primary, opacity: 0.6 }} />
@@ -456,7 +429,7 @@ export default function StorylineForm() {
           </div>
         ) : (
           <div>
-            <FieldLabel theme={theme} required>Select Folder</FieldLabel>
+            <FieldLabel theme={theme} required>Story Name</FieldLabel>
             {storylines.length === 0 ? (
               <p className="text-sm text-base-content/60">
                 No storyline folders yet. Switch to "New Folder" to create one.
@@ -571,19 +544,13 @@ export default function StorylineForm() {
           <FieldGroup
             ref={fieldRefs.protagonistStatus}
             label="Protagonist Status"
-            required
-            error={errors.protagonistStatus}
             theme={theme}
           >
             <TextInput
               value={protagonistStatus}
-              onChange={e => {
-                setProtagonistStatus(e.target.value)
-                if (errors.protagonistStatus) setErrors(ev => ({ ...ev, protagonistStatus: undefined }))
-              }}
+              onChange={e => setProtagonistStatus(e.target.value)}
               placeholder="Their role in the world hierarchy"
               theme={theme}
-              aria-invalid={!!errors.protagonistStatus}
             />
           </FieldGroup>
         </div>
@@ -609,26 +576,20 @@ export default function StorylineForm() {
         </div>
 
         {/* Abilities */}
-        <FieldGroup
-          ref={fieldRefs.abilitiesCurrent}
-          label="Abilities — Current State"
-          required
-          error={errors.abilitiesCurrent}
-          theme={theme}
-        >
-          <Textarea
-            value={abilitiesCurrent}
-            onChange={e => {
-              setAbilitiesCurrent(e.target.value)
-              if (errors.abilitiesCurrent) setErrors(ev => ({ ...ev, abilitiesCurrent: undefined }))
-            }}
-            placeholder={`1. [Name] — [function] / [limitation or cost]\n2. [Name] — [function] / [limitation or cost]`}
-            hint="One ability must be unique to origin; one must carry a cost or stigma"
-            rows={5}
+          <FieldGroup
+            ref={fieldRefs.abilitiesCurrent}
+            label="Abilities — Current State"
             theme={theme}
-            aria-invalid={!!errors.abilitiesCurrent}
-          />
-        </FieldGroup>
+          >
+            <Textarea
+              value={abilitiesCurrent}
+              onChange={e => setAbilitiesCurrent(e.target.value)}
+              placeholder={`1. [Name] — [function] / [limitation or cost]\n2. [Name] — [function] / [limitation or cost]`}
+              hint="One ability must be unique to origin; one must carry a cost or stigma"
+              rows={5}
+              theme={theme}
+            />
+          </FieldGroup>
 
         {/* Growth mechanism */}
         <FieldGroup label="Growth Mechanism" theme={theme}>
@@ -670,10 +631,7 @@ export default function StorylineForm() {
         <FieldGroup
           ref={fieldRefs.npcs}
           label="NPCs"
-          required
-          error={errors.npcs}
           theme={theme}
-          hint="Minimum 3 required"
         >
           {/* Mobile: single col; md+: 2-col grid when multiple cards */}
           <div className={`gap-3 ${npcs.length >= 2 ? 'grid grid-cols-1 md:grid-cols-2' : 'flex flex-col'}`}>
@@ -682,7 +640,6 @@ export default function StorylineForm() {
                 key={npc.id}
                 npc={npc}
                 index={idx}
-                fieldErrors={errors.npcFields?.[idx]}
                 onUpdate={patch => updateNPC(npc.id, patch)}
                 onRemove={npcs.length > 1 ? () => removeNPC(npc.id) : null}
                 theme={theme}
@@ -704,10 +661,7 @@ export default function StorylineForm() {
         <FieldGroup
           ref={fieldRefs.factions}
           label="Factions"
-          required
-          error={errors.factions}
           theme={theme}
-          hint="Minimum 2 required"
         >
           <div className={`gap-3 ${factions.length >= 2 ? 'grid grid-cols-1 md:grid-cols-2' : 'flex flex-col'}`}>
             {factions.map((faction, idx) => (
@@ -715,7 +669,6 @@ export default function StorylineForm() {
                 key={faction.id}
                 faction={faction}
                 index={idx}
-                fieldErrors={errors.factionFields?.[idx]}
                 onUpdate={patch => updateFaction(faction.id, patch)}
                 onRemove={factions.length > 1 ? () => removeFaction(faction.id) : null}
                 theme={theme}
@@ -1147,7 +1100,7 @@ function RadioChip({ label, selected, onClick, theme }) {
   )
 }
 
-function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
+function NPCCard({ npc, index, onUpdate, onRemove, theme }) {
   const [expanded, setExpanded] = useState(true)
 
   return (
@@ -1191,42 +1144,28 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
           {/* Name + Role — single col (inner card fields always single-col per spec) */}
           <div className="grid grid-cols-1 gap-3">
             <div>
-              <SubLabel theme={theme}>Name <span style={{ color: theme.primary }}>*</span></SubLabel>
+              <SubLabel theme={theme}>Name</SubLabel>
               <input
                 type="text"
                 value={npc.name}
                 onChange={e => onUpdate({ name: e.target.value })}
                 placeholder="NPC name"
                 className="input input-bordered bg-base-300 w-full text-sm"
-                style={{
-                  height:      '44px',
-                  borderColor: fieldErrors.name ? 'var(--fallback-er,oklch(var(--er)))' : undefined,
-                }}
-                aria-invalid={!!fieldErrors.name}
+                style={{ height: '44px' }}
                 autoCorrect="on"
               />
-              {fieldErrors.name && (
-                <p className="text-xs mt-0.5 text-error" role="alert">{fieldErrors.name}</p>
-              )}
             </div>
             <div>
-              <SubLabel theme={theme}>Role <span style={{ color: theme.primary }}>*</span></SubLabel>
+              <SubLabel theme={theme}>Role</SubLabel>
               <input
                 type="text"
                 value={npc.role}
                 onChange={e => onUpdate({ role: e.target.value })}
                 placeholder="e.g. rival general, reluctant healer"
                 className="input input-bordered bg-base-300 w-full text-sm"
-                style={{
-                  height:      '44px',
-                  borderColor: fieldErrors.role ? 'var(--fallback-er,oklch(var(--er)))' : undefined,
-                }}
-                aria-invalid={!!fieldErrors.role}
+                style={{ height: '44px' }}
                 autoCorrect="on"
               />
-              {fieldErrors.role && (
-                <p className="text-xs mt-0.5 text-error" role="alert">{fieldErrors.role}</p>
-              )}
             </div>
           </div>
 
@@ -1298,7 +1237,7 @@ function NPCCard({ npc, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
   )
 }
 
-function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, theme }) {
+function FactionCard({ faction, index, onUpdate, onRemove, theme }) {
   const [expanded, setExpanded] = useState(true)
 
   return (
@@ -1340,23 +1279,16 @@ function FactionCard({ faction, index, fieldErrors = {}, onUpdate, onRemove, the
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-1 gap-3">
             <div>
-              <SubLabel theme={theme}>Faction Name <span style={{ color: theme.primary }}>*</span></SubLabel>
+              <SubLabel theme={theme}>Faction Name</SubLabel>
               <input
                 type="text"
                 value={faction.name}
                 onChange={e => onUpdate({ name: e.target.value })}
                 placeholder="Faction name"
                 className="input input-bordered bg-base-300 w-full text-sm"
-                style={{
-                  height:      '44px',
-                  borderColor: fieldErrors.name ? 'var(--fallback-er,oklch(var(--er)))' : undefined,
-                }}
-                aria-invalid={!!fieldErrors.name}
+                style={{ height: '44px' }}
                 autoCorrect="on"
               />
-              {fieldErrors.name && (
-                <p className="text-xs mt-0.5 text-error" role="alert">{fieldErrors.name}</p>
-              )}
             </div>
             <div>
               <SubLabel theme={theme}>Purpose / Why They Exist</SubLabel>
