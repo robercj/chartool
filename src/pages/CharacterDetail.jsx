@@ -4,7 +4,7 @@
 // are silently redirected to the creation flow (/characters/generate/:id).
 // ─────────────────────────────────────────────────────────────────────────────
 import { Component, useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -325,12 +325,6 @@ function CharacterDetailInner() {
     return result;
   }, [editData, savedExpanded]);
 
-  // ── Navigation blocker (unsaved changes warning) ────────────────────────────
-  const afterSaveRef = useRef(null);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
-    isDirtyOverall && currentLocation.pathname !== nextLocation.pathname
-  );
-
   // beforeunload for hard navigation
   useEffect(() => {
     const handler = (e) => {
@@ -454,8 +448,6 @@ function CharacterDetailInner() {
       setShowSaveConfirm(false);
 
       toast.success('Character saved!');
-
-      if (afterSaveRef.current) { afterSaveRef.current(); afterSaveRef.current = null; }
     } catch {
       toast.error("Save failed — your changes are still here. Please try again.");
     } finally { setIsSaving(false); }
@@ -1148,19 +1140,6 @@ function CharacterDetailInner() {
           isSaving={isSaving}
           onConfirm={performSaveAs}
           onCancel={() => setShowSaveAs(false)}
-        />
-      )}
-
-      {/* Unsaved Changes Warning (from useBlocker) */}
-      {blocker.state === 'blocked' && (
-        <UnsavedChangesModal
-          characterName={savedChar.character_name}
-          onSave={() => {
-            afterSaveRef.current = () => blocker.proceed();
-            setShowSaveConfirm(true);
-          }}
-          onLeave={() => blocker.proceed()}
-          onStay={() => blocker.reset()}
         />
       )}
 
