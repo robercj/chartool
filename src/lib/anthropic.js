@@ -438,55 +438,237 @@ ${JSON.stringify(summary, null, 2)}`;
 }
 
 // ─── analyzeReferenceImage ────────────────────────────────────────────────────
-// Runs Claude vision analysis on a reference image to produce the character
-// consistency prompt used by the sprites generation pipeline.
+// Runs Claude vision analysis on a reference image.
+//
+// Returns BOTH:
+//   consistencyPrompt  — flat text description (legacy, backward-compatible)
+//   identityLock       — structured JSON { immutable_traits, forbidden_changes, notes }
+//
+// The structured identityLock is used by the prompt compiler for rigid,
+// section-by-section prompt assembly. The flat text is kept for display
+// and as a fallback for characters analyzed before this version.
 //
 // Accepts:
 //   imageInput — base64 data URL (data:image/...;base64,...) for uploads
-//              — OR a plain CDN/HTTP URL (fetched server-side by sending as URL
-//                 source type to the Anthropic API via the proxy)
+//              — OR a plain CDN/HTTP URL (fetched server-side via URL source)
 //
 // @param {string} imageInput  base64 data URL or HTTP(S) URL
-// @returns {Promise<string>}  Character consistency prompt text
+// @returns {Promise<{ consistencyPrompt: string, identityLock: object|null }>}
 export async function analyzeReferenceImage(imageInput) {
   const content = []
 
   if (imageInput.startsWith('data:')) {
-    // base64 data URL path (Mode A — user upload)
     const [meta, imageData] = imageInput.split(',')
     const mediaType = meta.match(/:(.*?);/)[1]
     content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } })
   } else {
-    // Remote URL path (Mode B — CDN image)
-    // Anthropic API supports URL sources directly
     content.push({ type: 'image', source: { type: 'url', url: imageInput } })
   }
 
+  // ── Structured identity lock analysis prompt ──────────────────────────────
+  // Requests BOTH a flat consistency prompt AND structured JSON in one call.
   content.push({
     type: 'text',
-    text: `Analyze this character image in thorough detail to create a character consistency prompt for AI image generation. Describe:
+    text: `Analyze this character image in thorough detail. You must produce TWO outputs in your response, clearly labeled:
+
+--- CONSISTENCY_PROMPT ---
+Write a detailed, specific character consistency description for use as an image generation reference prompt. Include:
 - Physical appearance: body type, height/build, skin tone, distinctive features
-- Hair: color, style, length, texture
-- Eyes: color, shape, expression
+- Hair: exact color(s), style, length, texture
+- Eyes: exact color, shape
 - Clothing: exact colors, patterns, style, layers, any insignia or details
 - Accessories: jewelry, bags, weapons, tools, hats, glasses, etc.
 - Art style: anime/manga style, line weight, shading technique, color palette
 - Any unique design elements, motifs, or identifiers
+Be extremely specific and detailed. Write in direct descriptive style for an image generation prompt.
 
-Be extremely specific and detailed so this character can be recreated consistently across many image variations. Write in a direct, descriptive style suitable for an image generation prompt.`,
+--- IDENTITY_LOCK_JSON ---
+Return ONLY valid JSON (no extra text, no markdown fences) with this exact schema:
+{
+  "immutable_traits": {
+    "face": ["list each immutable facial feature as a separate string — face shape, age impression, skin tone, distinguishing marks, nose shape, jaw, etc."],
+    "hair": ["list each hair trait separately — color, style, length, texture, any distinctive elements"],
+    "eyes": ["list each eye trait separately — color, shape, expression quality, any distinctive features"],
+    "outfit": ["list each outfit element separately — every garment, color, pattern, layer; list each accessory separately"]
+  },
+  "forbidden_changes": [
+    "list each forbidden change as a specific actionable constraint",
+    "e.g. 'wardrobe swap or outfit change of any kind'",
+    "e.g. 'adding accessories not present in reference'",
+    "e.g. 'altering hair color or style'"
+  ],
+  "notes": [
+    "list any important constraints about how this character must be drawn",
+    "e.g. pose plausibility with clothing",
+    "e.g. any art style consistency requirements"
+  ]
+}`,
   })
 
-  const systemPrompt = 'You are a character visual analyst. Produce a detailed, specific character consistency description for use as an image generation reference prompt. Output only the description — no preamble, no explanation.'
+  const systemPrompt = `You are a character visual identity analyst specializing in AI image generation consistency.
+Your task is to extract immutable character traits with maximum specificity.
+Every trait you list becomes an absolute constraint for future image generation.
+Be exhaustive — omitting a trait means it can change between generations.
+Produce both outputs exactly as requested: the CONSISTENCY_PROMPT section first, then IDENTITY_LOCK_JSON second.`
 
   const data = await callEdgeFunction('anthropic-proxy', {
     _generation_type: 'image',
     model: 'claude-sonnet-4-5',
-    max_tokens: 2000,
+    max_tokens: 3000,
     system: systemPrompt,
     messages: [{ role: 'user', content }],
   })
 
-  return data.content?.[0]?.text || ''
+  const rawText = data.content?.[0]?.text || ''
+
+  // ── Parse the two-section response ────────────────────────────────────────
+  let consistencyPrompt = rawText
+  let identityLock = null
+
+  try {
+    // Extract CONSISTENCY_PROMPT section
+    const cpMatch = rawText.match(/---\s*CONSISTENCY_PROMPT\s*---\s*([\s\S]*?)(?=---\s*IDENTITY_LOCK_JSON\s*---|$)/i)
+    if (cpMatch) {
+      consistencyPrompt = cpMatch[1].trim()
+    }
+
+    // Extract IDENTITY_LOCK_JSON section
+    const ilMatch = rawText.match(/---\s*IDENTITY_LOCK_JSON\s*---\s*([\s\S]*?)$/i)
+    if (ilMatch) {
+      const jsonText = ilMatch[1].trim()
+      // Strip any accidental markdown fences
+      const cleaned = jsonText.replace(/^```(?:json)?\n?|\n?```$/g, '').trim()
+      identityLock = JSON.parse(cleaned)
+    }
+  } catch (parseErr) {
+    // If parsing fails, identityLock stays null. The flat consistencyPrompt
+    // is used as a fallback by the prompt compiler. This is non-fatal.
+    console.warn('[analyzeReferenceImage] Could not parse identity lock JSON:', parseErr)
+    identityLock = null
+  }
+
+  return { consistencyPrompt, identityLock }
+}
+
+// ─── parseAppearanceFromIdentityLock ─────────────────────────────────────────
+// Extracts structured appearance fields from an identity lock JSON.
+// Used in Mode A (New Character) to auto-populate the character appearance form.
+//
+// Only populates appearance-related fields. Identity/personality fields
+// (name, role, backstory, etc.) are left for the user to fill manually.
+//
+// @param {object} identityLock  Structured identity lock from analyzeReferenceImage
+// @returns {object}             Partial appearance object matching the character schema
+export function parseAppearanceFromIdentityLock(identityLock) {
+  if (!identityLock?.immutable_traits) return {}
+
+  const traits = identityLock.immutable_traits
+  const appearance = {}
+
+  // ── Hair ──────────────────────────────────────────────────────────────────
+  if (traits.hair?.length) {
+    const hairText = traits.hair.join(' ').toLowerCase()
+
+    // Extract colors (common color words)
+    const colorWords = [
+      'black', 'white', 'brown', 'blonde', 'blond', 'red', 'auburn', 'chestnut',
+      'silver', 'grey', 'gray', 'blue', 'green', 'purple', 'pink', 'orange',
+      'golden', 'platinum', 'dark', 'light', 'ash',
+    ]
+    const foundColors = colorWords.filter(c => hairText.includes(c))
+    if (foundColors.length > 0) {
+      appearance.hair_color = foundColors.map(c => c.charAt(0).toUpperCase() + c.slice(1))
+    }
+
+    // Hair style from descriptors
+    const styleWords = [
+      'short', 'long', 'medium', 'shoulder-length', 'wavy', 'curly', 'straight',
+      'braided', 'ponytail', 'bun', 'twin tails', 'twintails', 'bob', 'pixie',
+      'layered', 'flowing', 'spiky', 'messy', 'neat', 'tied', 'loose',
+    ]
+    const foundStyles = styleWords.filter(s => hairText.includes(s))
+    if (foundStyles.length > 0) {
+      appearance.hair_style = foundStyles.slice(0, 3).join(', ')
+    }
+  }
+
+  // ── Eyes ──────────────────────────────────────────────────────────────────
+  if (traits.eyes?.length) {
+    const eyeText = traits.eyes.join(' ').toLowerCase()
+
+    const eyeColors = [
+      'blue', 'green', 'brown', 'hazel', 'gray', 'grey', 'amber', 'gold', 'golden',
+      'purple', 'violet', 'red', 'pink', 'black', 'silver', 'teal', 'heterochromia',
+    ]
+    const foundEyeColors = eyeColors.filter(c => eyeText.includes(c))
+    if (foundEyeColors.length > 0) {
+      appearance.eye_color = foundEyeColors.map(c => c.charAt(0).toUpperCase() + c.slice(1))
+    }
+  }
+
+  // ── Face / Skin ───────────────────────────────────────────────────────────
+  if (traits.face?.length) {
+    const faceText = traits.face.join(' ').toLowerCase()
+
+    const skinWords = [
+      'fair', 'pale', 'light', 'medium', 'olive', 'tan', 'dark', 'brown', 'ebony',
+      'ivory', 'porcelain', 'caramel', 'golden', 'warm', 'cool', 'neutral',
+    ]
+    const foundSkin = skinWords.filter(s => faceText.includes(s))
+    if (foundSkin.length > 0) {
+      appearance.skin_tone = foundSkin[0].charAt(0).toUpperCase() + foundSkin[0].slice(1)
+    }
+
+    // Facial features from face traits (non-color, non-skin entries)
+    const faceFeatures = traits.face
+      .filter(f => {
+        const lower = f.toLowerCase()
+        return !skinWords.some(s => lower === s || lower.startsWith(s + ' '))
+      })
+      .slice(0, 5)
+    if (faceFeatures.length > 0) {
+      appearance.facial_features = faceFeatures
+    }
+  }
+
+  // ── Outfit / Accessories ──────────────────────────────────────────────────
+  if (traits.outfit?.length) {
+    // Separate accessories from main outfit items
+    const accessoryKeywords = [
+      'earring', 'necklace', 'bracelet', 'ring', 'watch', 'glasses', 'hat', 'cap',
+      'scarf', 'glove', 'belt', 'bag', 'backpack', 'ribbon', 'bow', 'pin', 'badge',
+      'choker', 'anklet', 'headband', 'hairpin', 'clip',
+    ]
+    const accessories = traits.outfit.filter(item =>
+      accessoryKeywords.some(k => item.toLowerCase().includes(k))
+    )
+    const outfitItems = traits.outfit.filter(item =>
+      !accessoryKeywords.some(k => item.toLowerCase().includes(k))
+    )
+
+    if (accessories.length > 0) {
+      appearance.accessories = accessories
+    }
+
+    // Store outfit description as visual_motifs since there's no direct outfit field
+    if (outfitItems.length > 0) {
+      appearance.visual_motifs = outfitItems.slice(0, 5)
+    }
+  }
+
+  // ── Art style notes ───────────────────────────────────────────────────────
+  if (identityLock.notes?.length) {
+    const artStyleNote = identityLock.notes.find(n =>
+      ['anime', 'manga', 'style', 'art', 'illustration', 'render'].some(k =>
+        n.toLowerCase().includes(k)
+      )
+    )
+    if (artStyleNote) {
+      appearance.art_style = artStyleNote
+    }
+  }
+
+  return appearance
 }
 
 // ─── Appearance Description Generation: Claude ────────────────────────────────

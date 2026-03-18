@@ -1,14 +1,22 @@
 // ─── GenerateSprites.jsx ───────────────────────────────────────────────────────
 // Route: /sprites/generate
-// Replaces the old /generate page. Builds sprite image variations from a
-// character reference image, linked to a character record.
+// Builds sprite image variations from a character reference image.
 //
 // Two modes:
-//   Mode A — New Character: name + upload → analysis → create record → generate
-//   Mode B — Existing Character: select → pre-load image → analysis (if needed) → generate
+//   Mode A — New Character: name + upload → analysis → auto-fill appearance
+//            → create record → variation controls → generate
+//   Mode B — Existing Character: select → pre-load image → analysis (if needed)
+//            → variation controls → generate
 //
-// The image variation generation pipeline (callLLM analysis + generateImage)
-// is preserved unchanged from the legacy flow.
+// Identity Lock Enhancement:
+//   After analysis, structured identity lock data is stored alongside the flat
+//   consistency prompt. The prompt compiler uses the structured data to produce
+//   rigidly ordered generation prompts. Emotion, pose, and optional modifiers
+//   are selected per-session and compiled into each sprite's prompt.
+//
+// Auto-fill (Mode A only):
+//   On analysis complete, parsed appearance data is pre-populated into the
+//   character record's appearance field. User can review before confirming.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -16,17 +24,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   ArrowLeft, Upload, X, Sparkles, User, Search, Check,
-  AlertCircle, RefreshCw, Loader2, Download, Trash2, Lock,
-  ChevronDown, ChevronUp, Image as ImageIcon, ZoomIn,
+  AlertCircle, RefreshCw, Loader2, Lock, ChevronDown, ChevronUp,
+  Wand2, Eye, ZoomIn,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProgress } from '../contexts/ProgressContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Character } from '../lib/storage'
-import { analyzeReferenceImage, generateImage, LimitError } from '../lib/anthropic'
+import { analyzeReferenceImage, generateImage, LimitError, parseAppearanceFromIdentityLock } from '../lib/anthropic'
 import { supabase } from '../lib/supabase'
+import { compileSpritePrompt, resolveVariationSpecs } from '../lib/promptCompiler'
+import { RANDOM_POOL } from '../lib/constants/EMOTION_PRESETS'
+import { RANDOM_POSE_POOL } from '../lib/constants/POSE_PRESETS'
+import VariationControls from '../components/sprites/VariationControls'
+import ImageEditModal from '../components/sprites/ImageEditModal'
 
-// ─── Aspect ratio options (carried from legacy flow) ─────────────────────────
+// ─── Aspect ratio options ─────────────────────────────────────────────────────
 const ASPECT_RATIOS = [
   { value: '21:9', label: '21:9 — Cinematic Wide' },
   { value: '16:9', label: '16:9 — Widescreen' },
@@ -42,6 +55,9 @@ const ASPECT_RATIOS = [
 
 const DEFAULT_VARIATION_COUNT = 5
 
+// Default toggle state: all optional permissions OFF
+const DEFAULT_TOGGLES = { allowPrompt: false, allowClothing: false, allowProps: false }
+
 // ─── Main exported page ───────────────────────────────────────────────────────
 export default function GenerateSprites() {
   const { theme } = useTheme()
@@ -53,44 +69,54 @@ export default function GenerateSprites() {
   const queryClient = useQueryClient()
   const mountedRef = useRef(true)
 
-  // ── Mode state: null (selection screen) | 'new' | 'existing' ──────────────
+  // ── Mode: null (selection) | 'new' | 'existing' ───────────────────────────
   const [mode, setMode] = useState(null)
 
-  // ── New character form state ───────────────────────────────────────────────
+  // ── New character form ────────────────────────────────────────────────────
   const [newCharName, setNewCharName] = useState('')
   const [nameError, setNameError] = useState(null)
   const [nameChecking, setNameChecking] = useState(false)
-  // readyToAnalyze: set true when BOTH name is valid AND image is uploaded.
-  // The analysis effect watches this flag to fire exactly once per valid pair.
   const [readyToAnalyze, setReadyToAnalyze] = useState(false)
 
   // ── Shared image state ────────────────────────────────────────────────────
-  // referenceImageBase64: data URL (data:image/...;base64,...) for the analysis call
-  // referenceImageUrl: persistent CDN/storage URL stored on the character record
   const [referenceImageBase64, setReferenceImageBase64] = useState(null)
   const [referenceImageUrl, setReferenceImageUrl] = useState(null)
   const [referenceImageFile, setReferenceImageFile] = useState(null)
 
   // ── Analysis state ─────────────────────────────────────────────────────────
-  const [analysisStatus, setAnalysisStatus] = useState(null) // null | 'running' | 'done' | 'error'
+  const [analysisStatus, setAnalysisStatus] = useState(null)
   const [analysisError, setAnalysisError] = useState(null)
   const [consistencyPrompt, setConsistencyPrompt] = useState(null)
+  const [identityLock, setIdentityLock] = useState(null)  // structured JSON
 
-  // ── Existing character mode ────────────────────────────────────────────────
+  // ── Auto-fill appearance (Mode A only) ────────────────────────────────────
+  const [suggestedAppearance, setSuggestedAppearance] = useState(null)
+  const [autoFillConfirmed, setAutoFillConfirmed] = useState(false)
+
+  // ── Existing character mode ───────────────────────────────────────────────
   const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [charSearch, setCharSearch] = useState('')
 
-  // ── Character record (created before generation in Mode A) ─────────────────
+  // ── Character record ──────────────────────────────────────────────────────
   const [createdCharacter, setCreatedCharacter] = useState(null)
 
-  // ── Generation controls state ──────────────────────────────────────────────
+  // ── Generation controls ───────────────────────────────────────────────────
   const [variationCount, setVariationCount] = useState(DEFAULT_VARIATION_COUNT)
   const [aspectRatio, setAspectRatio] = useState('3:4')
   const [seedValue, setSeedValue] = useState('')
   const [liveImages, setLiveImages] = useState([])
   const [generationError, setGenerationError] = useState(null)
 
-  // ── Reset trigger (from nav same-route) ───────────────────────────────────
+  // ── Variation controls (identity lock UI) ─────────────────────────────────
+  const [emotionEntries, setEmotionEntries] = useState([])
+  const [selectedPoseId, setSelectedPoseId] = useState('random')
+  const [toggles, setToggles] = useState(DEFAULT_TOGGLES)
+  const [customPrompt, setCustomPrompt] = useState('')
+
+  // ── Image edit modal ──────────────────────────────────────────────────────
+  const [editModalImage, setEditModalImage] = useState(null)
+
+  // ── Reset key (from nav same-route) ──────────────────────────────────────
   const resetKey = location.state?.reset
 
   useEffect(() => {
@@ -98,12 +124,9 @@ export default function GenerateSprites() {
     return () => { mountedRef.current = false }
   }, [])
 
-  // Reset all state when user navigates to the same route (reset state trigger)
   useEffect(() => {
-    if (resetKey) {
-      resetAll()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (resetKey) resetAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey])
 
   // ── Fetch all characters for Mode B ──────────────────────────────────────
@@ -113,15 +136,12 @@ export default function GenerateSprites() {
     enabled: !!userId,
   })
 
-  // ── Filtered character list for Mode B search ─────────────────────────────
   const filteredCharacters = allCharacters.filter(c =>
     !charSearch.trim() ||
     (c.character_name || '').toLowerCase().includes(charSearch.toLowerCase())
   )
 
-  // ── Debounced name uniqueness check for Mode A ────────────────────────────
-  // After the check resolves, if the name is now valid AND an image is already
-  // uploaded but analysis hasn't started yet, trigger analysis immediately.
+  // ── Debounced name check (Mode A) ─────────────────────────────────────────
   useEffect(() => {
     if (mode !== 'new' || !newCharName.trim()) {
       setNameError(null)
@@ -135,7 +155,6 @@ export default function GenerateSprites() {
           setNameError(`You already have a character named "${newCharName.trim()}". Please choose a different name.`)
         } else {
           setNameError(null)
-          // Name is now valid — if image is ready and analysis hasn't run yet, start it
           setReadyToAnalyze(true)
         }
       } finally {
@@ -145,7 +164,19 @@ export default function GenerateSprites() {
     return () => clearTimeout(timer)
   }, [newCharName, userId, mode])
 
-  // ── Reset all state (back to mode selection) ──────────────────────────────
+  // ── Gate: fire analysis only when BOTH name valid AND image uploaded ───────
+  useEffect(() => {
+    if (!readyToAnalyze) return
+    if (mode !== 'new') return
+    if (!referenceImageBase64) return
+    if (!newCharName.trim() || nameError || nameChecking) return
+    if (analysisStatus === 'running' || analysisStatus === 'done') return
+    setReadyToAnalyze(false)
+    runAnalysis(referenceImageBase64, null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyToAnalyze, referenceImageBase64, newCharName, nameError, nameChecking, analysisStatus, mode])
+
+  // ── Reset all state ────────────────────────────────────────────────────────
   const resetAll = useCallback(() => {
     setMode(null)
     setNewCharName('')
@@ -158,6 +189,9 @@ export default function GenerateSprites() {
     setAnalysisStatus(null)
     setAnalysisError(null)
     setConsistencyPrompt(null)
+    setIdentityLock(null)
+    setSuggestedAppearance(null)
+    setAutoFillConfirmed(false)
     setSelectedCharacter(null)
     setCharSearch('')
     setCreatedCharacter(null)
@@ -166,27 +200,14 @@ export default function GenerateSprites() {
     setSeedValue('')
     setLiveImages([])
     setGenerationError(null)
+    setEmotionEntries([])
+    setSelectedPoseId('random')
+    setToggles(DEFAULT_TOGGLES)
+    setCustomPrompt('')
+    setEditModalImage(null)
   }, [])
 
-  // ── Gate: fire analysis only when BOTH name is valid AND image is uploaded ──
-  // This effect watches readyToAnalyze (flipped true by the name check or by
-  // image upload, whichever completes last) and starts analysis exactly once.
-  useEffect(() => {
-    if (!readyToAnalyze) return
-    if (mode !== 'new') return
-    // Re-check both conditions synchronously before firing
-    if (!referenceImageBase64) return
-    if (!newCharName.trim() || nameError || nameChecking) return
-    if (analysisStatus === 'running' || analysisStatus === 'done') return
-
-    // All conditions met — reset the flag and fire analysis
-    setReadyToAnalyze(false)
-    runAnalysis(referenceImageBase64, null)
-  // runAnalysis is stable (no deps change it); including it would cause re-runs
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readyToAnalyze, referenceImageBase64, newCharName, nameError, nameChecking, analysisStatus, mode])
-
-  // ── Upload reference image to Supabase Storage ────────────────────────────
+  // ── Upload reference image ─────────────────────────────────────────────────
   const uploadReferenceImage = async (file) => {
     const ext = file.name.split('.').pop().toLowerCase() || 'png'
     const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
@@ -194,24 +215,17 @@ export default function GenerateSprites() {
       .from('reference-images')
       .upload(path, file, { contentType: file.type, upsert: false })
     if (error) throw new Error(`Image upload failed: ${error.message}`)
-    const { data: urlData } = supabase.storage
-      .from('reference-images')
-      .getPublicUrl(data.path)
-    // If bucket is private, use createSignedUrl instead
-    // For a private bucket, we'll generate a long-lived signed URL (7 days)
     const { data: signed, error: signErr } = await supabase.storage
       .from('reference-images')
-      .createSignedUrl(data.path, 60 * 60 * 24 * 7) // 7 days
+      .createSignedUrl(data.path, 60 * 60 * 24 * 7)
     if (signErr) {
-      // Fallback: use public URL if available
+      const { data: urlData } = supabase.storage.from('reference-images').getPublicUrl(data.path)
       return urlData?.publicUrl || null
     }
     return signed.signedUrl
   }
 
-  // ── Handle file input for Mode A ──────────────────────────────────────────
-  // Stores the file and base64 preview. Does NOT start analysis here — analysis
-  // is gated on BOTH a valid name AND a valid image being present simultaneously.
+  // ── Handle file select (Mode A) ────────────────────────────────────────────
   const handleFileSelect = (file) => {
     if (!file) return
     const allowedTypes = ['image/png', 'image/jpeg', 'image/webp']
@@ -219,52 +233,59 @@ export default function GenerateSprites() {
       toast.error('Please upload a PNG, JPG, or WEBP image.')
       return
     }
-
-    // Reset analysis state for this new image
     setReferenceImageFile(file)
     setAnalysisStatus(null)
     setAnalysisError(null)
     setConsistencyPrompt(null)
+    setIdentityLock(null)
+    setSuggestedAppearance(null)
+    setAutoFillConfirmed(false)
     setCreatedCharacter(null)
     setReadyToAnalyze(false)
 
-    // Convert to base64 (for preview + analysis call)
     const reader = new FileReader()
     reader.onload = (e) => {
       setReferenceImageBase64(e.target.result)
-      // Signal that the image side is ready — the gate effect will check the
-      // name side and fire analysis if both conditions are now satisfied.
       setReadyToAnalyze(true)
     }
     reader.readAsDataURL(file)
   }
 
-  // ── Run Claude image analysis ─────────────────────────────────────────────
-  // Mode A: after analysis succeeds, immediately create the character record
-  //         so it is visible in the Gallery before generation runs.
-  // Mode B: persist the consistency prompt on the existing character record.
+  // ── Run analysis ───────────────────────────────────────────────────────────
   const runAnalysis = async (imageBase64, existingCharacter) => {
     setAnalysisStatus('running')
     setAnalysisError(null)
     try {
       const result = await analyzeReferenceImage(imageBase64)
       if (!mountedRef.current) return
-      setConsistencyPrompt(result)
+
+      const { consistencyPrompt: cp, identityLock: il } = result
+      setConsistencyPrompt(cp)
+      setIdentityLock(il)
       setAnalysisStatus('done')
 
       if (existingCharacter) {
-        // ── Mode B: persist prompt on existing character ──────────────────
+        // Mode B: persist on existing character
         await Character.update(existingCharacter.id, {
-          character_consistency_prompt: result,
+          character_consistency_prompt: cp,
+          character_identity_lock: il || null,
         })
         queryClient.invalidateQueries({ queryKey: ['characters', userId] })
         queryClient.invalidateQueries({ queryKey: ['character', existingCharacter.id] })
-        setSelectedCharacter(prev => ({ ...prev, character_consistency_prompt: result }))
+        setSelectedCharacter(prev => ({
+          ...prev,
+          character_consistency_prompt: cp,
+          character_identity_lock: il || null,
+        }))
       } else {
-        // ── Mode A: create character record immediately after analysis ─────
-        // Use the current name + file from state at the time analysis finishes.
-        // referenceImageFile is captured via closure from the enclosing scope.
-        await createCharacterRecord(result, imageBase64)
+        // Mode A: parse appearance for auto-fill, then create character record
+        if (il) {
+          const parsed = parseAppearanceFromIdentityLock(il)
+          if (Object.keys(parsed).length > 0) {
+            setSuggestedAppearance(parsed)
+          }
+        }
+        await createCharacterRecord(cp, il, imageBase64)
       }
     } catch (err) {
       if (!mountedRef.current) return
@@ -280,27 +301,26 @@ export default function GenerateSprites() {
     setAnalysisStatus(null)
     setAnalysisError(null)
     setConsistencyPrompt(null)
+    setIdentityLock(null)
     setLiveImages([])
 
-    // Check for primary image
     const primaryImageUrl = char.generated_image_url
     if (!primaryImageUrl) {
-      // No primary image — show warning, do not proceed with analysis
       setReferenceImageBase64(null)
       setReferenceImageUrl(null)
       return
     }
-
     setReferenceImageUrl(primaryImageUrl)
 
-    // If character already has a consistency prompt, use it directly
+    // If character already has both prompt and lock, use them
     if (char.character_consistency_prompt) {
       setConsistencyPrompt(char.character_consistency_prompt)
+      setIdentityLock(char.character_identity_lock || null)
       setAnalysisStatus('done')
       return
     }
 
-    // No consistency prompt yet — fetch image, convert to base64, run analysis
+    // Re-analyze
     setAnalysisStatus('running')
     try {
       const base64 = await fetchImageAsBase64(primaryImageUrl)
@@ -309,13 +329,12 @@ export default function GenerateSprites() {
       await runAnalysis(base64, char)
     } catch (err) {
       if (!mountedRef.current) return
-      console.error('Failed to load character image:', err)
       setAnalysisStatus('error')
       setAnalysisError(`Could not load ${char.character_name}'s image for analysis: ${err.message}`)
     }
   }
 
-  // ── Fetch a remote image and convert to base64 data URL ───────────────────
+  // ── Fetch remote image as base64 ──────────────────────────────────────────
   const fetchImageAsBase64 = async (url) => {
     const response = await fetch(url)
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -328,31 +347,18 @@ export default function GenerateSprites() {
     })
   }
 
-  // ── Readiness checks ──────────────────────────────────────────────────────
-  // canGenerateNew requires the character record to already exist in the DB
-  // (createdCharacter non-null), which happens after analysis completes.
-  const canGenerateNew = (
-    mode === 'new' &&
-    createdCharacter !== null &&
-    analysisStatus === 'done'
-  )
-
+  // ── Readiness checks ───────────────────────────────────────────────────────
+  const canGenerateNew = mode === 'new' && createdCharacter !== null && analysisStatus === 'done'
   const canGenerateExisting = (
     mode === 'existing' &&
     selectedCharacter !== null &&
     selectedCharacter.generated_image_url &&
     analysisStatus === 'done'
   )
-
   const canGenerate = canGenerateNew || canGenerateExisting
 
-  // ── Create character record immediately after analysis (Mode A) ──────────
-  // Called directly from runAnalysis on success. Uploads the reference image to
-  // storage first so the record has a persistent URL for the Gallery thumbnail.
-  // The record is created BEFORE any sprite generation occurs.
-  const createCharacterRecord = async (prompt, imageBase64) => {
-    // Upload the reference image file to Supabase Storage for a persistent URL.
-    // Fall back to the base64 data URL only if storage upload fails.
+  // ── Create character record (Mode A) ──────────────────────────────────────
+  const createCharacterRecord = async (prompt, lockData, imageBase64) => {
     let storedUrl = imageBase64
     if (referenceImageFile) {
       try {
@@ -368,32 +374,55 @@ export default function GenerateSprites() {
       creation_source:              'sprites',
       creation_status:              'finalized',
       reference_image_url:          storedUrl,
-      generated_image_url:          storedUrl, // reference image is the primary Gallery thumbnail
+      generated_image_url:          storedUrl,
       character_consistency_prompt: prompt,
+      character_identity_lock:      lockData || null,
       character_prompt:             null,
       appearance_description:       null,
+      appearance:                   suggestedAppearance || null,
       sprite_images:                null,
     })
 
     if (!mountedRef.current) return
     setCreatedCharacter(record)
-    // Immediately refresh the characters list so the Gallery shows this record
     queryClient.invalidateQueries({ queryKey: ['characters', userId] })
     toast.success(`Character "${record.character_name}" added to your Gallery.`)
     return record
   }
 
-  // ── Resolve the active character record for generation ────────────────────
-  // By the time the user clicks Generate, the record must already exist (Mode A)
-  // or be the selected character (Mode B). This is now just a guard/lookup.
+  // ── Resolve character for generation ──────────────────────────────────────
   const resolveCharacterForGeneration = () => {
     if (mode === 'existing') return selectedCharacter
     if (createdCharacter) return createdCharacter
-    // Should not reach here — Generate button is disabled until createdCharacter exists
     throw new Error('Character record not yet created. Please wait for analysis to complete.')
   }
 
-  // ── Main generation handler ───────────────────────────────────────────────
+  // ── Add a sprite image generated during the edit modal ────────────────────
+  const handleEditModalNewImage = useCallback(async (newEntry) => {
+    const character = resolveCharacterForGeneration()
+    const spriteEntry = {
+      url: newEntry.url,
+      generated_at: newEntry.generated_at,
+      seed: newEntry.seed ?? null,
+      editInstructions: newEntry.editInstructions,
+      parentUrl: newEntry.parentUrl,
+      params_snapshot: newEntry.params_snapshot,
+      poseId: newEntry.poseId ?? null,
+      emotionEntry: newEntry.emotionEntry ?? null,
+    }
+    try {
+      await Character.addSpriteImage(character.id, spriteEntry)
+      setLiveImages(prev => [...prev, { url: newEntry.url, label: newEntry.label, seed: newEntry.seed }])
+      queryClient.invalidateQueries({ queryKey: ['character', character.id] })
+      queryClient.invalidateQueries({ queryKey: ['characters', userId] })
+    } catch (err) {
+      console.error('Failed to save edited sprite:', err)
+      toast.error('Edit saved to view but could not persist to character record.')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, createdCharacter, selectedCharacter, userId, queryClient])
+
+  // ── Main generation handler ────────────────────────────────────────────────
   const handleGenerate = async () => {
     if (!canGenerate || generating) return
     setGenerationError(null)
@@ -405,53 +434,80 @@ export default function GenerateSprites() {
     let successCount = 0
 
     try {
-      // Step 1: Resolve the character record (already created before generation)
       const character = resolveCharacterForGeneration()
-
       const charName = character.character_name || 'Character'
       const refImageBase64 = referenceImageBase64
       const refImageUrl = mode === 'existing'
         ? character.generated_image_url
         : (character.reference_image_url || referenceImageBase64)
+      const lock = identityLock || character.character_identity_lock || null
       const prompt = consistencyPrompt || character.character_consistency_prompt || ''
+
+      // Resolve all N variation specs (emotion + pose per sprite)
+      const specs = resolveVariationSpecs(emotionEntries, selectedPoseId, variationCount, RANDOM_POOL, RANDOM_POSE_POOL)
 
       startProgress(`Generating sprites for ${charName}`, variationCount, '/sprites/generate')
 
       for (let i = 0; i < variationCount; i++) {
         if (isCancelled()) break
 
+        const spec = specs[i]
         try {
+          // Compile the full structured prompt for this variation
+          const finalPrompt = compileSpritePrompt({
+            identityLock: lock,
+            consistencyPrompt: prompt,
+            poseId: spec.poseId,
+            emotionEntry: spec.emotionEntry,
+            allowPrompt: toggles.allowPrompt,
+            customPrompt,
+            allowClothing: toggles.allowClothing,
+            allowProps: toggles.allowProps,
+          })
+
           const imageUrl = await generateImage({
-            prompt: `Character sprite variation. ${prompt}`,
+            prompt: finalPrompt,
             referenceImageUrls: [refImageBase64 || refImageUrl].filter(Boolean),
             aspectRatio,
           }, signal)
 
           if (!mountedRef.current) break
 
-          // Append to sprite_images on the character record
           const spriteEntry = {
             url: imageUrl,
             generated_at: new Date().toISOString(),
             seed: seedValue ? parseInt(seedValue, 10) : null,
-            params_snapshot: { variationCount, aspectRatio },
+            poseId: spec.poseId,
+            emotionEntry: spec.emotionEntry,
+            params_snapshot: {
+              variationCount, aspectRatio,
+              poseId: spec.poseId,
+              emotionEntry: spec.emotionEntry,
+              toggles,
+            },
           }
 
           await Character.addSpriteImage(character.id, spriteEntry)
 
-          setLiveImages(prev => [...prev, { url: imageUrl, label: `Sprite ${prev.length + 1}` }])
+          setLiveImages(prev => [
+            ...prev,
+            {
+              url: imageUrl,
+              label: `Sprite ${prev.length + 1}`,
+              seed: spriteEntry.seed,
+              poseId: spec.poseId,
+              emotionEntry: spec.emotionEntry,
+              params_snapshot: spriteEntry.params_snapshot,
+            },
+          ])
           successCount++
           updateProgress(i + 1)
 
-          // Invalidate character queries so detail page stays fresh
           queryClient.invalidateQueries({ queryKey: ['character', character.id] })
           queryClient.invalidateQueries({ queryKey: ['characters', userId] })
         } catch (err) {
           console.error(`Sprite ${i + 1} generation failed:`, err)
-          if (err instanceof LimitError) {
-            toast.error(err.message)
-            break
-          }
+          if (err instanceof LimitError) { toast.error(err.message); break }
           errors.push(`Sprite ${i + 1}: ${err.message || 'Generation failed'}`)
         }
       }
@@ -467,7 +523,6 @@ export default function GenerateSprites() {
       }
     } catch (err) {
       if (!mountedRef.current) return
-      console.error('Generation error:', err)
       if (err instanceof LimitError) {
         toast.error(err.message)
       } else {
@@ -480,15 +535,31 @@ export default function GenerateSprites() {
     }
   }
 
-  // ── Character record for display after creation ───────────────────────────
   const activeCharacter = createdCharacter || selectedCharacter
 
+  // ─── Image Edit Modal (global, accessible from preview) ───────────────────
+  const editModal = editModalImage ? (
+    <ImageEditModal
+      image={editModalImage}
+      identityLock={identityLock || activeCharacter?.character_identity_lock || null}
+      consistencyPrompt={consistencyPrompt || activeCharacter?.character_consistency_prompt || ''}
+      referenceImageBase64={referenceImageBase64}
+      referenceImageUrl={mode === 'existing' ? activeCharacter?.generated_image_url : activeCharacter?.reference_image_url}
+      toggles={toggles}
+      aspectRatio={aspectRatio}
+      onClose={() => setEditModalImage(null)}
+      onNewImageGenerated={handleEditModalNewImage}
+      theme={theme}
+    />
+  ) : null
+
   // ─────────────────────────────────────────────────────────────────────────
-  // RENDER: Mode Selection Screen
+  // RENDER: Mode Selection
   // ─────────────────────────────────────────────────────────────────────────
   if (mode === null) {
     return (
       <div className="max-w-2xl mx-auto py-10 px-4">
+        {editModal}
         <div className="text-center mb-10">
           <h1
             className="text-3xl font-bold mb-2"
@@ -507,56 +578,36 @@ export default function GenerateSprites() {
         </div>
 
         <div className="flex flex-col md:flex-row gap-4">
-          {/* New Character card */}
           <button
             onClick={() => setMode('new')}
             className="flex-1 flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 transition-all text-left cursor-pointer"
-            style={{
-              background: theme.cardBg,
-              borderColor: theme.cardBorder,
-              backdropFilter: 'blur(12px)',
-            }}
+            style={{ background: theme.cardBg, borderColor: theme.cardBorder, backdropFilter: 'blur(12px)' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = theme.primary }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = theme.cardBorder }}
           >
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center"
-              style={{ background: theme.primaryGlow }}
-            >
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: theme.primaryGlow }}>
               <Upload className="w-8 h-8" style={{ color: theme.primary }} />
             </div>
             <div className="text-center">
-              <div className="text-lg font-bold mb-1" style={{ color: theme.textBody }}>
-                New Character
-              </div>
+              <div className="text-lg font-bold mb-1" style={{ color: theme.textBody }}>New Character</div>
               <div className="text-sm" style={{ color: theme.textMuted }}>
                 Upload a reference image and create a new character entry
               </div>
             </div>
           </button>
 
-          {/* Existing Character card */}
           <button
             onClick={() => setMode('existing')}
             className="flex-1 flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 transition-all text-left cursor-pointer"
-            style={{
-              background: theme.cardBg,
-              borderColor: theme.cardBorder,
-              backdropFilter: 'blur(12px)',
-            }}
+            style={{ background: theme.cardBg, borderColor: theme.cardBorder, backdropFilter: 'blur(12px)' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = theme.primary }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = theme.cardBorder }}
           >
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center"
-              style={{ background: `${theme.accent}20` }}
-            >
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: `${theme.accent}20` }}>
               <User className="w-8 h-8" style={{ color: theme.accent }} />
             </div>
             <div className="text-center">
-              <div className="text-lg font-bold mb-1" style={{ color: theme.textBody }}>
-                Existing Character
-              </div>
+              <div className="text-lg font-bold mb-1" style={{ color: theme.textBody }}>Existing Character</div>
               <div className="text-sm" style={{ color: theme.textMuted }}>
                 Select an existing character — reference image pre-loaded automatically
               </div>
@@ -568,11 +619,70 @@ export default function GenerateSprites() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // SHARED: Generation controls + sprites preview (used in both modes)
+  // ─────────────────────────────────────────────────────────────────────────
+  const generationSection = (
+    <>
+      {/* Generation settings */}
+      <GenerationControls
+        variationCount={variationCount}
+        onVariationCountChange={(n) => {
+          setVariationCount(n)
+          // Soft-trim emotion list if it now exceeds the new sprite count
+          if (emotionEntries.length > n) {
+            toast(`Sprite count reduced to ${n}. Last ${emotionEntries.length - n} emotion${emotionEntries.length - n !== 1 ? 's' : ''} removed.`)
+            setEmotionEntries(emotionEntries.slice(0, n))
+          }
+        }}
+        aspectRatio={aspectRatio}
+        onAspectRatioChange={setAspectRatio}
+        seedValue={seedValue}
+        onSeedChange={setSeedValue}
+        theme={theme}
+      />
+
+      {/* Variation controls (identity lock UI) */}
+      <VariationControls
+        spriteCount={variationCount}
+        emotionEntries={emotionEntries}
+        onEmotionEntriesChange={setEmotionEntries}
+        selectedPoseId={selectedPoseId}
+        onPoseChange={setSelectedPoseId}
+        toggles={toggles}
+        onTogglesChange={setToggles}
+        customPrompt={customPrompt}
+        onCustomPromptChange={setCustomPrompt}
+        theme={theme}
+      />
+
+      {/* Sprites preview */}
+      {liveImages.length > 0 && (
+        <SpritesPreview
+          images={liveImages}
+          theme={theme}
+          generating={generating}
+          expectedTotal={variationCount}
+          onImageClick={(img) => setEditModalImage(img)}
+        />
+      )}
+
+      {/* Generation error */}
+      {generationError && (
+        <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: '#ef444415', border: '1px solid #ef444440' }}>
+          <AlertCircle className="w-4 h-4 text-error flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-error">{generationError}</p>
+        </div>
+      )}
+    </>
+  )
+
+  // ─────────────────────────────────────────────────────────────────────────
   // RENDER: Mode A — New Character
   // ─────────────────────────────────────────────────────────────────────────
   if (mode === 'new') {
     return (
       <div className="max-w-2xl mx-auto py-8 px-4">
+        {editModal}
         <PageHeader theme={theme} onBack={resetAll} />
 
         <div
@@ -581,10 +691,7 @@ export default function GenerateSprites() {
         >
           {/* Character Name */}
           <div className="space-y-1">
-            <label
-              className="text-xs font-semibold uppercase tracking-widest"
-              style={{ color: theme.labelColor }}
-            >
+            <label className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.labelColor }}>
               Character Name
             </label>
             <input
@@ -605,7 +712,7 @@ export default function GenerateSprites() {
             {nameChecking && (
               <p className="text-xs flex items-center gap-1" style={{ color: theme.textMuted }}>
                 <Loader2 className="w-3 h-3 animate-spin" />
-                Checking availability...
+                Checking availability…
               </p>
             )}
             {nameError && (
@@ -618,10 +725,7 @@ export default function GenerateSprites() {
 
           {/* Reference Image Upload */}
           <div className="space-y-2">
-            <label
-              className="text-xs font-semibold uppercase tracking-widest"
-              style={{ color: theme.labelColor }}
-            >
+            <label className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.labelColor }}>
               Reference Image
             </label>
             <ImageUploadZone
@@ -635,6 +739,9 @@ export default function GenerateSprites() {
                 setAnalysisStatus(null)
                 setAnalysisError(null)
                 setConsistencyPrompt(null)
+                setIdentityLock(null)
+                setSuggestedAppearance(null)
+                setAutoFillConfirmed(false)
                 setCreatedCharacter(null)
               }}
             />
@@ -648,31 +755,34 @@ export default function GenerateSprites() {
             theme={theme}
           />
 
-          {/* Generation controls (shown only when ready) */}
-          {analysisStatus === 'done' && (
-            <GenerationControls
-              variationCount={variationCount}
-              onVariationCountChange={setVariationCount}
-              aspectRatio={aspectRatio}
-              onAspectRatioChange={setAspectRatio}
-              seedValue={seedValue}
-              onSeedChange={setSeedValue}
+          {/* Identity lock summary (shown after analysis) */}
+          {analysisStatus === 'done' && identityLock && (
+            <IdentityLockSummary identityLock={identityLock} theme={theme} />
+          )}
+
+          {/* Auto-fill appearance prompt (Mode A, after analysis) */}
+          {analysisStatus === 'done' && suggestedAppearance && !autoFillConfirmed && (
+            <AutoFillPrompt
+              suggestedAppearance={suggestedAppearance}
+              onAccept={async () => {
+                setAutoFillConfirmed(true)
+                if (createdCharacter) {
+                  try {
+                    await Character.update(createdCharacter.id, { appearance: suggestedAppearance })
+                    queryClient.invalidateQueries({ queryKey: ['character', createdCharacter.id] })
+                    toast.success('Appearance pre-filled from image analysis.')
+                  } catch {
+                    toast.error('Could not save appearance data.')
+                  }
+                }
+              }}
+              onSkip={() => setAutoFillConfirmed(true)}
               theme={theme}
             />
           )}
 
-          {/* Generated sprites preview */}
-          {liveImages.length > 0 && (
-            <SpritesPreview images={liveImages} theme={theme} generating={generating} expectedTotal={variationCount} />
-          )}
-
-          {/* Generation error */}
-          {generationError && (
-            <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: '#ef444415', border: '1px solid #ef444440' }}>
-              <AlertCircle className="w-4 h-4 text-error flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-error">{generationError}</p>
-            </div>
-          )}
+          {/* Generation controls + variation controls */}
+          {analysisStatus === 'done' && generationSection}
 
           {/* Generate button */}
           <button
@@ -693,7 +803,10 @@ export default function GenerateSprites() {
 
           {/* Link to created character */}
           {createdCharacter && (
-            <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: `${theme.primary}15`, border: `1px solid ${theme.primary}30` }}>
+            <div
+              className="flex items-center justify-between p-3 rounded-xl"
+              style={{ background: `${theme.primary}15`, border: `1px solid ${theme.primary}30` }}
+            >
               <p className="text-sm" style={{ color: theme.primary }}>
                 Character "{createdCharacter.character_name}" created
               </p>
@@ -716,23 +829,19 @@ export default function GenerateSprites() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
+      {editModal}
       <PageHeader theme={theme} onBack={resetAll} />
 
       <div
         className="rounded-2xl border p-6 space-y-6"
         style={{ background: theme.cardBg, borderColor: theme.cardBorder, backdropFilter: 'blur(12px)' }}
       >
-        {/* Character selector */}
         {!selectedCharacter ? (
+          /* Character selector */
           <div className="space-y-3">
-            <label
-              className="text-xs font-semibold uppercase tracking-widest"
-              style={{ color: theme.labelColor }}
-            >
+            <label className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.labelColor }}>
               Select Character
             </label>
-
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: theme.textMuted }} />
               <input
@@ -745,18 +854,13 @@ export default function GenerateSprites() {
               />
             </div>
 
-            {/* Character list */}
             {allCharacters.length === 0 ? (
               <div className="text-center py-10 space-y-3">
                 <User className="w-12 h-12 mx-auto" style={{ color: theme.textMuted, opacity: 0.4 }} />
                 <p className="text-sm" style={{ color: theme.textMuted }}>
                   No characters found. Use "New Character" to get started.
                 </p>
-                <button
-                  onClick={resetAll}
-                  className="btn btn-primary btn-sm"
-                  style={{ background: theme.buttonGradient, border: 'none' }}
-                >
+                <button onClick={resetAll} className="btn btn-primary btn-sm" style={{ background: theme.buttonGradient, border: 'none' }}>
                   ← Back to selection
                 </button>
               </div>
@@ -765,9 +869,7 @@ export default function GenerateSprites() {
                 No characters match "{charSearch}"
               </p>
             ) : (
-              <div
-                className="space-y-2 max-h-80 overflow-y-auto pr-1"
-              >
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                 {filteredCharacters.map(char => (
                   <button
                     key={char.id}
@@ -776,16 +878,10 @@ export default function GenerateSprites() {
                     style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
                   >
                     {char.generated_image_url ? (
-                      <img
-                        src={char.generated_image_url}
-                        alt={char.character_name}
-                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                      />
+                      <img src={char.generated_image_url} alt={char.character_name}
+                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                     ) : (
-                      <div
-                        className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ background: theme.cardBg }}
-                      >
+                      <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: theme.cardBg }}>
                         <User className="w-6 h-6" style={{ color: theme.textMuted }} />
                       </div>
                     )}
@@ -793,12 +889,11 @@ export default function GenerateSprites() {
                       <div className="font-medium truncate" style={{ color: theme.textBody }}>
                         {char.character_name || 'Unnamed Character'}
                       </div>
-                      {char.creation_source && (
-                        <div className="text-xs truncate" style={{ color: theme.textMuted }}>
-                          {char.creation_source === 'sprites' ? 'Sprites' : 'Character Forge'}
-                          {char.character_consistency_prompt ? ' · Analyzed' : ''}
-                        </div>
-                      )}
+                      <div className="text-xs truncate" style={{ color: theme.textMuted }}>
+                        {char.creation_source === 'sprites' ? 'Sprites' : 'Character Forge'}
+                        {char.character_consistency_prompt ? ' · Analyzed' : ''}
+                        {char.character_identity_lock ? ' · Identity Locked' : ''}
+                      </div>
                     </div>
                   </button>
                 ))}
@@ -806,21 +901,14 @@ export default function GenerateSprites() {
             )}
           </div>
         ) : (
-          /* Character selected — show reference + analysis + controls */
           <div className="space-y-6">
             {/* Selected character header */}
             <div className="flex items-center gap-3">
               {selectedCharacter.generated_image_url ? (
-                <img
-                  src={selectedCharacter.generated_image_url}
-                  alt={selectedCharacter.character_name}
-                  className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
-                />
+                <img src={selectedCharacter.generated_image_url} alt={selectedCharacter.character_name}
+                  className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
               ) : (
-                <div
-                  className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: theme.fieldBg }}
-                >
+                <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: theme.fieldBg }}>
                   <User className="w-7 h-7" style={{ color: theme.textMuted }} />
                 </div>
               )}
@@ -836,6 +924,7 @@ export default function GenerateSprites() {
                     setAnalysisStatus(null)
                     setAnalysisError(null)
                     setConsistencyPrompt(null)
+                    setIdentityLock(null)
                     setLiveImages([])
                     setGenerationError(null)
                   }}
@@ -847,7 +936,7 @@ export default function GenerateSprites() {
               </div>
             </div>
 
-            {/* Reference image display */}
+            {/* Reference image */}
             {selectedCharacter.generated_image_url ? (
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.labelColor }}>
@@ -866,11 +955,7 @@ export default function GenerateSprites() {
                 </p>
               </div>
             ) : (
-              /* No primary image warning */
-              <div
-                className="flex items-start gap-3 p-4 rounded-xl"
-                style={{ background: '#f59e0b15', border: '1px solid #f59e0b40' }}
-              >
+              <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background: '#f59e0b15', border: '1px solid #f59e0b40' }}>
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
                 <p className="text-sm" style={{ color: '#f59e0b' }}>
                   This character doesn't have a primary image yet. Please generate one via the character creation flow first.
@@ -884,40 +969,19 @@ export default function GenerateSprites() {
               error={analysisError}
               characterName={selectedCharacter.character_name}
               onRetry={() => {
-                if (referenceImageBase64) {
-                  runAnalysis(referenceImageBase64, selectedCharacter)
-                } else if (selectedCharacter.generated_image_url) {
-                  handleSelectCharacter(selectedCharacter)
-                }
+                if (referenceImageBase64) runAnalysis(referenceImageBase64, selectedCharacter)
+                else if (selectedCharacter.generated_image_url) handleSelectCharacter(selectedCharacter)
               }}
               theme={theme}
             />
 
-            {/* Generation controls */}
-            {analysisStatus === 'done' && selectedCharacter.generated_image_url && (
-              <GenerationControls
-                variationCount={variationCount}
-                onVariationCountChange={setVariationCount}
-                aspectRatio={aspectRatio}
-                onAspectRatioChange={setAspectRatio}
-                seedValue={seedValue}
-                onSeedChange={setSeedValue}
-                theme={theme}
-              />
+            {/* Identity lock summary */}
+            {analysisStatus === 'done' && identityLock && (
+              <IdentityLockSummary identityLock={identityLock} theme={theme} />
             )}
 
-            {/* Generated sprites preview */}
-            {liveImages.length > 0 && (
-              <SpritesPreview images={liveImages} theme={theme} generating={generating} expectedTotal={variationCount} />
-            )}
-
-            {/* Generation error */}
-            {generationError && (
-              <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: '#ef444415', border: '1px solid #ef444440' }}>
-                <AlertCircle className="w-4 h-4 text-error flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-error">{generationError}</p>
-              </div>
-            )}
+            {/* Generation controls + variation controls */}
+            {analysisStatus === 'done' && selectedCharacter.generated_image_url && generationSection}
 
             {/* Generate button */}
             {selectedCharacter.generated_image_url && (
@@ -940,7 +1004,10 @@ export default function GenerateSprites() {
 
             {/* Link to character */}
             {activeCharacter && liveImages.length > 0 && (
-              <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: `${theme.primary}15`, border: `1px solid ${theme.primary}30` }}>
+              <div
+                className="flex items-center justify-between p-3 rounded-xl"
+                style={{ background: `${theme.primary}15`, border: `1px solid ${theme.primary}30` }}
+              >
                 <p className="text-sm" style={{ color: theme.primary }}>
                   Sprites saved to {activeCharacter.character_name}
                 </p>
@@ -964,11 +1031,7 @@ export default function GenerateSprites() {
 function PageHeader({ theme, onBack }) {
   return (
     <div className="flex items-center gap-3 mb-6">
-      <button
-        onClick={onBack}
-        className="btn btn-ghost btn-sm gap-2"
-        style={{ color: theme.textMuted }}
-      >
+      <button onClick={onBack} className="btn btn-ghost btn-sm gap-2" style={{ color: theme.textMuted }}>
         <ArrowLeft className="w-4 h-4" />
         Back
       </button>
@@ -1007,12 +1070,7 @@ function ImageUploadZone({ theme, imageBase64, onFileSelect, onClear }) {
   if (imageBase64) {
     return (
       <div className="relative rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.fieldBorder}` }}>
-        <img
-          src={imageBase64}
-          alt="Reference preview"
-          className="w-full max-h-64 object-contain"
-          style={{ background: theme.fieldBg }}
-        />
+        <img src={imageBase64} alt="Reference preview" className="w-full max-h-64 object-contain" style={{ background: theme.fieldBg }} />
         <button
           onClick={onClear}
           className="absolute top-2 right-2 btn btn-circle btn-sm btn-error btn-soft"
@@ -1036,19 +1094,12 @@ function ImageUploadZone({ theme, imageBase64, onFileSelect, onClear }) {
         borderColor: dragging ? theme.primary : theme.fieldBorder,
       }}
     >
-      <div
-        className="w-12 h-12 rounded-2xl flex items-center justify-center"
-        style={{ background: theme.primaryGlow }}
-      >
+      <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: theme.primaryGlow }}>
         <Upload className="w-6 h-6" style={{ color: theme.primary }} />
       </div>
       <div className="text-center">
-        <p className="text-sm font-medium" style={{ color: theme.textBody }}>
-          Drop an image here or click to upload
-        </p>
-        <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
-          PNG, JPG, or WEBP
-        </p>
+        <p className="text-sm font-medium" style={{ color: theme.textBody }}>Drop an image here or click to upload</p>
+        <p className="text-xs mt-1" style={{ color: theme.textMuted }}>PNG, JPG, or WEBP</p>
       </div>
       <input
         ref={fileRef}
@@ -1070,9 +1121,7 @@ function AnalysisStatus({ status, error, characterName, onRetry, theme }) {
       <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: `${theme.primary}10`, border: `1px solid ${theme.primary}30` }}>
         <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" style={{ color: theme.primary }} />
         <p className="text-sm" style={{ color: theme.primary }}>
-          {characterName
-            ? `Analyzing ${characterName}'s reference image…`
-            : 'Analyzing reference image…'}
+          {characterName ? `Analyzing ${characterName}'s reference image…` : 'Analyzing reference image…'}
         </p>
       </div>
     )
@@ -1082,9 +1131,7 @@ function AnalysisStatus({ status, error, characterName, onRetry, theme }) {
     return (
       <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#10b98115', border: '1px solid #10b98140' }}>
         <Check className="w-4 h-4 flex-shrink-0" style={{ color: '#10b981' }} />
-        <p className="text-sm font-medium" style={{ color: '#10b981' }}>
-          Image analyzed ✓
-        </p>
+        <p className="text-sm font-medium" style={{ color: '#10b981' }}>Image analyzed — identity lock applied</p>
       </div>
     )
   }
@@ -1094,15 +1141,9 @@ function AnalysisStatus({ status, error, characterName, onRetry, theme }) {
       <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: '#ef444415', border: '1px solid #ef444440' }}>
         <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5 text-error" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-error">
-            Analysis failed: {error || 'Unknown error'}
-          </p>
+          <p className="text-sm text-error">Analysis failed: {error || 'Unknown error'}</p>
         </div>
-        <button
-          onClick={onRetry}
-          className="btn btn-ghost btn-xs flex-shrink-0 gap-1"
-          style={{ color: '#ef4444' }}
-        >
+        <button onClick={onRetry} className="btn btn-ghost btn-xs flex-shrink-0 gap-1" style={{ color: '#ef4444' }}>
           <RefreshCw className="w-3 h-3" />
           Retry
         </button>
@@ -1113,25 +1154,149 @@ function AnalysisStatus({ status, error, characterName, onRetry, theme }) {
   return null
 }
 
+// ─── IdentityLockSummary ──────────────────────────────────────────────────────
+// Read-only summary of the extracted identity lock. Never editable.
+function IdentityLockSummary({ identityLock, theme }) {
+  const [expanded, setExpanded] = useState(false)
+  const traits = identityLock?.immutable_traits || {}
+  const traitCount = Object.values(traits).flat().length
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{ border: `1px solid ${theme.primary}30`, background: `${theme.primary}08` }}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+      >
+        <Lock className="w-4 h-4 flex-shrink-0" style={{ color: theme.primary }} />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.primary }}>
+            Identity Lock Active
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: theme.textMuted }}>
+            {traitCount} immutable trait{traitCount !== 1 ? 's' : ''} locked — will be enforced in every sprite
+          </p>
+        </div>
+        {expanded
+          ? <ChevronUp className="w-4 h-4 flex-shrink-0" style={{ color: theme.textMuted }} />
+          : <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: theme.textMuted }} />
+        }
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3" style={{ borderTop: `1px solid ${theme.primary}20` }}>
+          {Object.entries(traits).map(([category, items]) => (
+            items?.length > 0 ? (
+              <div key={category}>
+                <p className="text-xs font-semibold capitalize mb-1" style={{ color: theme.textMuted }}>
+                  {category}
+                </p>
+                <ul className="space-y-0.5">
+                  {items.map((item, i) => (
+                    <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: theme.textBody }}>
+                      <span className="mt-1 flex-shrink-0 w-1 h-1 rounded-full" style={{ background: theme.primary }} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null
+          ))}
+          {identityLock?.forbidden_changes?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold mb-1" style={{ color: '#ef4444' }}>Forbidden Changes</p>
+              <ul className="space-y-0.5">
+                {identityLock.forbidden_changes.slice(0, 4).map((f, i) => (
+                  <li key={i} className="text-xs flex items-start gap-1.5" style={{ color: theme.textBody }}>
+                    <span className="mt-1 flex-shrink-0 w-1 h-1 rounded-full" style={{ background: '#ef4444' }} />
+                    {f}
+                  </li>
+                ))}
+                {identityLock.forbidden_changes.length > 4 && (
+                  <li className="text-xs" style={{ color: theme.textMuted }}>
+                    +{identityLock.forbidden_changes.length - 4} more constraints…
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+          <p className="text-xs italic pt-1" style={{ color: theme.textMuted }}>
+            Identity lock is read-only. Re-upload a new reference image to re-analyze.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── AutoFillPrompt ───────────────────────────────────────────────────────────
+// Shown once in Mode A after analysis. Allows user to accept or skip
+// auto-population of the appearance fields from the identity lock.
+function AutoFillPrompt({ suggestedAppearance, onAccept, onSkip, theme }) {
+  const fieldCount = Object.keys(suggestedAppearance).length
+  const preview = [
+    suggestedAppearance.hair_color?.join(', '),
+    suggestedAppearance.eye_color?.join(', '),
+    suggestedAppearance.hair_style,
+    suggestedAppearance.skin_tone,
+  ].filter(Boolean).slice(0, 3).join(' · ')
+
+  return (
+    <div
+      className="rounded-xl p-4 space-y-3"
+      style={{ background: `${theme.accent}10`, border: `1px solid ${theme.accent}30` }}
+    >
+      <div className="flex items-start gap-3">
+        <Wand2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: theme.accent }} />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold" style={{ color: theme.textBody }}>
+            Auto-fill appearance detected
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: theme.textMuted }}>
+            {fieldCount} appearance field{fieldCount !== 1 ? 's' : ''} extracted from image analysis.
+            {preview && <> Detected: {preview}.</>}
+          </p>
+          <p className="text-xs mt-1" style={{ color: theme.textMuted }}>
+            These will be saved to the Appearance section of your character. You can edit them later in the Character Detail view.
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onAccept}
+          className="btn btn-sm flex-1 font-medium"
+          style={{ background: theme.accent, border: 'none', color: 'white' }}
+        >
+          <Check className="w-3.5 h-3.5" />
+          Apply to Character
+        </button>
+        <button
+          type="button"
+          onClick={onSkip}
+          className="btn btn-ghost btn-sm"
+          style={{ color: theme.textMuted }}
+        >
+          Skip
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── GenerationControls ───────────────────────────────────────────────────────
-function GenerationControls({
-  variationCount, onVariationCountChange,
-  aspectRatio, onAspectRatioChange,
-  seedValue, onSeedChange,
-  theme,
-}) {
+function GenerationControls({ variationCount, onVariationCountChange, aspectRatio, onAspectRatioChange, seedValue, onSeedChange, theme }) {
   return (
     <div className="space-y-4 pt-2" style={{ borderTop: `1px solid ${theme.fieldBorder}` }}>
       <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.labelColor }}>
         Generation Settings
       </p>
-
       <div className="grid grid-cols-2 gap-4">
-        {/* Variation count */}
         <div className="space-y-1">
-          <label className="text-xs font-medium" style={{ color: theme.textMuted }}>
-            Number of Sprites
-          </label>
+          <label className="text-xs font-medium" style={{ color: theme.textMuted }}>Number of Sprites</label>
           <select
             value={variationCount}
             onChange={e => onVariationCountChange(Number(e.target.value))}
@@ -1143,12 +1308,8 @@ function GenerationControls({
             ))}
           </select>
         </div>
-
-        {/* Aspect ratio */}
         <div className="space-y-1">
-          <label className="text-xs font-medium" style={{ color: theme.textMuted }}>
-            Aspect Ratio
-          </label>
+          <label className="text-xs font-medium" style={{ color: theme.textMuted }}>Aspect Ratio</label>
           <select
             value={aspectRatio}
             onChange={e => onAspectRatioChange(e.target.value)}
@@ -1161,13 +1322,11 @@ function GenerationControls({
           </select>
         </div>
       </div>
-
-      {/* Seed */}
       <div className="space-y-1">
         <label className="text-xs font-medium flex items-center gap-1.5" style={{ color: theme.textMuted }}>
           <Lock className="w-3 h-3" />
           Seed
-          <span className="text-xs" style={{ color: theme.textMuted, opacity: 0.6 }}>(optional)</span>
+          <span className="text-xs opacity-60">(optional)</span>
         </label>
         <input
           type="number"
@@ -1183,7 +1342,7 @@ function GenerationControls({
 }
 
 // ─── SpritesPreview ───────────────────────────────────────────────────────────
-function SpritesPreview({ images, theme, generating, expectedTotal }) {
+function SpritesPreview({ images, theme, generating, expectedTotal, onImageClick }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -1199,13 +1358,23 @@ function SpritesPreview({ images, theme, generating, expectedTotal }) {
         style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}
       >
         {images.map((img, i) => (
-          <div
+          <button
             key={i}
-            className="rounded-xl overflow-hidden"
+            type="button"
+            onClick={() => onImageClick(img)}
+            className="group relative rounded-xl overflow-hidden transition-all focus:outline-none"
             style={{ aspectRatio: '3/4', background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
+            aria-label={`View and edit ${img.label}`}
           >
             <img src={img.url} alt={img.label} className="w-full h-full object-cover" />
-          </div>
+            {/* Hover overlay with zoom hint */}
+            <div
+              className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity"
+              style={{ background: 'rgba(0,0,0,0.45)' }}
+            >
+              <ZoomIn className="w-5 h-5 text-white drop-shadow" />
+            </div>
+          </button>
         ))}
         {/* Placeholder cells for pending images */}
         {generating && Array(Math.max(0, expectedTotal - images.length)).fill(0).map((_, i) => (

@@ -688,8 +688,17 @@ function CharacterDetailInner() {
 
           <h1 className="text-xl font-bold text-base-content mb-6">Edit Character</h1>
 
-          {/* ── §8: Character Consistency Prompt — sprites flow ──────────── */}
-          {savedChar.character_consistency_prompt && (
+          {/* ── §8: Identity Lock — sprites flow ─────────────────────────── */}
+          {savedChar.character_identity_lock && (
+            <IdentityLockSection
+              identityLock={savedChar.character_identity_lock}
+              sectionExpanded={sectionExpanded}
+              onToggle={toggleSection}
+            />
+          )}
+
+          {/* ── §8b: Character Consistency Prompt (flat text fallback) ──── */}
+          {savedChar.character_consistency_prompt && !savedChar.character_identity_lock && (
             <ConsistencyPromptSection
               prompt={savedChar.character_consistency_prompt}
               sectionExpanded={sectionExpanded}
@@ -1525,6 +1534,105 @@ function ConsistencyPromptSection({ prompt, sectionExpanded, onToggle }) {
             rows={8}
             style={{ userSelect: 'text' }}
           />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── IdentityLockSection ──────────────────────────────────────────────────────
+// Read-only display of the structured identity lock. Never editable.
+// Shown in CharacterDetail when character_identity_lock is present.
+function IdentityLockSection({ identityLock, sectionExpanded, onToggle }) {
+  const id = 'identity-lock';
+  const isExpanded = sectionExpanded[id] ?? false;
+  const traits = identityLock?.immutable_traits || {};
+  const traitCount = Object.values(traits).flat().length;
+
+  return (
+    <div className="border border-primary/30 rounded-xl overflow-hidden mb-4 bg-primary/5">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-primary/10 transition-colors text-left"
+        aria-expanded={isExpanded}
+      >
+        <LockKeyhole className="w-4 h-4 text-primary flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <span className="font-semibold text-sm text-base-content">Identity Lock</span>
+          <span className="ml-2 text-xs text-base-content/50">
+            {traitCount} trait{traitCount !== 1 ? 's' : ''} locked
+          </span>
+        </div>
+        <span className="badge badge-primary badge-sm mr-1">Active</span>
+        {isExpanded
+          ? <ChevronUp  className="w-4 h-4 opacity-50 flex-shrink-0" />
+          : <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0" />
+        }
+      </button>
+      {isExpanded && (
+        <div className="p-5 space-y-4 bg-base-100 border-t border-primary/20">
+          <p className="text-xs text-base-content/50 flex items-center gap-1.5">
+            <LockKeyhole className="w-3 h-3" />
+            These traits are immutable and enforced in every sprite generation. They cannot be edited.
+          </p>
+
+          {/* Immutable traits */}
+          {Object.entries(traits).map(([category, items]) =>
+            items?.length > 0 ? (
+              <div key={category}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-base-content/60 mb-1.5 capitalize">
+                  {category}
+                </p>
+                <ul className="space-y-1">
+                  {items.map((item, i) => (
+                    <li key={i} className="text-xs text-base-content/80 flex items-start gap-1.5">
+                      <span className="mt-1.5 w-1 h-1 rounded-full bg-primary flex-shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null
+          )}
+
+          {/* Forbidden changes */}
+          {identityLock?.forbidden_changes?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-error/70 mb-1.5">
+                Forbidden Changes
+              </p>
+              <ul className="space-y-1">
+                {identityLock.forbidden_changes.map((f, i) => (
+                  <li key={i} className="text-xs text-base-content/70 flex items-start gap-1.5">
+                    <span className="mt-1.5 w-1 h-1 rounded-full bg-error flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Notes */}
+          {identityLock?.notes?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-base-content/60 mb-1.5">
+                Notes
+              </p>
+              <ul className="space-y-1">
+                {identityLock.notes.map((n, i) => (
+                  <li key={i} className="text-xs text-base-content/70 flex items-start gap-1.5">
+                    <span className="mt-1.5 w-1 h-1 rounded-full bg-base-content/40 flex-shrink-0" />
+                    {n}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="text-xs italic text-base-content/40 pt-1">
+            To update the identity lock, re-generate sprites with a new reference image.
+          </p>
         </div>
       )}
     </div>
