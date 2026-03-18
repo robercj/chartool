@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, forwardRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -116,6 +116,25 @@ export default function StorylineForm() {
   const [newFolderName, setNewFolderName] = useState('')
   const [selectedFolderId, setSelectedFolderId] = useState('')
 
+  // ── URL params ────────────────────────────────────────────────────────────
+  const [searchParams] = useSearchParams()
+  const preselectedFolderId = searchParams.get('folderId')
+
+  // Query for preselected folder validation
+  const { data: preselectedFolder } = useQuery({
+    queryKey: ['storyline', preselectedFolderId],
+    queryFn: () => Storyline.get(preselectedFolderId),
+    enabled: !!preselectedFolderId,
+  })
+
+  // Pre-select folder when preselectedFolderId is provided and query completes
+  useEffect(() => {
+    if (preselectedFolderId && preselectedFolder) {
+      setFolderMode('existing')
+      setSelectedFolderId(preselectedFolderId)
+    }
+  }, [preselectedFolderId, preselectedFolder])
+
   // ── Section A state ────────────────────────────────────────────────────────
   const [genres, setGenres] = useState([])
   const [openingSituation, setOpeningSituation] = useState('')
@@ -153,6 +172,17 @@ export default function StorylineForm() {
     queryFn: () => Storyline.list(userId),
     enabled: !!userId,
   })
+
+  // Validate preselected folder exists in user's storylines
+  useEffect(() => {
+    if (preselectedFolderId && storylines.length > 0) {
+      const validFolder = storylines.find(s => s.id === preselectedFolderId)
+      if (!validFolder) {
+        toast.error('Storyline folder not found')
+        navigate('/storyline/new', { replace: true })
+      }
+    }
+  }, [preselectedFolderId, storylines, navigate])
 
   // Refs for scroll-to-error
   const fieldRefs = {
@@ -430,6 +460,11 @@ export default function StorylineForm() {
         ) : (
           <div>
             <FieldLabel theme={theme} required>Story Name</FieldLabel>
+            {preselectedFolderId && (
+              <p className="text-xs mb-2 text-base-content/60">
+                Adding story to: <span className="font-medium" style={{ color: theme.primary }}>{storylines.find(s => s.id === preselectedFolderId)?.name}</span>
+              </p>
+            )}
             {storylines.length === 0 ? (
               <p className="text-sm text-base-content/60">
                 No storyline folders yet. Switch to "New Folder" to create one.

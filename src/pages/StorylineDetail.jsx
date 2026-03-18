@@ -180,7 +180,7 @@ COMPOSITION RULES:
 
         {/* Actions row — wraps on mobile */}
         <div className="flex flex-wrap gap-2 pl-0 md:pl-14">
-          {storyline.storyline_prompt_id && (
+          {storyline.storyline_prompt_id ? (
             <button
               onClick={() => navigate(`/storyline/result/${storyline.storyline_prompt_id}`)}
               className="btn btn-outline btn-sm"
@@ -188,6 +188,15 @@ COMPOSITION RULES:
             >
               <BookMarked className="w-4 h-4 mr-2" aria-hidden="true" />
               View Generated Prompt
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate(`/storyline/new?folderId=${storylineId}`)}
+              className="btn btn-primary btn-sm"
+              style={{ minHeight: '44px' }}
+            >
+              <Sparkles className="w-4 h-4 mr-2" aria-hidden="true" />
+              Add Story
             </button>
           )}
           {batches.length >= 2 && (
