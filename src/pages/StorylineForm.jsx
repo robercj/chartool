@@ -146,8 +146,8 @@ export default function StorylineForm() {
   const [growthMechanism, setGrowthMechanism] = useState('')
   const [growthOther, setGrowthOther] = useState('')
   const [unknownToSelf, setUnknownToSelf] = useState('')
-  const [npcs, setNpcs] = useState([createNPC(), createNPC(), createNPC()])
-  const [factions, setFactions] = useState([createFaction(), createFaction()])
+  const [npcs, setNpcs] = useState([createNPC()])
+  const [factions, setFactions] = useState([createFaction()])
   const [powerHierarchy, setPowerHierarchy] = useState('')
   const [forbiddenPower, setForbiddenPower] = useState('')
   const [worldEquilibrium, setWorldEquilibrium] = useState('')
@@ -629,7 +629,7 @@ export default function StorylineForm() {
         {/* Growth mechanism */}
         <FieldGroup label="Growth Mechanism" theme={theme}>
           {/* Mobile: vertical list of full-width tap targets; md+: flex-wrap chips */}
-          <div className="flex flex-col md:flex-row md:flex-wrap gap-2" role="group" aria-label="Growth mechanism options">
+          <div className="grid grid-cols-2 md:flex md:flex-row md:flex-wrap gap-2" role="group" aria-label="Growth mechanism options">
             {GROWTH_MECHANISMS.map(g => (
               <RadioChip
                 key={g}
@@ -812,7 +812,7 @@ export default function StorylineForm() {
 
         {/* First hook type */}
         <FieldGroup label="Preferred First Hook Type" theme={theme}>
-          <div className="flex flex-col md:flex-row md:flex-wrap gap-2" role="group" aria-label="First hook type options">
+          <div className="grid grid-cols-2 md:flex md:flex-row md:flex-wrap gap-2" role="group" aria-label="First hook type options">
             {FIRST_HOOK_TYPES.map(h => (
               <RadioChip
                 key={h}
@@ -935,7 +935,7 @@ export default function StorylineForm() {
         <button
           onClick={handleReviewGenerate}
           disabled={generating}
-          className="btn btn-primary btn-block pb-safe"
+          className="btn btn-primary btn-block"
           style={{ minHeight: '48px' }}
         >
           {generating ? (

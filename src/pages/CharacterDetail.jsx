@@ -12,7 +12,7 @@ import {
   Copy, RefreshCw, Save, History, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle, Sparkles, X, Plus, RotateCcw,
   Pencil, Clock, Loader2, Image as ImageIcon, Lock, Unlock,
-  Download, Trash2, ZoomIn, LockKeyhole,
+  Download, Trash2, ZoomIn, LockKeyhole, ArrowLeft,
 } from 'lucide-react';
 import { useAuth }  from '../contexts/AuthContext';
 import { Character, PromptHistory } from '../lib/storage';
@@ -564,6 +564,18 @@ function CharacterDetailInner() {
       <div className="hidden lg:flex flex-col w-[22%] flex-shrink-0 border-r border-base-300 bg-base-200 overflow-hidden">
         <div className="flex-1 overflow-y-auto">
 
+          {/* Back to characters (desktop) */}
+          <div className="px-3 pt-3 pb-1">
+            <button
+              onClick={() => navigate('/characters')}
+              className="btn btn-ghost btn-sm gap-1.5 w-full justify-start text-base-content/60 hover:text-base-content"
+              aria-label="Back to characters"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Characters
+            </button>
+          </div>
+
           {/* Portrait */}
           <div className="aspect-[3/4] bg-base-300 relative">
             {displayImage ? (
@@ -636,11 +648,19 @@ function CharacterDetailInner() {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Mobile sticky header */}
-        <div className="lg:hidden sticky top-0 z-10 bg-base-100 border-b border-base-300 px-4 py-3 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg overflow-hidden bg-base-300 flex-shrink-0">
+        <div className="lg:hidden sticky top-0 z-10 bg-base-100 border-b border-base-300 px-4 py-3 flex items-center gap-2">
+          {/* Back to character list */}
+          <button
+            onClick={() => navigate('/characters')}
+            className="btn btn-ghost btn-sm btn-square flex-shrink-0"
+            aria-label="Back to characters"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="w-9 h-9 rounded-lg overflow-hidden bg-base-300 flex-shrink-0">
             {displayImage
               ? <img src={displayImage} alt="" className="w-full h-full object-cover" />
-              : <ImageIcon className="w-6 h-6 text-base-content/20 m-2" />
+              : <ImageIcon className="w-5 h-5 text-base-content/20 m-2" />
             }
           </div>
           <div className="flex-1 min-w-0">
@@ -656,7 +676,7 @@ function CharacterDetailInner() {
         </div>
 
         {/* Scrollable form */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <div className="flex-1 overflow-y-auto p-4 pb-44 lg:p-6">
 
           {/* ── §9: Primary image display — cosmetic, all characters ─────── */}
           {savedChar.generated_image_url && (
@@ -996,7 +1016,15 @@ function CharacterDetailInner() {
         </div>
 
         {/* ── STICKY ACTION BAR ────────────────────────────────────────── */}
-        <div className="flex-shrink-0 border-t border-base-300 bg-base-100 px-4 py-3">
+        {/*
+          Mobile (< lg): fixed to bottom of viewport — bypasses iOS Safari 100vh bug
+          where calc(100vh - 64px) overshoots the visible area, hiding the bar.
+          Desktop (lg+): static flex-shrink-0 inside the flex column as normal.
+        */}
+        <div
+          className="fixed bottom-0 left-0 right-0 z-30 lg:static lg:flex-shrink-0 border-t border-base-300 bg-base-100 px-4 pt-3"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+        >
           {/* Errors */}
           {identityError && (
             <div className="flex items-center gap-2 mb-2 text-sm text-error">
@@ -1013,7 +1041,8 @@ function CharacterDetailInner() {
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Row 1 — Identity + Appearance regen */}
+          <div className="flex items-center gap-2 mb-2">
             {/* Regenerate Identity Prompt */}
             <button
               onClick={handleRegenerateIdentityPrompt}
@@ -1038,8 +1067,26 @@ function CharacterDetailInner() {
                 <span className="badge badge-warning badge-xs">!</span>
               )}
             </button>
+          </div>
 
-            {/* Seed + Regenerate Image */}
+          {/* Row 2 — Image regen + Seed + Save */}
+          <div className="flex items-center gap-2">
+            {/* Regenerate Image */}
+            <button
+              onClick={handleRegenerateImage}
+              disabled={isRegeneratingImage || isRegeneratingIdentity || isRegeneratingAppearance}
+              className={`btn btn-sm gap-1.5 ${
+                appearanceDescRegenerated && !imageRegenerated
+                  ? 'btn-warning btn-soft animate-pulse'
+                  : 'btn-ghost border border-base-300'
+              }`}
+              title={appearanceDescRegenerated && !imageRegenerated ? 'Description updated — regenerate image to reflect.' : 'Regenerate Image'}
+            >
+              {isRegeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">Image</span>
+            </button>
+
+            {/* Seed input + lock toggle */}
             <div className="flex items-center gap-1">
               <input
                 type="number"
@@ -1057,19 +1104,6 @@ function CharacterDetailInner() {
                 {seedLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
               </button>
             </div>
-            <button
-              onClick={handleRegenerateImage}
-              disabled={isRegeneratingImage || isRegeneratingIdentity || isRegeneratingAppearance}
-              className={`btn btn-sm gap-1.5 ${
-                appearanceDescRegenerated && !imageRegenerated
-                  ? 'btn-warning btn-soft animate-pulse'
-                  : 'btn-ghost border border-base-300'
-              }`}
-              title={appearanceDescRegenerated && !imageRegenerated ? 'Description updated — regenerate image to reflect.' : 'Regenerate Image'}
-            >
-              {isRegeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">Image</span>
-            </button>
 
             {/* Save + Save As */}
             <div className="ml-auto flex items-center gap-2">

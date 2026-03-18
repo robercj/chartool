@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { Save, Sparkles, ChevronRight, FileText, AlertTriangle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Save, Sparkles, ChevronRight, FileText, AlertTriangle, AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
 
 import { useDraftPersistence } from '../lib/hooks/useDraftPersistence';
 import { CharacterDraft, Character } from '../lib/storage';
@@ -387,8 +387,19 @@ export default function GenerateCharacterPage() {
       <div className="max-w-5xl mx-auto px-4 py-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-          <div>
+        <div className="flex items-center gap-3 mb-6 flex-wrap">
+          {/* Back to characters */}
+          <button
+            onClick={() => handleNavigate('/characters')}
+            className="btn btn-ghost btn-sm flex-shrink-0 gap-1.5"
+            aria-label="Back to characters"
+            style={{ minHeight: '44px' }}
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span className="hidden sm:inline">Characters</span>
+          </button>
+
+          <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold text-base-content flex items-center gap-2">
               <Sparkles className="w-7 h-7 text-primary" />
               Generate Character
@@ -401,23 +412,15 @@ export default function GenerateCharacterPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleNavigate('/characters')}
-              className="btn btn-ghost btn-sm"
-            >
-              View Characters
-            </button>
-            <button
-              onClick={saveNow}
-              disabled={!isDirty}
-              className="btn btn-neutral btn-sm gap-2"
-              style={{ minHeight: '40px' }}
-            >
-              <Save className="w-4 h-4" />
-              Save Draft
-            </button>
-          </div>
+          <button
+            onClick={saveNow}
+            disabled={!isDirty}
+            className="btn btn-neutral btn-sm gap-2 flex-shrink-0"
+            style={{ minHeight: '40px' }}
+          >
+            <Save className="w-4 h-4" />
+            Save Draft
+          </button>
         </div>
 
         {/* DaisyUI Steps — two-step architecture (v2) */}
