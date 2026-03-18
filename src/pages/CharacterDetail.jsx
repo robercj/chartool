@@ -496,10 +496,10 @@ export default function CharacterDetail() {
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex bg-base-100" style={{ height: 'calc(100vh - 64px)' }}>
+    <div className="flex flex-col lg:flex-row bg-base-100" style={{ minHeight: 'calc(100vh - 64px)' }}>
 
       {/* ── LEFT PANEL — saved snapshot ─────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[22%] flex-shrink-0 border-r border-base-300 bg-base-200 overflow-hidden">
+      <div className="hidden lg:flex flex-col w-[22%] flex-shrink-0 border-r border-base-300 bg-base-200 overflow-hidden" style={{ height: 'calc(100vh - 64px)', position: 'sticky', top: '64px' }}>
         <div className="flex-1 overflow-y-auto">
 
           {/* Portrait */}
@@ -571,7 +571,7 @@ export default function CharacterDetail() {
       </div>
 
       {/* ── CENTER PANEL — edit surface ──────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col lg:overflow-hidden" style={{ minHeight: 'calc(100vh - 64px)' }}>
 
         {/* Mobile sticky header */}
         <div className="lg:hidden sticky top-0 z-10 bg-base-100 border-b border-base-300 px-4 py-3 flex items-center gap-3">
@@ -594,7 +594,7 @@ export default function CharacterDetail() {
         </div>
 
         {/* Scrollable form */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <div className="flex-1 lg:overflow-y-auto p-4 lg:p-6">
           <h1 className="text-xl font-bold text-base-content mb-6">Edit Character</h1>
 
           {/* ── Section 1: Identity & Role ─────────────────────────────── */}
@@ -1005,7 +1005,7 @@ export default function CharacterDetail() {
       </div>
 
       {/* ── RIGHT PANEL — live prompt view ───────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-[28%] flex-shrink-0 border-l border-base-300 bg-base-200 overflow-hidden">
+      <div className="hidden lg:flex flex-col w-[28%] flex-shrink-0 border-l border-base-300 bg-base-200 overflow-hidden" style={{ height: 'calc(100vh - 64px)', position: 'sticky', top: '64px' }}>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm text-base-content">Character Prompt</h3>

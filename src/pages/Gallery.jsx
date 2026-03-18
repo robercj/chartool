@@ -876,6 +876,12 @@ function StorylineCard({ storyline, theme, onClick, onDelete, dragActive, isDrag
   // Live character count derived from assigned wizard characters
   const charCount = assignedChars.length
 
+  // Portrait thumbnails: prefer legacy batch previews, fall back to wizard char images
+  const charPortraits = assignedChars
+    .filter(c => c.generated_image_url)
+    .slice(0, 4)
+    .map(c => c.generated_image_url)
+
   // Drop zone border styling during an active drag
   const dropBorderStyle = dragActive
     ? isDragOver
@@ -899,10 +905,23 @@ function StorylineCard({ storyline, theme, onClick, onDelete, dragActive, isDrag
     >
       <div className="absolute inset-0 grid grid-cols-2 gap-0.5">
         {previewImages.length > 0 ? (
+          // Legacy batch images
           previewImages.map((img, i) => (
             <img key={i} src={img.url} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
           ))
+        ) : charPortraits.length > 0 ? (
+          // Wizard character portrait thumbnails
+          Array(4).fill(0).map((_, i) => (
+            charPortraits[i] ? (
+              <img key={i} src={charPortraits[i]} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+            ) : (
+              <div key={i} className="w-full h-full flex items-center justify-center bg-base-300">
+                <BookOpen className="w-6 h-6 md:w-8 md:h-8 text-base-content/20" />
+              </div>
+            )
+          ))
         ) : (
+          // No images at all — placeholder grid
           Array(4).fill(0).map((_, i) => (
             <div key={i} className="w-full h-full flex items-center justify-center bg-base-300">
               <BookOpen className="w-6 h-6 md:w-8 md:h-8 text-base-content/20" />
