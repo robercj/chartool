@@ -437,6 +437,51 @@ ${JSON.stringify(summary, null, 2)}`;
   return data.content?.[0]?.text || '';
 }
 
+// ─── compressBase64Image ──────────────────────────────────────────────────────
+// Client-side compression to stay under Anthropic's 5 MB base64 limit.
+//
+// Approach: Canvas API resize + JPEG encode. Original image is never modified —
+//
+// the compressed copy is used only for the API call.
+//
+// Compression threshold: 3.5 MB base64 string (~5 MB decoded). Below threshold,
+// returns original unchanged. Above threshold: resize to 1200px longest edge,
+// output as JPEG at 0.85 quality.
+//
+// Alternative (not implemented): upload to fal CDN first, pass URL to Anthropic.
+// Anthropic fetches server-side, bypassing base64 entirely. Trade-off: adds
+// upload latency (~1-2s) but eliminates compression artifacts. Consider revisiting
+// if compression quality issues arise or Anthropic raises base64 limits.
+//
+// @param {string} dataUrl  base64 data URL (data:image/...;base64,...)
+// @returns {Promise<string>} compressed base64 data URL
+// ─────────────────────────────────────────────────────────────────────────────
+async function compressBase64Image(dataUrl) {
+  const byteLength = (dataUrl.length - 'data:image/xxx;base64,'.length) * 0.75;
+  if (byteLength < 3_500_000) return dataUrl;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxSize = 1200;
+      let { width, height } = img;
+      if (width > height && width > maxSize) {
+        height = Math.round((height * maxSize) / width);
+        width = maxSize;
+      } else if (height > maxSize) {
+        width = Math.round((width * maxSize) / height);
+        height = maxSize;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = dataUrl;
+  });
+}
+
 // ─── analyzeReferenceImage ────────────────────────────────────────────────────
 // Runs Claude vision analysis on a reference image.
 //
@@ -455,14 +500,20 @@ ${JSON.stringify(summary, null, 2)}`;
 // @param {string} imageInput  base64 data URL or HTTP(S) URL
 // @returns {Promise<{ consistencyPrompt: string, identityLock: object|null }>}
 export async function analyzeReferenceImage(imageInput) {
-  const content = []
+  let imageDataUrl = imageInput;
 
   if (imageInput.startsWith('data:')) {
-    const [meta, imageData] = imageInput.split(',')
-    const mediaType = meta.match(/:(.*?);/)[1]
-    content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } })
+    imageDataUrl = await compressBase64Image(imageInput);
+  }
+
+  const content = [];
+
+  if (imageDataUrl.startsWith('data:')) {
+    const [meta, imageData] = imageDataUrl.split(',');
+    const mediaType = meta.match(/:(.*?);/)[1];
+    content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } });
   } else {
-    content.push({ type: 'image', source: { type: 'url', url: imageInput } })
+    content.push({ type: 'image', source: { type: 'url', url: imageDataUrl } });
   }
 
   // ── Structured identity lock analysis prompt ──────────────────────────────
