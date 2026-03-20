@@ -38,6 +38,7 @@ import { RANDOM_POOL } from '../lib/constants/EMOTION_PRESETS'
 import { RANDOM_POSE_POOL } from '../lib/constants/POSE_PRESETS'
 import VariationControls from '../components/sprites/VariationControls'
 import ImageEditModal from '../components/sprites/ImageEditModal'
+import useGenerationQueueStore, { activeSession } from '../lib/stores/generationQueueStore'
 
 // ─── Aspect ratio options ─────────────────────────────────────────────────────
 const ASPECT_RATIOS = [
@@ -129,6 +130,91 @@ export default function GenerateSprites() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey])
 
+  // ── Session hydration: restore form state from active queue session ─────────
+  const session = useGenerationQueueStore(activeSession)
+  useEffect(() => {
+    if (!session) return
+    if (session.returnRoute !== '/sprites/generate') return
+
+    const { formSnapshot, jobs, contextId } = session
+
+    // Hydrate mode
+    if (formSnapshot?.mode) setMode(formSnapshot.mode)
+
+    // Hydrate new character mode
+    if (formSnapshot?.mode === 'new') {
+      setNewCharName(formSnapshot.newCharName || '')
+      if (formSnapshot.suggestedAppearance) setSuggestedAppearance(formSnapshot.suggestedAppearance)
+      setAutoFillConfirmed(formSnapshot.autoFillConfirmed ?? false)
+    }
+
+    // Hydrate existing character mode
+    if (formSnapshot?.mode === 'existing' && formSnapshot.selectedCharacterId) {
+      const char = allCharacters.find(c => c.id === formSnapshot.selectedCharacterId)
+      if (char) {
+        setSelectedCharacter(char)
+        if (char.reference_image_url) setReferenceImageUrl(char.reference_image_url)
+      }
+    }
+
+    // Hydrate generation controls
+    if (formSnapshot?.variationCount) setVariationCount(formSnapshot.variationCount)
+    if (formSnapshot?.aspectRatio) setAspectRatio(formSnapshot.aspectRatio)
+    if (formSnapshot?.seedValue) setSeedValue(formSnapshot.seedValue)
+    if (formSnapshot?.emotionEntries) setEmotionEntries(formSnapshot.emotionEntries)
+    if (formSnapshot?.selectedPoseId) setSelectedPoseId(formSnapshot.selectedPoseId)
+    if (formSnapshot?.toggles) setToggles(formSnapshot.toggles)
+    if (formSnapshot?.customPrompt) setCustomPrompt(formSnapshot.customPrompt)
+
+    // Hydrate analysis state
+    if (formSnapshot?.consistencyPrompt) setConsistencyPrompt(formSnapshot.consistencyPrompt)
+    if (formSnapshot?.identityLock) setIdentityLock(formSnapshot.identityLock)
+    if (formSnapshot?.referenceImageBase64) setReferenceImageBase64(formSnapshot.referenceImageBase64)
+    if (formSnapshot?.referenceImageUrl) setReferenceImageUrl(formSnapshot.referenceImageUrl)
+
+    // Hydrate live images from completed jobs
+    const completed = jobs
+      .filter(j => j.status === 'complete' && j.imageUrl)
+      .map((j, idx) => ({
+        url: j.imageUrl,
+        label: `Sprite ${idx + 1}`,
+        seed: j.generationParams?.seed ?? null,
+        poseId: j.generationParams?.poseId ?? null,
+        emotionEntry: j.generationParams?.emotionEntry ?? null,
+        params_snapshot: j.generationParams?.paramsSnapshot ?? null,
+        jobId: j.jobId,
+      }))
+    if (completed.length > 0) setLiveImages(completed)
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.sessionId])
+
+  // ── Subscribe to session job updates for live images ───────────────────────
+  useEffect(() => {
+    if (!session) return
+
+    const unsubscribe = useGenerationQueueStore.subscribe(
+      (state) => state.sessions.find(s => s.sessionId === session.sessionId),
+      (sessionData) => {
+        if (!sessionData) return
+        const completed = sessionData.jobs
+          .filter(j => j.status === 'complete' && j.imageUrl)
+          .map((j, idx) => ({
+            url: j.imageUrl,
+            label: `Sprite ${idx + 1}`,
+            seed: j.generationParams?.seed ?? null,
+            poseId: j.generationParams?.poseId ?? null,
+            emotionEntry: j.generationParams?.emotionEntry ?? null,
+            params_snapshot: j.generationParams?.paramsSnapshot ?? null,
+            jobId: j.jobId,
+          }))
+        setLiveImages(completed)
+      }
+    )
+
+    return unsubscribe
+  }, [session?.sessionId])
+
   // ── Fetch all characters for Mode B ──────────────────────────────────────
   const { data: allCharacters = [] } = useQuery({
     queryKey: ['characters', userId],
@@ -178,6 +264,11 @@ export default function GenerateSprites() {
 
   // ── Reset all state ────────────────────────────────────────────────────────
   const resetAll = useCallback(() => {
+    const { activeSessionId, clearSession } = useGenerationQueueStore.getState()
+    if (activeSessionId) {
+      clearSession(activeSessionId)
+    }
+
     setMode(null)
     setNewCharName('')
     setNameError(null)
@@ -425,113 +516,147 @@ export default function GenerateSprites() {
   // ── Main generation handler ────────────────────────────────────────────────
   const handleGenerate = async () => {
     if (!canGenerate || generating) return
+    if (!mountedRef.current) return
+
     setGenerationError(null)
     setLiveImages([])
+
+    const character = resolveCharacterForGeneration()
+    const charName = character.character_name || 'Character'
+    const refImageBase64 = referenceImageBase64
+    const refImageUrl = mode === 'existing'
+      ? character.generated_image_url
+      : (character.reference_image_url || referenceImageBase64)
+    const lock = identityLock || character.character_identity_lock || null
+    const prompt = consistencyPrompt || character.character_consistency_prompt || ''
+
+    // Resolve all N variation specs (emotion + pose per sprite)
+    const specs = resolveVariationSpecs(emotionEntries, selectedPoseId, variationCount, RANDOM_POOL, RANDOM_POSE_POOL)
+
+    // Build form snapshot for session hydration
+    const formSnapshot = {
+      mode,
+      newCharName,
+      suggestedAppearance,
+      autoFillConfirmed,
+      selectedCharacterId: selectedCharacter?.id || null,
+      variationCount,
+      aspectRatio,
+      seedValue,
+      emotionEntries,
+      selectedPoseId,
+      toggles,
+      customPrompt,
+      consistencyPrompt: prompt,
+      identityLock: lock,
+      referenceImageBase64,
+      referenceImageUrl,
+    }
+
+    // Build jobs for dispatch
+    const jobs = specs.map((spec, i) => {
+      const finalPrompt = compileSpritePrompt({
+        identityLock: lock,
+        consistencyPrompt: prompt,
+        poseId: spec.poseId,
+        emotionEntry: spec.emotionEntry,
+        allowPrompt: toggles.allowPrompt,
+        customPrompt,
+        allowClothing: toggles.allowClothing,
+        allowProps: toggles.allowProps,
+      })
+
+      return {
+        label: `Sprite ${i + 1}`,
+        generationParams: {
+          prompt: finalPrompt,
+          referenceImageUrls: [refImageBase64 || refImageUrl].filter(Boolean),
+          aspectRatio,
+          seed: seedValue ? parseInt(seedValue, 10) : null,
+          poseId: spec.poseId,
+          emotionEntry: spec.emotionEntry,
+          paramsSnapshot: {
+            variationCount, aspectRatio,
+            poseId: spec.poseId,
+            emotionEntry: spec.emotionEntry,
+            toggles,
+          },
+        },
+      }
+    })
+
     setGenerating(true)
 
-    const signal = getAbortSignal()
-    let errors = []
-    let successCount = 0
-
     try {
-      const character = resolveCharacterForGeneration()
-      const charName = character.character_name || 'Character'
-      const refImageBase64 = referenceImageBase64
-      const refImageUrl = mode === 'existing'
-        ? character.generated_image_url
-        : (character.reference_image_url || referenceImageBase64)
-      const lock = identityLock || character.character_identity_lock || null
-      const prompt = consistencyPrompt || character.character_consistency_prompt || ''
+      const dispatchBatch = useGenerationQueueStore.getState().dispatchBatch
+      const sessionId = await dispatchBatch({
+        contextType: 'sprite',
+        contextId: character.id,
+        formSnapshot,
+        returnRoute: '/sprites/generate',
+        jobs,
+      })
 
-      // Resolve all N variation specs (emotion + pose per sprite)
-      const specs = resolveVariationSpecs(emotionEntries, selectedPoseId, variationCount, RANDOM_POOL, RANDOM_POSE_POOL)
+      toast.info(`Generating ${variationCount} sprite${variationCount !== 1 ? 's' : ''} for ${charName}...`)
 
-      startProgress(`Generating sprites for ${charName}`, variationCount, '/sprites/generate')
+      // Monitor session for completion and save images to character
+      const unsubscribe = useGenerationQueueStore.subscribe(
+        (state) => state.sessions.find(s => s.sessionId === sessionId),
+        async (sessionData) => {
+          if (!sessionData) return
 
-      for (let i = 0; i < variationCount; i++) {
-        if (isCancelled()) break
+          // Save completed images to character
+          const completed = sessionData.jobs.filter(j => j.status === 'complete' && j.imageUrl && !j._saved)
+          for (const job of completed) {
+            try {
+              const spriteEntry = {
+                url: job.imageUrl,
+                generated_at: new Date().toISOString(),
+                seed: job.generationParams?.seed ?? null,
+                poseId: job.generationParams?.poseId ?? null,
+                emotionEntry: job.generationParams?.emotionEntry ?? null,
+                params_snapshot: job.generationParams?.paramsSnapshot ?? null,
+              }
+              await Character.addSpriteImage(character.id, spriteEntry)
 
-        const spec = specs[i]
-        try {
-          // Compile the full structured prompt for this variation
-          const finalPrompt = compileSpritePrompt({
-            identityLock: lock,
-            consistencyPrompt: prompt,
-            poseId: spec.poseId,
-            emotionEntry: spec.emotionEntry,
-            allowPrompt: toggles.allowPrompt,
-            customPrompt,
-            allowClothing: toggles.allowClothing,
-            allowProps: toggles.allowProps,
-          })
+              // Mark as saved to avoid duplicate saves
+              useGenerationQueueStore.getState().updateJob(job.jobId, { _saved: true })
 
-          const imageUrl = await generateImage({
-            prompt: finalPrompt,
-            referenceImageUrls: [refImageBase64 || refImageUrl].filter(Boolean),
-            aspectRatio,
-          }, signal)
-
-          if (!mountedRef.current) break
-
-          const spriteEntry = {
-            url: imageUrl,
-            generated_at: new Date().toISOString(),
-            seed: seedValue ? parseInt(seedValue, 10) : null,
-            poseId: spec.poseId,
-            emotionEntry: spec.emotionEntry,
-            params_snapshot: {
-              variationCount, aspectRatio,
-              poseId: spec.poseId,
-              emotionEntry: spec.emotionEntry,
-              toggles,
-            },
+              queryClient.invalidateQueries({ queryKey: ['character', character.id] })
+              queryClient.invalidateQueries({ queryKey: ['characters', userId] })
+            } catch (err) {
+              console.error('Failed to persist sprite to character:', err)
+            }
           }
 
-          await Character.addSpriteImage(character.id, spriteEntry)
+          // Handle session completion
+          if (sessionData.jobs.every(j => j.status === 'complete' || j.status === 'failed')) {
+            const failed = sessionData.jobs.filter(j => j.status === 'failed')
+            const success = sessionData.jobs.filter(j => j.status === 'complete')
 
-          setLiveImages(prev => [
-            ...prev,
-            {
-              url: imageUrl,
-              label: `Sprite ${prev.length + 1}`,
-              seed: spriteEntry.seed,
-              poseId: spec.poseId,
-              emotionEntry: spec.emotionEntry,
-              params_snapshot: spriteEntry.params_snapshot,
-            },
-          ])
-          successCount++
-          updateProgress(i + 1)
+            if (success.length > 0) {
+              toast.success(`Generated ${success.length} sprite${success.length !== 1 ? 's' : ''} successfully!`)
+            }
+            if (failed.length > 0) {
+              const errors = failed.map(j => j.errorMessage || 'Generation failed').join('\n')
+              setGenerationError(errors)
+              toast.error(`${failed.length} sprite${failed.length !== 1 ? 's' : ''} failed to generate.`)
+            }
 
-          queryClient.invalidateQueries({ queryKey: ['character', character.id] })
-          queryClient.invalidateQueries({ queryKey: ['characters', userId] })
-        } catch (err) {
-          console.error(`Sprite ${i + 1} generation failed:`, err)
-          if (err instanceof LimitError) { toast.error(err.message); break }
-          errors.push(`Sprite ${i + 1}: ${err.message || 'Generation failed'}`)
+            setGenerating(false)
+          }
         }
-      }
+      )
 
-      clearProgress()
-
-      if (successCount > 0) {
-        toast.success(`Generated ${successCount} sprite${successCount !== 1 ? 's' : ''} successfully!`)
-      }
-      if (errors.length > 0) {
-        toast.error(`${errors.length} sprite${errors.length !== 1 ? 's' : ''} failed to generate.`)
-        setGenerationError(errors.join('\n'))
-      }
     } catch (err) {
       if (!mountedRef.current) return
+      console.error('Failed to dispatch generation batch:', err)
       if (err instanceof LimitError) {
         toast.error(err.message)
       } else {
-        toast.error(err.message || 'Generation failed')
-        setGenerationError(err.message)
+        toast.error(err.message || 'Failed to start generation')
       }
-      clearProgress()
-    } finally {
-      if (mountedRef.current) setGenerating(false)
+      setGenerating(false)
     }
   }
 

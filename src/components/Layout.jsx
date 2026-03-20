@@ -8,6 +8,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useProgress } from '../contexts/ProgressContext';
 import { useAuth } from '../contexts/AuthContext';
 import AuthModal from './AuthModal';
+import GenerationProgressBar from './GenerationProgressBar';
 import { Toaster } from 'sonner';
 
 // ─── Tier badge DaisyUI colour mapping ───────────────────────────────────────
@@ -357,6 +358,9 @@ export default function Layout({ children }) {
         </div>
       )}
 
+      {/* ── Generation queue progress bar ─────────────────────────────────────── */}
+      <GenerationProgressBar />
+
       {/* ── Mobile Nav Drawer ──────────────────────────────────────────────── */}
       <div
         id="mobile-nav-drawer"
@@ -466,7 +470,7 @@ export default function Layout({ children }) {
       {/* ── Page content ──────────────────────────────────────────────────── */}
       <main
         className="relative z-10 scroll-anchor"
-        style={{ paddingTop: progress ? '96px' : '64px', minHeight: '100vh' }}
+        style={{ paddingTop: '64px', minHeight: '100vh' }}
       >
         {children}
       </main>

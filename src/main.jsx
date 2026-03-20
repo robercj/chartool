@@ -19,6 +19,7 @@ import Settings from './pages/Settings'
 import StorylineForm from './pages/StorylineForm'
 import StorylineResult from './pages/StorylineResult'
 import AuthCallback from './pages/AuthCallback'
+import { GenerationContextProvider } from './components/GenerationContextProvider'
 import './index.css'
 // seedSettings.js no longer needed — API keys are managed by Supabase Edge Function secrets
 
@@ -46,6 +47,7 @@ createRoot(document.getElementById('root')).render(
       <ThemeProvider>
         <ProgressProvider>
           <AuthProvider>
+            <GenerationContextProvider>
             <BrowserRouter>
               <Layout>
                 <Routes>
@@ -70,6 +72,7 @@ createRoot(document.getElementById('root')).render(
                 </Routes>
               </Layout>
             </BrowserRouter>
+          </GenerationContextProvider>
           </AuthProvider>
         </ProgressProvider>
       </ThemeProvider>
