@@ -40,4 +40,5 @@ CREATE POLICY "Users can insert own jobs"
 
 CREATE POLICY "Users can update own jobs"
   ON generation_jobs FOR UPDATE
-  USING (user_id = auth.uid());
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());

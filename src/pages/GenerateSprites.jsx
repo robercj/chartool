@@ -38,7 +38,7 @@ import { RANDOM_POOL } from '../lib/constants/EMOTION_PRESETS'
 import { RANDOM_POSE_POOL } from '../lib/constants/POSE_PRESETS'
 import VariationControls from '../components/sprites/VariationControls'
 import ImageEditModal from '../components/sprites/ImageEditModal'
-import useGenerationQueueStore, { activeSession } from '../lib/stores/generationQueueStore'
+import useGenerationQueueStore from '../lib/stores/generationQueueStore'
 
 // ─── Aspect ratio options ─────────────────────────────────────────────────────
 const ASPECT_RATIOS = [
@@ -131,12 +131,13 @@ export default function GenerateSprites() {
   }, [resetKey])
 
   // ── Session hydration: restore form state from active queue session ─────────
-  const session = useGenerationQueueStore(activeSession)
+  const activeSessionId = useGenerationQueueStore(s => s.activeSessionId)
+  const activeSessionFromStore = useGenerationQueueStore(s => s.sessions.find(sess => sess.sessionId === activeSessionId))
   useEffect(() => {
-    if (!session) return
-    if (session.returnRoute !== '/sprites/generate') return
+    if (!activeSessionFromStore) return
+    if (activeSessionFromStore.returnRoute !== '/sprites/generate') return
 
-    const { formSnapshot, jobs, contextId } = session
+    const { formSnapshot, jobs } = activeSessionFromStore
 
     // Hydrate mode
     if (formSnapshot?.mode) setMode(formSnapshot.mode)
@@ -187,33 +188,7 @@ export default function GenerateSprites() {
     if (completed.length > 0) setLiveImages(completed)
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.sessionId])
-
-  // ── Subscribe to session job updates for live images ───────────────────────
-  useEffect(() => {
-    if (!session) return
-
-    const unsubscribe = useGenerationQueueStore.subscribe(
-      (state) => state.sessions.find(s => s.sessionId === session.sessionId),
-      (sessionData) => {
-        if (!sessionData) return
-        const completed = sessionData.jobs
-          .filter(j => j.status === 'complete' && j.imageUrl)
-          .map((j, idx) => ({
-            url: j.imageUrl,
-            label: `Sprite ${idx + 1}`,
-            seed: j.generationParams?.seed ?? null,
-            poseId: j.generationParams?.poseId ?? null,
-            emotionEntry: j.generationParams?.emotionEntry ?? null,
-            params_snapshot: j.generationParams?.paramsSnapshot ?? null,
-            jobId: j.jobId,
-          }))
-        setLiveImages(completed)
-      }
-    )
-
-    return unsubscribe
-  }, [session?.sessionId])
+  }, [activeSessionFromStore?.sessionId])
 
   // ── Fetch all characters for Mode B ──────────────────────────────────────
   const { data: allCharacters = [] } = useQuery({
@@ -589,7 +564,7 @@ export default function GenerateSprites() {
 
     try {
       const dispatchBatch = useGenerationQueueStore.getState().dispatchBatch
-      const sessionId = await dispatchBatch({
+      await dispatchBatch({
         contextType: 'sprite',
         contextId: character.id,
         formSnapshot,
@@ -598,55 +573,6 @@ export default function GenerateSprites() {
       })
 
       toast.info(`Generating ${variationCount} sprite${variationCount !== 1 ? 's' : ''} for ${charName}...`)
-
-      // Monitor session for completion and save images to character
-      const unsubscribe = useGenerationQueueStore.subscribe(
-        (state) => state.sessions.find(s => s.sessionId === sessionId),
-        async (sessionData) => {
-          if (!sessionData) return
-
-          // Save completed images to character
-          const completed = sessionData.jobs.filter(j => j.status === 'complete' && j.imageUrl && !j._saved)
-          for (const job of completed) {
-            try {
-              const spriteEntry = {
-                url: job.imageUrl,
-                generated_at: new Date().toISOString(),
-                seed: job.generationParams?.seed ?? null,
-                poseId: job.generationParams?.poseId ?? null,
-                emotionEntry: job.generationParams?.emotionEntry ?? null,
-                params_snapshot: job.generationParams?.paramsSnapshot ?? null,
-              }
-              await Character.addSpriteImage(character.id, spriteEntry)
-
-              // Mark as saved to avoid duplicate saves
-              useGenerationQueueStore.getState().updateJob(job.jobId, { _saved: true })
-
-              queryClient.invalidateQueries({ queryKey: ['character', character.id] })
-              queryClient.invalidateQueries({ queryKey: ['characters', userId] })
-            } catch (err) {
-              console.error('Failed to persist sprite to character:', err)
-            }
-          }
-
-          // Handle session completion
-          if (sessionData.jobs.every(j => j.status === 'complete' || j.status === 'failed')) {
-            const failed = sessionData.jobs.filter(j => j.status === 'failed')
-            const success = sessionData.jobs.filter(j => j.status === 'complete')
-
-            if (success.length > 0) {
-              toast.success(`Generated ${success.length} sprite${success.length !== 1 ? 's' : ''} successfully!`)
-            }
-            if (failed.length > 0) {
-              const errors = failed.map(j => j.errorMessage || 'Generation failed').join('\n')
-              setGenerationError(errors)
-              toast.error(`${failed.length} sprite${failed.length !== 1 ? 's' : ''} failed to generate.`)
-            }
-
-            setGenerating(false)
-          }
-        }
-      )
 
     } catch (err) {
       if (!mountedRef.current) return
@@ -659,6 +585,53 @@ export default function GenerateSprites() {
       setGenerating(false)
     }
   }
+
+  // ── Monitor active session for completion ───────────────────────────────────
+  const activeSessionForMonitor = useGenerationQueueStore(s => s.sessions.find(sess => sess.sessionId === activeSessionId))
+  useEffect(() => {
+    if (!activeSessionForMonitor) return
+
+    // Save completed images to character
+    const activeCharacter = createdCharacter || selectedCharacter
+    if (activeCharacter) {
+      const completed = activeSessionForMonitor.jobs.filter(j => j.status === 'complete' && j.imageUrl && !j._saved)
+      completed.forEach(async (job) => {
+        try {
+          const spriteEntry = {
+            url: job.imageUrl,
+            generated_at: new Date().toISOString(),
+            seed: job.generationParams?.seed ?? null,
+            poseId: job.generationParams?.poseId ?? null,
+            emotionEntry: job.generationParams?.emotionEntry ?? null,
+            params_snapshot: job.generationParams?.paramsSnapshot ?? null,
+          }
+          await Character.addSpriteImage(activeCharacter.id, spriteEntry)
+          useGenerationQueueStore.getState().updateJob(job.jobId, { _saved: true })
+          queryClient.invalidateQueries({ queryKey: ['character', activeCharacter.id] })
+          queryClient.invalidateQueries({ queryKey: ['characters', userId] })
+        } catch (err) {
+          console.error('Failed to persist sprite to character:', err)
+        }
+      })
+    }
+
+    // Handle session completion
+    if (activeSessionForMonitor.jobs.length > 0 && activeSessionForMonitor.jobs.every(j => j.status === 'complete' || j.status === 'failed')) {
+      const failed = activeSessionForMonitor.jobs.filter(j => j.status === 'failed')
+      const success = activeSessionForMonitor.jobs.filter(j => j.status === 'complete')
+
+      if (success.length > 0) {
+        toast.success(`Generated ${success.length} sprite${success.length !== 1 ? 's' : ''} successfully!`)
+      }
+      if (failed.length > 0) {
+        const errors = failed.map(j => j.errorMessage || 'Generation failed').join('\n')
+        setGenerationError(errors)
+        toast.error(`${failed.length} sprite${failed.length !== 1 ? 's' : ''} failed to generate.`)
+      }
+
+      setGenerating(false)
+    }
+  }, [activeSessionForMonitor, createdCharacter, selectedCharacter, userId, queryClient])
 
   const activeCharacter = createdCharacter || selectedCharacter
 
