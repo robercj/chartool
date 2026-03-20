@@ -1,13 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
-import useGenerationQueueStore, {
-  totalPending,
-  totalComplete,
-  totalJobs,
-  isGenerating,
-  activeSession,
-  sessionProgress,
-} from '../lib/stores/generationQueueStore';
+import useGenerationQueueStore from '../lib/stores/generationQueueStore';
 import { Images } from 'lucide-react';
 
 export default function GenerationProgressBar() {
@@ -15,14 +8,21 @@ export default function GenerationProgressBar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const generating = useGenerationQueueStore(isGenerating);
-  const pending = useGenerationQueueStore(totalPending);
-  const complete = useGenerationQueueStore(totalComplete);
-  const total = useGenerationQueueStore(totalJobs);
-  const session = useGenerationQueueStore(activeSession);
+  const sessions = useGenerationQueueStore(s => s.sessions);
+  const activeSessionId = useGenerationQueueStore(s => s.activeSessionId);
+
+  const generating = sessions.some(s => s.jobs.some(j => j.status === 'queued' || j.status === 'generating'));
+  const pending = sessions.flatMap(s => s.jobs).filter(j => j.status === 'queued' || j.status === 'generating').length;
+  const complete = sessions.flatMap(s => s.jobs).filter(j => j.status === 'complete').length;
+  const total = sessions.flatMap(s => s.jobs).length;
+  const session = sessions.find(s => s.sessionId === activeSessionId) || null;
 
   const progress = session
-    ? useGenerationQueueStore(s => sessionProgress(s, session.sessionId))
+    ? (() => {
+        const done = session.jobs.filter(j => j.status === 'complete' || j.status === 'failed').length;
+        const tot = session.jobs.length;
+        return { complete: done, total: tot, percent: tot > 0 ? Math.round((done / tot) * 100) : 0 };
+      })()
     : { complete: 0, total: 0, percent: 0 };
 
   if (!generating && complete === 0) return null;
