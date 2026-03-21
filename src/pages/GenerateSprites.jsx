@@ -30,7 +30,7 @@ import {
 import { useTheme } from '../contexts/ThemeContext'
 import { useProgress } from '../contexts/ProgressContext'
 import { useAuth } from '../contexts/AuthContext'
-import { Character, CharacterImage } from '../lib/storage'
+import { Character } from '../lib/storage'
 import { analyzeReferenceImage, generateImage, LimitError, parseAppearanceFromIdentityLock } from '../lib/anthropic'
 import { supabase } from '../lib/supabase'
 import { compileSpritePrompt, resolveVariationSpecs } from '../lib/promptCompiler'
@@ -466,24 +466,27 @@ export default function GenerateSprites() {
   // ── Add a sprite image generated during the edit modal ────────────────────
   const handleEditModalNewImage = useCallback(async (newEntry) => {
     const character = resolveCharacterForGeneration()
+    const spriteEntry = {
+      url: newEntry.url,
+      generated_at: newEntry.generated_at,
+      seed: newEntry.seed ?? null,
+      editInstructions: newEntry.editInstructions,
+      parentUrl: newEntry.parentUrl,
+      params_snapshot: newEntry.params_snapshot,
+      poseId: newEntry.poseId ?? null,
+      emotionEntry: newEntry.emotionEntry ?? null,
+    }
     try {
-      await CharacterImage.add(character.id, {
-        url: newEntry.url,
-        label: newEntry.label || 'Edited Sprite',
-        seed: newEntry.seed ?? null,
-        poseId: newEntry.poseId ?? null,
-        emotionEntry: newEntry.emotionEntry ?? null,
-        paramsSnapshot: newEntry.params_snapshot,
-        generationType: 'sprite_edit',
-      })
+      await Character.addSpriteImage(character.id, spriteEntry)
       setLiveImages(prev => [...prev, { url: newEntry.url, label: newEntry.label, seed: newEntry.seed }])
-      queryClient.invalidateQueries({ queryKey: ['character-images', character.id] })
+      queryClient.invalidateQueries({ queryKey: ['character', character.id] })
+      queryClient.invalidateQueries({ queryKey: ['characters', userId] })
     } catch (err) {
       console.error('Failed to save edited sprite:', err)
       toast.error('Edit saved to view but could not persist to character record.')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, createdCharacter, selectedCharacter, queryClient])
+  }, [mode, createdCharacter, selectedCharacter, userId, queryClient])
 
   // ── Main generation handler ────────────────────────────────────────────────
   const handleGenerate = async () => {
@@ -588,24 +591,24 @@ export default function GenerateSprites() {
   useEffect(() => {
     if (!activeSessionForMonitor) return
 
-    // Save completed images directly to character_images table
+    // Save completed images to character
     const activeCharacter = createdCharacter || selectedCharacter
     if (activeCharacter) {
       const completed = activeSessionForMonitor.jobs.filter(j => j.status === 'complete' && j.imageUrl && !j._saved)
       completed.forEach(async (job) => {
         try {
-          await CharacterImage.add(activeCharacter.id, {
+          const spriteEntry = {
             url: job.imageUrl,
-            label: job.label || 'Sprite',
+            generated_at: new Date().toISOString(),
             seed: job.generationParams?.seed ?? null,
             poseId: job.generationParams?.poseId ?? null,
             emotionEntry: job.generationParams?.emotionEntry ?? null,
-            paramsSnapshot: job.generationParams?.paramsSnapshot ?? null,
-            generationType: 'sprite',
-            jobId: job.jobId,
-          })
+            params_snapshot: job.generationParams?.paramsSnapshot ?? null,
+          }
+          await Character.addSpriteImage(activeCharacter.id, spriteEntry)
           useGenerationQueueStore.getState().updateJob(job.jobId, { _saved: true })
-          queryClient.invalidateQueries({ queryKey: ['character-images', activeCharacter.id] })
+          queryClient.invalidateQueries({ queryKey: ['character', activeCharacter.id] })
+          queryClient.invalidateQueries({ queryKey: ['characters', userId] })
         } catch (err) {
           console.error('Failed to persist sprite to character:', err)
         }
@@ -628,7 +631,7 @@ export default function GenerateSprites() {
 
       setGenerating(false)
     }
-  }, [activeSessionForMonitor, createdCharacter, selectedCharacter, queryClient])
+  }, [activeSessionForMonitor, createdCharacter, selectedCharacter, userId, queryClient])
 
   const activeCharacter = createdCharacter || selectedCharacter
 

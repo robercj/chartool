@@ -15,7 +15,7 @@ import {
   Download, Trash2, ZoomIn, LockKeyhole, ArrowLeft,
 } from 'lucide-react';
 import { useAuth }  from '../contexts/AuthContext';
-import { Character, PromptHistory, CharacterImage } from '../lib/storage';
+import { Character, PromptHistory } from '../lib/storage';
 import {
   generateCharacterIdentityPrompt,
   generateAppearanceDescription,
@@ -223,12 +223,6 @@ function CharacterDetailInner() {
   const { data: promptHistory = [] } = useQuery({
     queryKey: ['character-history', characterId],
     queryFn:  () => PromptHistory.list(characterId),
-    enabled:  !!characterId,
-  });
-
-  const { data: characterImages = [] } = useQuery({
-    queryKey: ['character-images', characterId],
-    queryFn:  () => CharacterImage.forCharacter(characterId),
     enabled:  !!characterId,
   });
 
@@ -1021,10 +1015,10 @@ function CharacterDetailInner() {
           </CollapsibleSection>
 
           {/* ── §7: Sprite Images section — bottom of detail page ────────── */}
-          {characterImages.length > 0 && (
+          {Array.isArray(savedChar.sprite_images) && savedChar.sprite_images.length > 0 && (
             <SpriteImagesSection
               characterId={characterId}
-              spriteImages={characterImages}
+              spriteImages={savedChar.sprite_images}
               queryClient={queryClient}
             />
           )}
@@ -1675,8 +1669,8 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient }) {
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await CharacterImage.deleteByUrl(characterId, deleteTargetUrl);
-      queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
+      await Character.deleteSpriteImage(characterId, deleteTargetUrl);
+      queryClient.invalidateQueries({ queryKey: ['character', characterId] });
       setDeleteTargetUrl(null);
       if (enlargedUrl === deleteTargetUrl) setEnlargedUrl(null);
       toast.success('Image deleted.');
@@ -1708,7 +1702,7 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient }) {
           >
             {spriteImages.map((img, i) => (
               <SpriteImageThumbnail
-                key={img.id || img.url || i}
+                key={img.url || i}
                 img={img}
                 onDownload={() => handleDownload(img.url)}
                 onDelete={() => setDeleteTargetUrl(img.url)}
