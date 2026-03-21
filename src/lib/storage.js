@@ -556,3 +556,57 @@ export const Character = {
     if (error) throw error;
   },
 };
+
+// ─── CharacterImage ──────────────────────────────────────────────────────────
+// Direct image-to-character binding: one row per generated image.
+// Uses denormalized user_id for fast RLS checks.
+// ─────────────────────────────────────────────────────────────────────────────
+export const CharacterImage = {
+  async forCharacter(characterId) {
+    const { data, error } = await supabase
+      .from('character_images')
+      .select('*')
+      .eq('character_id', characterId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async add(characterId, userId, { url, label, seed, poseId, emotionEntry, paramsSnapshot, generationType = 'sprite', jobId }) {
+    const { data, error } = await supabase
+      .from('character_images')
+      .insert({
+        character_id: characterId,
+        user_id: userId,
+        url,
+        label,
+        seed,
+        pose_id: poseId,
+        emotion_entry: emotionEntry,
+        params_snapshot: paramsSnapshot,
+        generation_type: generationType,
+        job_id: jobId,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(imageId) {
+    const { error } = await supabase
+      .from('character_images')
+      .delete()
+      .eq('id', imageId);
+    if (error) throw error;
+  },
+
+  async deleteByUrl(characterId, url) {
+    const { error } = await supabase
+      .from('character_images')
+      .delete()
+      .eq('character_id', characterId)
+      .eq('url', url);
+    if (error) throw error;
+  },
+};
