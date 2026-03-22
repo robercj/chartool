@@ -77,6 +77,7 @@ SECTION C — AI REMINDERS
 // @throws {LimitError}  On HTTP 429 (usage limit reached)
 // @throws {Error}       On all other non-OK responses
 async function callEdgeFunction(functionName, body, signal = null) {
+  await supabase.auth.initialize();
   const invokeOptions = { body };
   if (signal) invokeOptions.signal = signal;
 
