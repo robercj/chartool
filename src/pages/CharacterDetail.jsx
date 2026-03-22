@@ -1838,7 +1838,13 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
     try {
       const identityLock = character?.character_identity_lock || null;
       const consistencyPrompt = character?.character_consistency_prompt || '';
-      const referenceImageUrl = character?.generated_image_url || character?.reference_image_url || null;
+      const referenceImageUrl = viewingImg?.url || character?.generated_image_url || character?.reference_image_url || null;
+
+      if (!referenceImageUrl) {
+        setError('No reference image available. Please ensure the character has a reference image.');
+        setGenerating(false);
+        return;
+      }
 
       const finalPrompt = compileEditPrompt({
         identityLock,

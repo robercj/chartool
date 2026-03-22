@@ -354,10 +354,15 @@ export default function Gallery() {
     queryClient.invalidateQueries({ queryKey: ['batches', userId] })
     toast.success('Character deleted')
   }
-  const handleDeleteCharacter = async (id) => {
+  const handleDeleteCharacter = async (id, isDraft) => {
     try {
-      await CharacterDraft.delete(id)
+      if (isDraft) {
+        await CharacterDraft.delete(id)
+      } else {
+        await Character.delete(id)
+      }
       queryClient.invalidateQueries({ queryKey: ['wizard-drafts', userId] })
+      queryClient.invalidateQueries({ queryKey: ['wizard-characters', userId] })
       toast.success('Character deleted')
     } catch {
       toast.error('Failed to delete character')
@@ -367,7 +372,7 @@ export default function Gallery() {
     if (!pendingDelete) return
     if      (pendingDelete.type === 'storyline')  handleDeleteStoryline(pendingDelete.id)
     else if (pendingDelete.type === 'batch')      handleDeleteBatch(pendingDelete.id)
-    else if (pendingDelete.type === 'character')  handleDeleteCharacter(pendingDelete.id)
+    else if (pendingDelete.type === 'character')  handleDeleteCharacter(pendingDelete.id, pendingDelete.isDraft)
     setPendingDelete(null)
   }
   const handleMoveBatch = async (batchId, storylineId) => {
