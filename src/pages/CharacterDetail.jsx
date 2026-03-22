@@ -20,7 +20,10 @@ import {
   generateCharacterIdentityPrompt,
   generateAppearanceDescription,
   generateCharacterImage,
+  generateImage,
+  LimitError,
 } from '../lib/anthropic';
+import { compileEditPrompt } from '../lib/promptCompiler';
 import DerePresetSelector from '../components/character/DerePresetSelector';
 import PillTagInput       from '../components/character/PillTagInput';
 import {
@@ -1026,6 +1029,7 @@ function CharacterDetailInner() {
               characterId={characterId}
               spriteImages={characterImages}
               queryClient={queryClient}
+              character={savedChar}
             />
           )}
         </div>
@@ -1648,12 +1652,13 @@ function IdentityLockSection({ identityLock, sectionExpanded, onToggle }) {
 // ─── §7: SpriteImagesSection ─────────────────────────────────────────────────
 // Responsive image grid of generated sprite images. Shown at bottom of detail
 // page only when sprite_images is non-empty. Each thumbnail has download +
-// delete buttons, and clicking the image opens an enlarged view.
-function SpriteImagesSection({ characterId, spriteImages, queryClient }) {
-  const [enlargedUrl, setEnlargedUrl]       = useState(null);
-  const [deleteTargetUrl, setDeleteTargetUrl] = useState(null);
-  const [isDeleting, setIsDeleting]         = useState(false);
-  const [deleteError, setDeleteError]       = useState(null);
+// delete buttons, and clicking the image opens an enhanced modal with prompt,
+// seed editing, and edit-to-regenerate functionality.
+function SpriteImagesSection({ characterId, spriteImages, queryClient, character }) {
+  const [enlargedImg, setEnlargedImg]           = useState(null);
+  const [deleteTargetUrl, setDeleteTargetUrl]   = useState(null);
+  const [isDeleting, setIsDeleting]             = useState(false);
+  const [deleteError, setDeleteError]           = useState(null);
 
   const handleDownload = async (url) => {
     try {
@@ -1678,7 +1683,7 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient }) {
       await CharacterImage.deleteByUrl(characterId, deleteTargetUrl);
       queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
       setDeleteTargetUrl(null);
-      if (enlargedUrl === deleteTargetUrl) setEnlargedUrl(null);
+      if (enlargedImg?.url === deleteTargetUrl) setEnlargedImg(null);
       toast.success('Image deleted.');
     } catch (err) {
       console.error('Delete sprite image failed:', err);
@@ -1712,51 +1717,32 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient }) {
                 img={img}
                 onDownload={() => handleDownload(img.url)}
                 onDelete={() => setDeleteTargetUrl(img.url)}
-                onEnlarge={() => setEnlargedUrl(img.url)}
+                onEnlarge={() => setEnlargedImg(img)}
               />
             ))}
           </div>
         </div>
       </div>
 
-      {/* Enlarged image modal */}
-      {enlargedUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setEnlargedUrl(null)}
-        >
-          <div
-            className="relative max-w-2xl w-full"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Download — top left */}
-            <button
-              onClick={() => handleDownload(enlargedUrl)}
-              className="absolute top-3 left-3 z-10 btn btn-sm btn-ghost bg-black/50 hover:bg-black/70 text-white gap-1"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-            {/* Delete — top right */}
-            <button
-              onClick={() => { setDeleteTargetUrl(enlargedUrl); setEnlargedUrl(null); }}
-              className="absolute top-3 right-3 z-10 btn btn-sm btn-error btn-soft gap-1"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            <img
-              src={enlargedUrl}
-              alt="Sprite"
-              className="w-full rounded-2xl"
-              style={{ objectFit: 'contain', maxHeight: '80vh' }}
-            />
-          </div>
-        </div>
+      {/* Enhanced image modal */}
+      {enlargedImg && (
+        <SpriteImageModal
+          img={enlargedImg}
+          character={character}
+          onClose={() => setEnlargedImg(null)}
+          onDelete={() => { setDeleteTargetUrl(enlargedImg.url); }}
+          onDownload={() => handleDownload(enlargedImg.url)}
+          onNewImageGenerated={(newImg) => {
+            setEnlargedImg(newImg);
+            queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
+          }}
+        />
       )}
 
       {/* Delete confirmation modal */}
       {deleteTargetUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
           onClick={() => { if (!isDeleting) setDeleteTargetUrl(null); }}
         >
           <div
@@ -1794,6 +1780,333 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient }) {
         </div>
       )}
     </>
+  );
+}
+
+// ─── SpriteImageModal ─────────────────────────────────────────────────────────
+// Enhanced modal for viewing and editing sprite images with:
+// - Prominent image display
+// - Collapsible prompt view (collapsed by default)
+// - Seed display and editing (locked by default)
+// - Edit-to-regenerate functionality
+// - Updates modal image when new images are generated
+function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNewImageGenerated }) {
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const [editInstructions, setEditInstructions] = useState('');
+  const [seed, setSeed] = useState(img?.seed ?? '');
+  const [seedLocked, setSeedLocked] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState(null);
+  const [viewingImg, setViewingImg] = useState(img);
+  const abortRef = useRef(null);
+
+  useEffect(() => {
+    if (img) {
+      setViewingImg(img);
+      setSeed(img?.seed ?? '');
+      setSeedLocked(true);
+      setEditInstructions('');
+      setError(null);
+    }
+  }, [img]);
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
+
+  const handleRegenerate = useCallback(async () => {
+    if (generating || !editInstructions.trim()) return;
+
+    setGenerating(true);
+    setError(null);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const identityLock = character?.character_identity_lock || null;
+      const consistencyPrompt = character?.character_consistency_prompt || '';
+      const referenceImageUrl = character?.generated_image_url || character?.reference_image_url || null;
+
+      const finalPrompt = compileEditPrompt({
+        identityLock,
+        consistencyPrompt,
+        originalPoseId: viewingImg?.pose_id || viewingImg?.params_snapshot?.poseId || null,
+        originalEmotionEntry: viewingImg?.emotion_entry || viewingImg?.params_snapshot?.emotionEntry || null,
+        editInstructions: editInstructions.trim(),
+        allowClothing: viewingImg?.params_snapshot?.allowClothing ?? false,
+        allowProps: viewingImg?.params_snapshot?.allowProps ?? false,
+      });
+
+      const imageUrl = await generateImage({
+        prompt: finalPrompt,
+        referenceImageUrls: [referenceImageUrl].filter(Boolean),
+        aspectRatio: viewingImg?.params_snapshot?.aspectRatio || '3:4',
+        ...(seedLocked && seed ? { seed: parseInt(seed, 10) } : {}),
+      }, controller.signal);
+
+      const { data: { user } } = await import('../lib/supabase').then(m => m.supabase.auth.getUser());
+      const newEntry = await CharacterImage.add(character?.id, user?.id, {
+        url: imageUrl,
+        label: `Edit of ${viewingImg?.label || 'Sprite'}`,
+        seed: seedLocked && seed ? parseInt(seed, 10) : null,
+        poseId: viewingImg?.pose_id || viewingImg?.params_snapshot?.poseId || null,
+        emotionEntry: viewingImg?.emotion_entry || viewingImg?.params_snapshot?.emotionEntry || null,
+        paramsSnapshot: viewingImg?.params_snapshot || null,
+        generationType: 'sprite-edit',
+      });
+
+      setViewingImg(newEntry);
+      onNewImageGenerated(newEntry);
+      toast.success('Image regenerated!');
+    } catch (err) {
+      if (err.name === 'AbortError' || err.message === 'Request cancelled') return;
+      if (err instanceof LimitError) {
+        setError(err.message);
+      } else {
+        setError(err.message || 'Regeneration failed. Please try again.');
+      }
+    } finally {
+      setGenerating(false);
+    }
+  }, [generating, editInstructions, viewingImg, character, seedLocked, seed, onNewImageGenerated]);
+
+  const displayPrompt = viewingImg?.params_snapshot?.prompt || 
+                        viewingImg?.params_snapshot?.consistencyPrompt || 
+                        viewingImg?.params_snapshot?.editInstructions ||
+                        'Prompt not available';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative w-full sm:max-w-2xl sm:rounded-2xl overflow-hidden flex flex-col"
+        style={{
+          background: 'var(--fallback-b1, oklch(var(--b1)))',
+          border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+          maxHeight: '96vh',
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+          style={{ borderBottom: '1px solid var(--fallback-b3, oklch(var(--b3)))' }}
+        >
+          <div className="flex items-center gap-2">
+            <ImageIcon className="w-4 h-4 text-primary" />
+            <p className="text-sm font-semibold text-base-content">
+              {viewingImg?.label || 'Sprite'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onDownload}
+              className="btn btn-ghost btn-sm btn-square"
+              style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+              aria-label="Download image"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="btn btn-ghost btn-sm btn-square"
+              style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Image */}
+          <div
+            className="relative w-full bg-black flex items-center justify-center"
+            style={{ minHeight: '200px', maxHeight: '50vh' }}
+          >
+            <img
+              src={viewingImg?.url}
+              alt={viewingImg?.label}
+              className="w-full h-full object-contain"
+              style={{ maxHeight: '50vh' }}
+            />
+            {generating && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <span className="loading loading-spinner loading-lg text-primary" />
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="p-4 space-y-4">
+            {/* Seed */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}
+                >
+                  Seed
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSeedLocked(s => !s)}
+                  className="flex items-center gap-1.5 text-xs transition-colors"
+                  style={{
+                    color: seedLocked ? 'var(--fallback-p, oklch(var(--p)))' : 'var(--fallback-bc, oklch(var(--bc))/0.5)',
+                  }}
+                >
+                  {seedLocked
+                    ? <><Lock className="w-3 h-3" /> Locked</>
+                    : <><Unlock className="w-3 h-3" /> Unlocked</>
+                  }
+                </button>
+              </div>
+              <input
+                type="number"
+                value={seed}
+                onChange={e => setSeed(e.target.value)}
+                placeholder="Auto-generated"
+                disabled={seedLocked && !seed}
+                className="w-full px-3 py-2 text-sm rounded-lg"
+                style={{
+                  background: 'var(--fallback-b2, oklch(var(--b2)))',
+                  border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+                  color: 'var(--fallback-bc, oklch(var(--bc)))',
+                }}
+              />
+            </div>
+
+            {/* Collapsible Prompt */}
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => setPromptExpanded(e => !e)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <label
+                  className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}
+                >
+                  Prompt
+                </label>
+                {promptExpanded ? (
+                  <ChevronUp className="w-4 h-4" style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }} />
+                ) : (
+                  <ChevronDown className="w-4 h-4" style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }} />
+                )}
+              </button>
+              {promptExpanded && (
+                <div
+                  className="p-3 rounded-lg text-sm whitespace-pre-wrap"
+                  style={{
+                    background: 'var(--fallback-b2, oklch(var(--b2)))',
+                    border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+                    color: 'var(--fallback-bc, oklch(var(--bc)))',
+                  }}
+                >
+                  {displayPrompt}
+                </div>
+              )}
+            </div>
+
+            {/* Edit Instructions */}
+            <div className="space-y-1.5">
+              <label
+                className="text-xs font-semibold uppercase tracking-widest"
+                style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}
+              >
+                Edit Instructions
+              </label>
+              <textarea
+                value={editInstructions}
+                onChange={e => setEditInstructions(e.target.value)}
+                placeholder="Describe what to change (e.g. 'face the camera', 'change hair color to blonde', 'have them kneeling')"
+                rows={3}
+                className="w-full px-3 py-2.5 text-sm rounded-xl resize-none"
+                style={{
+                  background: 'var(--fallback-b2, oklch(var(--b2)))',
+                  border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+                  color: 'var(--fallback-bc, oklch(var(--bc)))',
+                }}
+                onFocus={e => { e.target.style.borderColor = 'var(--fallback-p, oklch(var(--p)))'; }}
+                onBlur={e => { e.target.style.borderColor = 'var(--fallback-b3, oklch(var(--b3)))'; }}
+              />
+              <p className="text-xs" style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}>
+                Character identity remains locked. Focus edits on pose, expression, or allowed changes.
+              </p>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div
+                className="flex items-start gap-2 p-3 rounded-xl text-sm"
+                style={{ background: '#ef444415', border: '1px solid #ef444440', color: '#ef4444' }}
+              >
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                {error}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onDelete}
+                className="btn btn-ghost btn-sm gap-1.5"
+                style={{ color: '#ef4444' }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </button>
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+              >
+                Done
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={generating || !editInstructions.trim()}
+                className="btn btn-sm gap-2"
+                style={{
+                  background: (!generating && editInstructions.trim()) 
+                    ? 'linear-gradient(135deg, var(--fallback-p, oklch(var(--p))), var(--fallback-p2, oklch(var(--p2))))' 
+                    : undefined,
+                  border: 'none',
+                  color: (!generating && editInstructions.trim()) ? 'white' : undefined,
+                }}
+              >
+                {generating
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Regenerating…</>
+                  : <><Sparkles className="w-3.5 h-3.5" /> Regenerate</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

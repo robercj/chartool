@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 const SESSION_TIMEOUT_MS = null;
 const AUTO_RETRY_MAX = 1;
 const AUTO_RETRY_DELAY_MS = 2000;
+const MAX_CONCURRENT_JOBS = 10;
 
 function generateId() {
   return crypto.randomUUID();
@@ -17,6 +18,30 @@ const useGenerationQueueStore = create((set, get) => ({
   activeSessionId: null,
   _notifiedCharacters: new Set(),
   _initialized: false,
+  _activeJobCount: 0,
+
+  _getQueuedJobs: () => {
+    const state = get();
+    return state.sessions.flatMap(s => s.jobs).filter(j => j.status === 'queued');
+  },
+
+  _getActiveJobCount: () => {
+    const state = get();
+    return state.sessions.flatMap(s => s.jobs).filter(j => j.status === 'generating').length;
+  },
+
+  _fireNextJob: async (userId) => {
+    const state = get();
+    const activeCount = state._activeJobCount;
+    const queuedJobs = state._getQueuedJobs();
+
+    if (activeCount >= MAX_CONCURRENT_JOBS || queuedJobs.length === 0) {
+      return;
+    }
+
+    const nextJob = queuedJobs[0];
+    get()._fireJob(nextJob, userId);
+  },
 
   initialize: async () => {
     if (get()._initialized) return;
@@ -46,6 +71,7 @@ const useGenerationQueueStore = create((set, get) => ({
     }
 
     const sessionsMap = {};
+    let activeCount = 0;
     activeJobs.forEach(job => {
       if (!sessionsMap[job.session_id]) {
         sessionsMap[job.session_id] = {
@@ -75,6 +101,7 @@ const useGenerationQueueStore = create((set, get) => ({
         generationParams: job.generation_params || {},
         label: null,
       });
+      if (job.status === 'generating') activeCount++;
     });
 
     const sessions = Object.values(sessionsMap);
@@ -84,15 +111,16 @@ const useGenerationQueueStore = create((set, get) => ({
       activeSessionId: sessions[0]?.sessionId || null,
       _initialized: true,
       _notifiedCharacters: new Set(),
+      _activeJobCount: activeCount,
     });
 
-    sessions.forEach(session => {
-      session.jobs.forEach(job => {
+    for (const session of sessions) {
+      for (const job of session.jobs) {
         if (job.status === 'queued') {
           get()._resumeJob(job, user.id);
         }
-      });
-    });
+      }
+    }
   },
 
   dispatchBatch: async ({ contextType, formSnapshot, returnRoute, jobs }) => {
@@ -126,7 +154,7 @@ const useGenerationQueueStore = create((set, get) => ({
 
     set(state => ({
       sessions: [...state.sessions, session],
-      activeSessionId: sessionId,
+      activeSessionId: state.activeSessionId || sessionId,
     }));
 
     const dbJobs = session.jobs.map(j => ({
@@ -147,11 +175,23 @@ const useGenerationQueueStore = create((set, get) => ({
       toast.error('Failed to save job to database');
     }
 
-    session.jobs.forEach(job => {
-      get()._fireJob(job, user.id);
-    });
+    get()._processQueue(user.id);
 
     return sessionId;
+  },
+
+  _processQueue: async (userId) => {
+    const state = get();
+    const slotsAvailable = MAX_CONCURRENT_JOBS - state._activeJobCount;
+    
+    if (slotsAvailable <= 0) return;
+
+    const queuedJobs = state._getQueuedJobs();
+    const jobsToFire = queuedJobs.slice(0, slotsAvailable);
+    
+    for (const job of jobsToFire) {
+      get()._fireJob(job, userId);
+    }
   },
 
   _fireJob: (job, userId, retryCount = 0) => {
@@ -165,6 +205,7 @@ const useGenerationQueueStore = create((set, get) => ({
           ),
         };
       }),
+      _activeJobCount: state._activeJobCount + 1,
     }));
 
     supabase
@@ -200,6 +241,7 @@ const useGenerationQueueStore = create((set, get) => ({
               ),
             };
           }),
+          _activeJobCount: Math.max(0, state._activeJobCount - 1),
         }));
 
         const { data: existing } = await supabase
@@ -232,6 +274,7 @@ const useGenerationQueueStore = create((set, get) => ({
         });
 
         get()._checkCharacterCompletion(job);
+        get()._processQueue(userId);
       })
       .catch(async err => {
         const message = err?.message || 'Generation failed';
@@ -265,6 +308,7 @@ const useGenerationQueueStore = create((set, get) => ({
               ),
             };
           }),
+          _activeJobCount: Math.max(0, state._activeJobCount - 1),
         }));
 
         toast.error(`Generation failed for ${job.characterName}`, {
@@ -273,10 +317,15 @@ const useGenerationQueueStore = create((set, get) => ({
         });
 
         get()._checkCharacterCompletion(job);
+        get()._processQueue(userId);
       });
   },
 
   _resumeJob: (job, userId) => {
+    set(state => ({
+      _activeJobCount: state._activeJobCount + 1,
+    }));
+
     const { _signal, ...restParams } = job.generationParams || {};
     const signal = _signal || null;
 
@@ -304,6 +353,7 @@ const useGenerationQueueStore = create((set, get) => ({
               ),
             };
           }),
+          _activeJobCount: Math.max(0, state._activeJobCount - 1),
         }));
 
         const { data: existing } = await supabase
@@ -336,12 +386,10 @@ const useGenerationQueueStore = create((set, get) => ({
         });
 
         get()._checkCharacterCompletion(job);
+        get()._processQueue(userId);
       })
       .catch(async err => {
         const message = err?.message || 'Generation failed';
-
-        // No auto-retry for resumed jobs to avoid infinite loops
-        // Mark as failed directly
 
         await supabase
           .from('generation_jobs')
@@ -365,6 +413,7 @@ const useGenerationQueueStore = create((set, get) => ({
               ),
             };
           }),
+          _activeJobCount: Math.max(0, state._activeJobCount - 1),
         }));
 
         toast.error(`Generation failed for ${job.characterName}`, {
@@ -373,6 +422,7 @@ const useGenerationQueueStore = create((set, get) => ({
         });
 
         get()._checkCharacterCompletion(job);
+        get()._processQueue(userId);
       });
   },
 
