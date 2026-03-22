@@ -356,7 +356,11 @@ export default function GenerateCharacterPage() {
       navigate(`/characters/${created.id}`);
     } catch (error) {
       console.error('Finalization failed:', error);
-      toast.error('Failed to finalize character. Please try again.');
+      if (error?.code === '23505' || error?.message?.includes('duplicate key') || error?.message?.includes('idx_characters_user_id_character_name')) {
+        toast.error(`A character named "${formData.character_name}" already exists. Please choose a different name.`);
+      } else {
+        toast.error('Failed to finalize character. Please try again.');
+      }
     } finally {
       setIsFinalizing(false);
     }

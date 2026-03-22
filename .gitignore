@@ -11,6 +11,9 @@ opencode.json
 
 # Logs
 logs
+
+# Technical Documentation (may contain sensitive architecture info)
+TECHNICAL_DOCUMENTATION.md
 *.log
 npm-debug.log*
 yarn-debug.log*
