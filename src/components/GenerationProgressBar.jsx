@@ -15,7 +15,7 @@ export default function GenerationProgressBar() {
   const failed = allJobs.filter(j => j.status === 'failed').length;
   const total = allJobs.length;
 
-  if (total === 0) return null;
+  if (total === 0 || pending === 0) return null;
 
   const percent = total > 0 ? Math.round(((complete + failed) / total) * 100) : 0;
 
