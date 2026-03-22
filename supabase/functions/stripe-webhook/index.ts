@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
 
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('CharacterForge')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
   // ── Idempotency check ────────────────────────────────────────────────────
