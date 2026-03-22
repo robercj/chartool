@@ -7,6 +7,7 @@ import {
   BookOpen, ChevronRight, BookMarked, X as XIcon,
   Sparkles, FileText, Copy, Check,
   MoreVertical, FolderMinus, CheckSquare,
+  AlertTriangle,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -404,7 +405,7 @@ export default function Gallery() {
     { key: 'select',  label: 'Select',           icon: CheckSquare  },
     { key: 'view',    label: 'View Character',   icon: ChevronRight },
     ...(char.character_prompt  ? [{ key: 'prompt', label: 'View Prompt', icon: FileText }] : []),
-    ...(char.isDraft            ? [{ key: 'delete', label: 'Delete',      icon: Trash2, danger: true }] : []),
+    { key: 'delete', label: 'Delete', icon: Trash2, danger: true },
   ]
   // Filtered stories for picker search
   const filteredStoriesForPicker = storylines.filter(s =>
@@ -624,6 +625,7 @@ export default function Gallery() {
           theme={theme}
           name={pendingDelete.name}
           type={pendingDelete.type}
+          isDraft={pendingDelete.isDraft}
           onClose={() => setPendingDelete(null)}
           onConfirm={handleConfirmDelete}
         />
@@ -1190,14 +1192,16 @@ function AssignStorylineModal({ theme, storylines, currentBatchId, onClose, onAs
   )
 }
 
-function ConfirmDeleteModal({ theme, name, type, onClose, onConfirm }) {
-  const label = type === 'storyline' ? 'storyline' : type === 'character' ? 'character' : 'character'
-  const consequence =
-    type === 'storyline'
-      ? 'The storyline folder will be removed. Characters inside will not be deleted.'
-      : type === 'character'
+function ConfirmDeleteModal({ theme, name, type, isDraft, onClose, onConfirm }) {
+  const label = type === 'storyline' ? 'storyline' : 'character'
+  const isCharacter = type === 'character'
+  const consequence = isCharacter
+    ? isDraft
       ? 'The character draft and all associated data will be permanently removed.'
-      : 'All generated images for this character will be permanently lost.'
+      : 'All images, prompt history, and generation records for this character will be permanently deleted. This action cannot be undone.'
+    : type === 'storyline'
+    ? 'The storyline folder will be removed. Characters inside will not be deleted.'
+    : 'All generated images for this character will be permanently lost.'
 
   return (
     <GalleryModal theme={theme} onClose={onClose} title="Confirm Delete">
@@ -1207,7 +1211,15 @@ function ConfirmDeleteModal({ theme, name, type, onClose, onConfirm }) {
             Are you sure you want to delete the {label}{' '}
             <span className="font-semibold text-primary">&ldquo;{name}&rdquo;</span>?
           </p>
-          <p className="text-xs text-base-content/50">{consequence}</p>
+          {isCharacter && !isDraft && (
+            <div className="flex items-start gap-2 p-3 rounded-lg mt-2" style={{ background: '#ef444415', border: '1px solid #ef444440' }}>
+              <AlertTriangle className="w-4 h-4 text-error flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-error">
+                This action is irreversible. All associated data will be permanently deleted.
+              </p>
+            </div>
+          )}
+          <p className="text-xs text-base-content/50 mt-2">{consequence}</p>
         </div>
         <div className="flex flex-col-reverse md:flex-row gap-3">
           <button onClick={onClose} className="btn btn-ghost flex-1" style={{ minHeight: '48px' }}>Cancel</button>
