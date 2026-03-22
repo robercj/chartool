@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import useGenerationQueueStore from '../lib/stores/generationQueueStore';
 import { Images } from 'lucide-react';
@@ -6,39 +6,27 @@ import { Images } from 'lucide-react';
 export default function GenerationProgressBar() {
   const { theme } = useTheme();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const sessions = useGenerationQueueStore(s => s.sessions);
-  const activeSessionId = useGenerationQueueStore(s => s.activeSessionId);
 
-  const generating = sessions.some(s => s.jobs.some(j => j.status === 'queued' || j.status === 'generating'));
-  const pending = sessions.flatMap(s => s.jobs).filter(j => j.status === 'queued' || j.status === 'generating').length;
-  const complete = sessions.flatMap(s => s.jobs).filter(j => j.status === 'complete').length;
-  const total = sessions.flatMap(s => s.jobs).length;
-  const session = sessions.find(s => s.sessionId === activeSessionId) || null;
+  const allJobs = sessions.flatMap(s => s.jobs);
+  const pending = allJobs.filter(j => j.status === 'queued' || j.status === 'generating').length;
+  const complete = allJobs.filter(j => j.status === 'complete').length;
+  const failed = allJobs.filter(j => j.status === 'failed').length;
+  const total = allJobs.length;
 
-  const progress = session
-    ? (() => {
-        const done = session.jobs.filter(j => j.status === 'complete' || j.status === 'failed').length;
-        const tot = session.jobs.length;
-        return { complete: done, total: tot, percent: tot > 0 ? Math.round((done / tot) * 100) : 0 };
-      })()
-    : { complete: 0, total: 0, percent: 0 };
+  if (total === 0) return null;
 
-  if (!generating && complete === 0) return null;
+  const percent = total > 0 ? Math.round(((complete + failed) / total) * 100) : 0;
 
-  const isOnSessionPage = session && location.pathname === session.returnRoute;
-
-  const label = complete === total && total > 0
-    ? 'All images ready'
-    : pending === 0 && complete > 0
-    ? `${complete} of ${total} images ready`
-    : `${complete} of ${total} images complete`;
+  const label = sessions.length === 1
+    ? (pending === 0
+      ? `${complete}/${total} images ready${failed > 0 ? ` (${failed} failed)` : ''}`
+      : `${complete}/${total} images complete`)
+    : `${sessions.length} sessions • ${complete}/${total} ready${failed > 0 ? ` (${failed} failed)` : ''}`;
 
   const handleClick = () => {
-    if (!isOnSessionPage && session?.returnRoute) {
-      navigate(session.returnRoute);
-    }
+    navigate('/queue');
   };
 
   return (
@@ -55,16 +43,15 @@ export default function GenerationProgressBar() {
       <div className="max-w-7xl mx-auto flex items-center gap-3">
         <button
           onClick={handleClick}
-          disabled={isOnSessionPage}
           className="flex items-center gap-2 text-xs font-medium rounded-full px-3 py-1 transition-all"
           style={{
-            background: isOnSessionPage ? theme.fieldBg : theme.primaryGlow,
-            color: isOnSessionPage ? theme.textMuted : theme.primary,
-            cursor: isOnSessionPage ? 'default' : 'pointer',
-            border: `1px solid ${isOnSessionPage ? theme.fieldBorder : theme.primary}20`,
+            background: theme.primaryGlow,
+            color: theme.primary,
+            cursor: 'pointer',
+            border: `1px solid ${theme.primary}20`,
             minHeight: '28px',
           }}
-          title={isOnSessionPage ? 'Already on this page' : `Click to view: ${session?.returnRoute}`}
+          title="Click to view queue"
         >
           <Images className="w-3.5 h-3.5 flex-shrink-0" />
           <span className="whitespace-nowrap">{label}</span>
@@ -74,8 +61,10 @@ export default function GenerationProgressBar() {
           <div
             className="h-full rounded-full transition-all duration-500 ease-out"
             style={{
-              width: `${progress.percent}%`,
-              background: complete === total && total > 0 ? theme.success || theme.primary : theme.primary,
+              width: `${percent}%`,
+              background: pending === 0 && total > 0
+                ? (failed > 0 ? theme.error || '#ef4444' : theme.success || theme.primary)
+                : theme.primary,
             }}
           />
         </div>

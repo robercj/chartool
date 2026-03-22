@@ -19,11 +19,12 @@ import Settings from './pages/Settings'
 import StorylineForm from './pages/StorylineForm'
 import StorylineResult from './pages/StorylineResult'
 import AuthCallback from './pages/AuthCallback'
+import QueuePage from './pages/Queue'
 import { GenerationContextProvider } from './components/GenerationContextProvider'
 import './index.css'
 // seedSettings.js no longer needed — API keys are managed by Supabase Edge Function secrets
 
-const queryClient = new QueryClient()
+export const queryClient = new QueryClient()
 
 function NotFound() {
   return (
@@ -67,6 +68,7 @@ createRoot(document.getElementById('root')).render(
                   <Route path="/storyline/new"         element={<Protected><StorylineForm /></Protected>} />
                   <Route path="/storyline/result/:id"  element={<Protected><StorylineResult /></Protected>} />
                   <Route path="/batch"                 element={<Protected><BatchDetail /></Protected>} />
+                  <Route path="/queue"                element={<Protected><QueuePage /></Protected>} />
                   <Route path="/settings"              element={<Protected><Settings /></Protected>} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>

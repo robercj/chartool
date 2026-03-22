@@ -539,6 +539,9 @@ export default function GenerateSprites() {
       })
 
       return {
+        contextId: character.id,
+        characterName: charName,
+        thumbnailUrl: character.generated_image_url || character.reference_image_url || null,
         label: `Sprite ${i + 1}`,
         generationParams: {
           prompt: finalPrompt,
@@ -563,7 +566,6 @@ export default function GenerateSprites() {
       const dispatchBatch = useGenerationQueueStore.getState().dispatchBatch
       await dispatchBatch({
         contextType: 'sprite',
-        contextId: character.id,
         formSnapshot,
         returnRoute: '/sprites/generate',
         jobs,
@@ -588,47 +590,16 @@ export default function GenerateSprites() {
   useEffect(() => {
     if (!activeSessionForMonitor) return
 
-    // Save completed images to character
-    const activeCharacter = createdCharacter || selectedCharacter
-    if (activeCharacter) {
-      const completed = activeSessionForMonitor.jobs.filter(j => j.status === 'complete' && j.imageUrl && !j._saved)
-      completed.forEach(async (job) => {
-        try {
-          await CharacterImage.add(activeCharacter.id, userId, {
-            url: job.imageUrl,
-            label: job.label || 'Sprite',
-            seed: job.generationParams?.seed ?? null,
-            poseId: job.generationParams?.poseId ?? null,
-            emotionEntry: job.generationParams?.emotionEntry ?? null,
-            paramsSnapshot: job.generationParams?.paramsSnapshot ?? null,
-            generationType: 'sprite',
-            jobId: job.jobId,
-          })
-          useGenerationQueueStore.getState().updateJob(job.jobId, { _saved: true })
-          queryClient.invalidateQueries({ queryKey: ['character-images', activeCharacter.id] })
-        } catch (err) {
-          console.error('Failed to persist sprite to character:', err)
-        }
-      })
-    }
-
-    // Handle session completion
+    // Clear generating flag when all jobs are complete or failed
     if (activeSessionForMonitor.jobs.length > 0 && activeSessionForMonitor.jobs.every(j => j.status === 'complete' || j.status === 'failed')) {
       const failed = activeSessionForMonitor.jobs.filter(j => j.status === 'failed')
-      const success = activeSessionForMonitor.jobs.filter(j => j.status === 'complete')
-
-      if (success.length > 0) {
-        toast.success(`Generated ${success.length} sprite${success.length !== 1 ? 's' : ''} successfully!`)
-      }
       if (failed.length > 0) {
         const errors = failed.map(j => j.errorMessage || 'Generation failed').join('\n')
         setGenerationError(errors)
-        toast.error(`${failed.length} sprite${failed.length !== 1 ? 's' : ''} failed to generate.`)
       }
-
       setGenerating(false)
     }
-  }, [activeSessionForMonitor, createdCharacter, selectedCharacter, userId, queryClient])
+  }, [activeSessionForMonitor])
 
   const activeCharacter = createdCharacter || selectedCharacter
 
