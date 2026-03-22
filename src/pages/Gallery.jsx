@@ -363,9 +363,11 @@ export default function Gallery() {
       }
       queryClient.invalidateQueries({ queryKey: ['wizard-drafts', userId] })
       queryClient.invalidateQueries({ queryKey: ['wizard-characters', userId] })
+      queryClient.invalidateQueries({ queryKey: ['character-images', id] })
       toast.success('Character deleted')
-    } catch {
-      toast.error('Failed to delete character')
+    } catch (err) {
+      console.error('Delete character error:', err)
+      toast.error(`Failed to delete character: ${err.message || 'Unknown error'}`)
     }
   }
   const handleConfirmDelete = () => {

@@ -449,8 +449,7 @@ export const Character = {
     const { error: genError } = await supabase
       .from('generation_jobs')
       .delete()
-      .eq('context_id', id)
-      .eq('context_type', 'sprite');
+      .eq('context_id', id);
     if (genError) console.error('Failed to delete generation jobs:', genError);
 
     const { error } = await supabase
