@@ -10,6 +10,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { extractUserId } from '../_shared/auth.ts'
+import { checkLimit, incrementUsage } from '../_shared/limits.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -31,33 +33,9 @@ Deno.serve(async (req) => {
       return json({ error: 'CharacterForge secret not configured in Edge Function secrets.' }, 500)
     }
 
-    const authHeader = req.headers.get('Authorization')
-    const userJwt = authHeader?.replace('Bearer ', '')
-
-    if (!userJwt) {
-      return json({ error: 'Missing Authorization header' }, 401)
-    }
-
-    const jwtParts = userJwt.split('.')
-    if (jwtParts.length !== 3) {
-      return json({ error: 'Invalid JWT format' }, 401)
-    }
-
-    let jwtPayload: any
-    try {
-      const payloadBase64 = jwtParts[1].replace(/-/g, '+').replace(/_/g, '/')
-      const padding = '='.repeat((4 - payloadBase64.length % 4) % 4)
-      const payloadJson = atob(payloadBase64 + padding)
-      jwtPayload = JSON.parse(payloadJson)
-    } catch (e) {
-      return json({ error: 'Invalid JWT payload' }, 401)
-    }
-
-    const userId = jwtPayload.sub
-    if (!userId) {
-      return json({ error: 'JWT missing sub claim' }, 401)
-    }
-
+    const auth = extractUserId(req)
+    if (!auth.ok) return json({ error: auth.error }, auth.status)
+    const { userId } = auth
     console.log('Authenticated user:', userId)
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseSecretKey)
@@ -180,46 +158,3 @@ function json(data: unknown, status = 200) {
   })
 }
 
-function currentPeriod(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-}
-
-async function checkLimit(supabase: any, userId: string, type: string) {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tier_id, tier:tiers(monthly_image_limit, monthly_story_limit)')
-    .eq('id', userId)
-    .single()
-
-  if (!profile) return { allowed: false, reason: 'Profile not found' }
-
-  const limit = type === 'image'
-    ? profile.tier.monthly_image_limit
-    : profile.tier.monthly_story_limit
-  if (limit === null) return { allowed: true, reason: null }
-
-  const period = currentPeriod()
-  const { data: usageRow } = await supabase
-    .from('usage')
-    .select('count')
-    .eq('user_id', userId)
-    .eq('type', type)
-    .eq('period', period)
-    .single()
-
-  const current = usageRow?.count ?? 0
-  if (current >= limit) {
-    return { allowed: false, reason: `Monthly image limit (${limit}) reached. Resets on the 1st.` }
-  }
-  return { allowed: true, reason: null }
-}
-
-async function incrementUsage(supabase: any, userId: string, type: string) {
-  await supabase.rpc('increment_usage', {
-    p_user_id: userId,
-    p_type: type,
-    p_period: currentPeriod(),
-    p_amount: 1,
-  })
-}

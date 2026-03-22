@@ -77,8 +77,6 @@ SECTION C — AI REMINDERS
 // @throws {LimitError}  On HTTP 429 (usage limit reached)
 // @throws {Error}       On all other non-OK responses
 async function callEdgeFunction(functionName, body, signal = null) {
-  await supabase.auth.initialize();
-
   const invokeOptions = { body };
   if (signal) invokeOptions.signal = signal;
 
@@ -162,7 +160,8 @@ export async function callLLM({ prompt, imageUrls = [], responseSchema = null, g
   const content = [];
   for (const url of imageUrls) {
     const [meta, imageData] = url.split(',');
-    const mediaType = meta.match(/:(.*?);/)[1];
+    const match = meta.match(/:(.*?);/);
+    const mediaType = match?.[1] ?? 'image/jpeg';
     content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } });
   }
   content.push({ type: 'text', text: prompt });
@@ -241,45 +240,6 @@ export async function removeImageBackground(imageUrl, signal = null) {
   return outputUrl;
 }
 
-// ─── Character Prompt Synthesis: Claude ───────────────────────────────────────
-// Synthesizes a fal.ai image prompt from the full character JSON
-export async function synthesizeCharacterImagePrompt(characterData) {
-  const systemPrompt = `You are a character visual design specialist. Your task is to create a detailed, vivid image generation prompt for an AI image generator (fal.ai nanoBanana2/FLUX model).
-
-Based on the character description provided, create a single paragraph prompt that includes:
-1. Subject description (full body or portrait as appropriate)
-2. Pose or composition
-3. Background/setting
-4. Mood and lighting
-5. Art style reference if specified
-
-Requirements:
-- The prompt should be in English, descriptive and detailed
-- Include specific visual details: hair color/style, eye color, clothing, accessories, body type
-- Specify pose and expression
-- Include appropriate art style tags (anime, manga, etc.)
-  - Do NOT include NSFW or inappropriate content
-- Focus on creating a visually appealing character portrait
-- Keep the prompt under 500 words
-
-Output ONLY the prompt text, no explanations or additional content.`;
-
-  const userMessage = `Create an image generation prompt for this character:
-
-${JSON.stringify(characterData, null, 2)}`;
-
-  const data = await callEdgeFunction('anthropic-proxy', {
-    _generation_type: 'character_image_prompt',
-    model: 'claude-sonnet-4-5',
-    max_tokens: 2000,
-    temperature: 0.8,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
-  return data.content?.[0]?.text || '';
-}
-
 // ─── Character Manifest Generation: Claude ──────────────────────────────────
 // Generates a prose character manifest (AI roleplay system prompt).
 //
@@ -349,8 +309,8 @@ ${JSON.stringify(summary, null, 2)}`;
       manifest: parsed.manifest || responseText,
       imagePrompt: parsed.image_prompt || null,
     };
-  } catch {
-    // Claude returned plain text instead of JSON — treat the whole thing as the manifest
+  } catch (parseErr) {
+    console.warn('[generateCharacterManifest] JSON parse failed — imagePrompt will be null:', parseErr.message);
     return {
       manifest: responseText,
       imagePrompt: null,
@@ -460,7 +420,7 @@ async function compressBase64Image(dataUrl) {
   const byteLength = (dataUrl.length - 'data:image/xxx;base64,'.length) * 0.75;
   if (byteLength < 3_500_000) return dataUrl;
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
@@ -478,6 +438,7 @@ async function compressBase64Image(dataUrl) {
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
       resolve(canvas.toDataURL('image/jpeg', 0.85));
     };
+    img.onerror = () => reject(new Error('Failed to load image for compression'));
     img.src = dataUrl;
   });
 }
@@ -510,7 +471,8 @@ export async function analyzeReferenceImage(imageInput) {
 
   if (imageDataUrl.startsWith('data:')) {
     const [meta, imageData] = imageDataUrl.split(',');
-    const mediaType = meta.match(/:(.*?);/)[1];
+    const metaMatch = meta.match(/:(.*?);/);
+    const mediaType = metaMatch?.[1] ?? 'image/jpeg';
     content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } });
   } else {
     content.push({ type: 'image', source: { type: 'url', url: imageDataUrl } });

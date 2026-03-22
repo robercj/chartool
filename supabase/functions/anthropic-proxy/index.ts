@@ -15,6 +15,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { extractUserId } from '../_shared/auth.ts'
+import { checkLimit, incrementUsage } from '../_shared/limits.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -38,43 +40,13 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get user's JWT from Authorization header (Supabase verified it via --no-verify-jwt)
-    const authHeader = req.headers.get('Authorization')
-    const userJwt = authHeader?.replace('Bearer ', '')
-
-    if (!userJwt) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+    const auth = extractUserId(req)
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), {
+        status: auth.status, headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
-
-    // Decode JWT manually to get user ID (Supabase already verified the signature)
-    const jwtParts = userJwt.split('.')
-    if (jwtParts.length !== 3) {
-      return new Response(JSON.stringify({ error: 'Invalid JWT format' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    let jwtPayload: any
-    try {
-      const payloadBase64 = jwtParts[1].replace(/-/g, '+').replace(/_/g, '/')
-      const padding = '='.repeat((4 - payloadBase64.length % 4) % 4)
-      const payloadJson = atob(payloadBase64 + padding)
-      jwtPayload = JSON.parse(payloadJson)
-    } catch (e) {
-      return new Response(JSON.stringify({ error: 'Invalid JWT payload' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const userId = jwtPayload.sub
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'JWT missing sub claim' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
+    const { userId, authHeader } = auth
     console.log('Authenticated user:', userId)
 
     // Create admin client for database operations
@@ -92,8 +64,20 @@ Deno.serve(async (req) => {
     const generationType: string = body._generation_type || 'story'
     delete body._generation_type
 
+    // Map generation type to quota type
+    const CHARACTER_TYPES = new Set([
+      'character_manifest',
+      'character_identity_prompt',
+      'character_appearance_description',
+    ])
+    const quotaType =
+      generationType === 'image'          ? 'image' :
+      generationType === 'story'          ? 'story' :
+      CHARACTER_TYPES.has(generationType) ? 'character' :
+      'story' // fallback for unknown types
+
     // Check generation limit
-    const { allowed, reason } = await checkLimit(supabaseAdmin, userId, generationType)
+    const { allowed, reason } = await checkLimit(supabaseAdmin, userId, quotaType)
     if (!allowed) {
       return new Response(JSON.stringify({ error: reason }), {
         status: 429, headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -117,7 +101,7 @@ Deno.serve(async (req) => {
     const responseData = await anthropicRes.json()
 
     if (anthropicRes.ok) {
-      await incrementUsage(supabaseAdmin, userId, generationType)
+      await incrementUsage(supabaseAdmin, userId, quotaType)
     }
 
     return new Response(JSON.stringify(responseData), {
@@ -132,46 +116,3 @@ Deno.serve(async (req) => {
     })
   }
 })
-
-function currentPeriod(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-}
-
-async function checkLimit(supabase: any, userId: string, type: string) {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tier_id, tier:tiers(monthly_image_limit, monthly_story_limit)')
-    .eq('id', userId)
-    .single()
-
-  if (!profile) return { allowed: false, reason: 'Profile not found' }
-
-  const tier = profile.tier
-  const limit = type === 'image' ? tier.monthly_image_limit : tier.monthly_story_limit
-  if (limit === null) return { allowed: true, reason: null }
-
-  const period = currentPeriod()
-  const { data: usageRow } = await supabase
-    .from('usage')
-    .select('count')
-    .eq('user_id', userId)
-    .eq('type', type)
-    .eq('period', period)
-    .single()
-
-  const current = usageRow?.count ?? 0
-  if (current >= limit) {
-    return { allowed: false, reason: `Monthly ${type} limit (${limit}) reached. Resets on the 1st.` }
-  }
-  return { allowed: true, reason: null }
-}
-
-async function incrementUsage(supabase: any, userId: string, type: string) {
-  await supabase.rpc('increment_usage', {
-    p_user_id: userId,
-    p_type: type,
-    p_period: currentPeriod(),
-    p_amount: 1,
-  })
-}

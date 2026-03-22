@@ -10,7 +10,7 @@
 //
 // useLocalStorage: thin hook kept for client-side theme/genre preference only.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabase';
 
 // ─── useLocalStorage (theme/genre prefs only) ────────────────────────────────
@@ -24,7 +24,9 @@ export function useLocalStorage(key, defaultValue) {
     }
   });
 
+  const isFirstRender = useRef(true);
   useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
     try {
       localStorage.setItem(key, JSON.stringify(value));
     } catch (err) {
@@ -39,27 +41,19 @@ export function useLocalStorage(key, defaultValue) {
 // DB table: public.storylines
 // Extra relation: character_batches.storyline_id (instead of embedded batch_ids[])
 export const Storyline = {
-  /** List all storylines for user, newest first */
+  /** List all storylines for user, newest first, with batch_ids via a join */
   async list(userId) {
     const { data, error } = await supabase
       .from('storylines')
-      .select('*')
+      .select('*, character_batches(id)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    // Attach batch_ids array by querying character_batches
-    const ids = (data || []).map(s => s.id);
-    if (ids.length === 0) return data || [];
-    const { data: batches } = await supabase
-      .from('character_batches')
-      .select('id, storyline_id')
-      .in('storyline_id', ids);
-    const batchMap = {};
-    (batches || []).forEach(b => {
-      if (!batchMap[b.storyline_id]) batchMap[b.storyline_id] = [];
-      batchMap[b.storyline_id].push(b.id);
-    });
-    return (data || []).map(s => ({ ...s, batch_ids: batchMap[s.id] || [] }));
+    return (data || []).map(s => ({
+      ...s,
+      batch_ids: (s.character_batches || []).map(b => b.id),
+      character_batches: undefined,
+    }));
   },
 
   /** Get a single storyline by id */
@@ -322,15 +316,6 @@ export const PromptHistory = {
   },
 };
 
-// ─── Settings (localStorage only — not user data) ────────────────────────────
-// Legacy: no longer used. seedSettings.js was removed; API keys live in Supabase
-// Edge Function secrets only. This module is kept to avoid breaking any consumers
-// that might reference it, but can be safely deleted once confirmed unused.
-export const Settings = {
-  get: () => JSON.parse(localStorage.getItem('cf_settings') || '{}'),
-  set: (data) => localStorage.setItem('cf_settings', JSON.stringify(data)),
-};
-
 // ─── CharacterDraft ──────────────────────────────────────────────────────────
 // DB table: public.character_drafts
 export const CharacterDraft = {
@@ -369,6 +354,16 @@ export const CharacterDraft = {
       .from('character_drafts')
       .update({ ...data, last_modified_at: new Date().toISOString() })
       .eq('id', id);
+    if (error) throw error;
+  },
+
+  async upsert(id, userId, data) {
+    const { error } = await supabase
+      .from('character_drafts')
+      .upsert(
+        { id, user_id: userId, ...data, last_modified_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      );
     if (error) throw error;
   },
 
@@ -515,50 +510,23 @@ export const Character = {
     return (data || []).length > 0;
   },
 
-  /** Append a sprite image entry to the character's sprite_images JSONB array.
-   *  Performs a read-modify-write. The entry shape is:
-   *    { url, generated_at, seed, params_snapshot }
+  /** Atomically append a sprite image entry to the character's sprite_images JSONB array.
+   *  Uses a Postgres RPC to avoid read-modify-write race conditions when multiple
+   *  jobs complete simultaneously for the same character.
    *  @param {string} id     Character UUID
-   *  @param {object} entry  Sprite image entry object
+   *  @param {object} entry  Sprite image entry object { url, generated_at, seed, params_snapshot }
    */
   async addSpriteImage(id, entry) {
-    // Fetch current sprite_images array
-    const { data: char, error: fetchErr } = await supabase
-      .from('characters')
-      .select('sprite_images')
-      .eq('id', id)
-      .single();
-    if (fetchErr) throw fetchErr;
-
-    const existing = Array.isArray(char.sprite_images) ? char.sprite_images : [];
-    const updated = [...existing, entry];
-
-    const { error } = await supabase
-      .from('characters')
-      .update({ sprite_images: updated })
-      .eq('id', id);
+    const { error } = await supabase.rpc('append_sprite_image', { p_id: id, p_entry: entry });
     if (error) throw error;
   },
 
-  /** Remove a sprite image entry from the character's sprite_images array by URL.
+  /** Atomically remove a sprite image entry from the character's sprite_images array by URL.
    *  @param {string} id   Character UUID
    *  @param {string} url  URL of the image to remove
    */
   async deleteSpriteImage(id, url) {
-    const { data: char, error: fetchErr } = await supabase
-      .from('characters')
-      .select('sprite_images')
-      .eq('id', id)
-      .single();
-    if (fetchErr) throw fetchErr;
-
-    const existing = Array.isArray(char.sprite_images) ? char.sprite_images : [];
-    const updated = existing.filter(img => img.url !== url);
-
-    const { error } = await supabase
-      .from('characters')
-      .update({ sprite_images: updated })
-      .eq('id', id);
+    const { error } = await supabase.rpc('delete_sprite_image', { p_id: id, p_url: url });
     if (error) throw error;
   },
 };

@@ -42,6 +42,7 @@ export function useDraftPersistence(draftId, userId) {
   const [isDirty, setIsDirty] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const debounceTimerRef = useRef(null);
   const hasHydratedRef = useRef(false);
 
@@ -50,12 +51,16 @@ export function useDraftPersistence(draftId, userId) {
   }, [draftId]);
 
   useEffect(() => {
-    if (!draftId) return;
-    
+    if (!draftId) {
+      hasHydratedRef.current = true;
+      setIsInitialized(true);
+      return;
+    }
+
     const loadInitialState = async () => {
       const storageKey = getLocalStorageKey();
       const localData = localStorage.getItem(storageKey);
-      
+
       if (localData) {
         try {
           const parsed = JSON.parse(localData);
@@ -64,7 +69,7 @@ export function useDraftPersistence(draftId, userId) {
           console.error('Failed to parse local draft:', e);
         }
       }
-      
+
       if (userId) {
         try {
           const dbDraft = await CharacterDraft.get(draftId);
@@ -78,8 +83,9 @@ export function useDraftPersistence(draftId, userId) {
           console.error('Failed to load draft from DB:', e);
         }
       }
-      
+
       hasHydratedRef.current = true;
+      setIsInitialized(true);
     };
 
     loadInitialState();
@@ -97,19 +103,10 @@ export function useDraftPersistence(draftId, userId) {
     if (userId) {
       setIsSaving(true);
       try {
-        const existingDraft = await CharacterDraft.get(draftId);
-        if (existingDraft) {
-          await CharacterDraft.update(draftId, {
-            ...sanitizedState,
-            last_modified_at: new Date().toISOString(),
-          });
-        } else {
-          await CharacterDraft.create(userId, {
-            ...sanitizedState,
-            draft_saved_at: new Date().toISOString(),
-            last_modified_at: new Date().toISOString(),
-          });
-        }
+        await CharacterDraft.upsert(draftId, userId, {
+          ...sanitizedState,
+          draft_saved_at: new Date().toISOString(),
+        });
       } catch (e) {
         console.error('Failed to save draft to DB:', e);
       } finally {
@@ -194,7 +191,7 @@ export function useDraftPersistence(draftId, userId) {
     isDirty,
     lastSaved,
     isSaving,
-    isInitialized: hasHydratedRef.current,
+    isInitialized,
     updateState,
     saveNow,
     clearDraft,

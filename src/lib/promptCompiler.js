@@ -7,13 +7,12 @@
 //
 // Compilation Order (ABSOLUTE):
 //   1. Character Identity Lock      — MANDATORY FIRST. Verbatim. Unmodified.
-//   2. Forbidden Changes            — MUST NOT list extracted from identity lock
+//   2. Forbidden Changes            — MUST NOT list extracted from identity lock (props toggle affects this section)
 //   3. Pose & Emotion               — Selected or randomized pose/emotion for this sprite
 //   4. User Direction               — Only if allowPrompt toggle is ON
 //   5. Optional: Clothing Change    — Only if allowClothing toggle is ON
-//   6. Optional: Prop Additions     — Only if allowProps toggle is ON
-//   7. Edit Instructions            — Only present in the image edit modal flow
-//   8. Critical Constraints         — Final hard MUST NOT reinforcements
+//   6. Edit Instructions            — Only present in the image edit modal flow
+//   7. Critical Constraints         — Final hard MUST NOT reinforcements
 //
 // Identity Safety Rules:
 //   - Identity lock is ALWAYS inserted first, verbatim. No summarizing.

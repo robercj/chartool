@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { extractUserId } from '../_shared/auth.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -34,35 +35,9 @@ Deno.serve(async (req) => {
       return json({ error: 'CharacterForge secret not configured in Edge Function secrets.' }, 500)
     }
 
-    // Get user's JWT from Authorization header (Supabase verified it via --no-verify-jwt)
-    const authHeader = req.headers.get('Authorization')
-    const userJwt = authHeader?.replace('Bearer ', '')
-
-    if (!userJwt) {
-      return json({ error: 'Missing Authorization header' }, 401)
-    }
-
-    // Decode JWT manually to get user ID (Supabase already verified the signature)
-    const jwtParts = userJwt.split('.')
-    if (jwtParts.length !== 3) {
-      return json({ error: 'Invalid JWT format' }, 401)
-    }
-
-    let jwtPayload: any
-    try {
-      const payloadBase64 = jwtParts[1].replace(/-/g, '+').replace(/_/g, '/')
-      const padding = '='.repeat((4 - payloadBase64.length % 4) % 4)
-      const payloadJson = atob(payloadBase64 + padding)
-      jwtPayload = JSON.parse(payloadJson)
-    } catch (e) {
-      return json({ error: 'Invalid JWT payload' }, 401)
-    }
-
-    const userId = jwtPayload.sub
-    if (!userId) {
-      return json({ error: 'JWT missing sub claim' }, 401)
-    }
-
+    const auth = extractUserId(req)
+    if (!auth.ok) return json({ error: auth.error }, auth.status)
+    const { userId } = auth
     console.log('Authenticated user:', userId)
 
     // Create admin client for database operations

@@ -86,15 +86,6 @@ export default function Layout({ children }) {
     return () => document.removeEventListener('keydown', handler);
   }, [mobileMenuOpen]);
 
-  const handleGenerateClick = () => {
-    setMobileMenuOpen(false);
-    if (location.pathname === '/sprites/generate') {
-      navigate('/sprites/generate', { state: { reset: Date.now() } });
-    } else {
-      navigate('/sprites/generate');
-    }
-  };
-
   const handleSignOut = async () => {
     await signOut();
   };
@@ -107,10 +98,12 @@ export default function Layout({ children }) {
   const tierId     = tier?.id || 'free';
   const tierBadge  = TIER_BADGE[tierId] || 'badge-ghost';
 
-  const imageLimit = tier?.monthly_image_limit;
-  const storyLimit = tier?.monthly_story_limit;
-  const imageUsed  = usage?.image ?? 0;
-  const storyUsed  = usage?.story ?? 0;
+  const imageLimit     = tier?.monthly_image_limit;
+  const storyLimit     = tier?.monthly_story_limit;
+  const characterLimit = tier?.monthly_character_limit;
+  const imageUsed      = usage?.image ?? 0;
+  const storyUsed      = usage?.story ?? 0;
+  const characterUsed  = usage?.character ?? 0;
 
   return (
     <div
@@ -126,20 +119,20 @@ export default function Layout({ children }) {
 
       {/* Ambient orbs — purely decorative */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
-        {theme.orbs.map((color, i) => (
+        {theme.orbs.map((orb, i) => (
           <div
             key={i}
             style={{
               position:     'absolute',
-              width:        500 + i * 200,
-              height:       500 + i * 200,
+              width:        orb.size,
+              height:       orb.size,
               borderRadius: '50%',
-              background:   `radial-gradient(circle, ${color} 0%, transparent 70%)`,
-              opacity:      0.15 - i * 0.03,
-              top:    i === 0 ? '-10%' : i === 1 ? 'auto' : '30%',
-              bottom: i === 1 ? '-10%' : 'auto',
-              left:   i === 2 ? '60%'  : i === 0 ? '-5%'  : 'auto',
-              right:  i === 2 ? '-10%' : 'auto',
+              background:   `radial-gradient(circle, ${orb.color} 0%, transparent 70%)`,
+              opacity:      orb.opacity,
+              top:          orb.top    ?? 'auto',
+              bottom:       orb.bottom ?? 'auto',
+              left:         orb.left   ?? 'auto',
+              right:        orb.right  ?? 'auto',
             }}
           />
         ))}
@@ -196,7 +189,7 @@ export default function Layout({ children }) {
                 <li key={item.to}>
                   <Link
                     to={item.to}
-                    onClick={item.to === '/sprites/generate' ? handleGenerateClick : undefined}
+                    state={item.to === '/sprites/generate' && location.pathname === '/sprites/generate' ? { reset: Date.now() } : undefined}
                     className="rounded-xl flex items-center gap-2 text-sm font-medium transition-all"
                     style={{
                       minHeight:  '44px',
@@ -283,8 +276,9 @@ export default function Layout({ children }) {
 
                       {/* Usage bars */}
                       <div className="space-y-3 pb-3" style={{ borderBottom: `1px solid ${theme.fieldBorder}` }}>
-                        <UsageBar label="Images this month"     used={imageUsed} limit={imageLimit} theme={theme} />
-                        <UsageBar label="Storylines this month" used={storyUsed} limit={storyLimit} theme={theme} />
+                        <UsageBar label="Images this month"     used={imageUsed}     limit={imageLimit}     theme={theme} />
+                        <UsageBar label="Characters this month" used={characterUsed} limit={characterLimit} theme={theme} />
+                        <UsageBar label="Storylines this month" used={storyUsed}     limit={storyLimit}     theme={theme} />
                       </div>
 
                       {/* Actions */}
@@ -420,13 +414,14 @@ export default function Layout({ children }) {
           <ul className="menu w-full p-0 gap-1">
             {NAV_ITEMS.map((item, idx) => {
               const isActive = item.matchFn(location.pathname);
-                  const isGenerate = item.to === '/sprites/generate';
+              const isGenerate = item.to === '/sprites/generate';
               return (
                 <li key={item.to}>
                   <Link
                     ref={idx === 0 ? firstNavItem : undefined}
                     to={item.to}
-                    onClick={isGenerate ? handleGenerateClick : closeMobileMenu}
+                    state={isGenerate && location.pathname === '/sprites/generate' ? { reset: Date.now() } : undefined}
+                    onClick={closeMobileMenu}
                     tabIndex={mobileMenuOpen ? 0 : -1}
                     className="rounded-xl flex items-center gap-3 font-medium transition-all"
                     style={{

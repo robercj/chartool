@@ -214,7 +214,7 @@ function CharacterDetailInner() {
   const { characterId } = useParams();
   const navigate        = useNavigate();
   const queryClient     = useQueryClient();
-  const { user }        = useAuth();
+  const { user, checkLimit } = useAuth();
 
   // ── Load character ──────────────────────────────────────────────────────────
   const { data: savedChar, isLoading, error: loadError } = useQuery({
@@ -376,6 +376,9 @@ function CharacterDetailInner() {
   };
 
   const handleRegenerateAppearanceDesc = async () => {
+    const limitCheck = checkLimit('character');
+    if (!limitCheck.allowed) { toast.error(limitCheck.reason); return; }
+
     setIsRegeneratingAppearance(true);
     setAppearanceError(null);
     try {

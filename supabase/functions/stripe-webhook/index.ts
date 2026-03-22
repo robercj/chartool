@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
 
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    Deno.env.get('CharacterForge')!,
   )
 
   // ── Idempotency check ────────────────────────────────────────────────────
@@ -143,16 +143,14 @@ Deno.serve(async (req: Request) => {
       }
 
       case 'customer.subscription.deleted': {
-        // Downgrade to free on cancellation
-        await supabaseAdmin
-          .from('profiles')
-          .update({
-            tier_id: 'free',
-            stripe_subscription_id: null,
-            stripe_subscription_status: 'canceled',
-            subscription_period_end: null,
-          })
-          .eq('stripe_customer_id', obj.customer)
+        // Downgrade to free on cancellation — RPC handles tier resolution consistently
+        await supabaseAdmin.rpc('sync_tier_from_subscription', {
+          p_stripe_customer_id: obj.customer,
+          p_stripe_price_id: null,
+          p_subscription_id: obj.id,
+          p_subscription_status: 'canceled',
+          p_period_end: null,
+        })
         break
       }
 

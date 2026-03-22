@@ -58,7 +58,7 @@ export default function GenerateCharacterPage() {
   const { draftId }   = useParams();
   const [searchParams]  = useSearchParams();
   const storyIdParam    = searchParams.get('storyId');
-  const { user }        = useAuth();
+  const { user, checkLimit } = useAuth();
 
   const [formData,                     setFormData]                     = useState(INITIAL_FORM_STATE);
   const [imageHistory,                 setImageHistory]                 = useState([]);
@@ -152,6 +152,12 @@ export default function GenerateCharacterPage() {
       return;
     }
 
+    const limitCheck = checkLimit('character');
+    if (!limitCheck.allowed) {
+      toast.error(limitCheck.reason);
+      return;
+    }
+
     setIsGeneratingIdentityPrompt(true);
     setIdentityPromptError(null);
 
@@ -177,6 +183,12 @@ export default function GenerateCharacterPage() {
 
   // ── Appearance description generation ─────────────────────────────────────
   const handleGenerateAppearanceDescription = useCallback(async () => {
+    const limitCheck = checkLimit('character');
+    if (!limitCheck.allowed) {
+      toast.error(limitCheck.reason);
+      return;
+    }
+
     setIsGeneratingDescription(true);
     setAppearanceDescriptionError(null);
 
@@ -294,6 +306,15 @@ export default function GenerateCharacterPage() {
     ];
     const missing = required.filter(f => { const v = formData[f.key]; return !v || (Array.isArray(v) && v.length === 0); });
     if (missing.length > 0) { toast.error(`Please fill in: ${missing.map(f => f.label).join(', ')}`); return; }
+
+    // Only need a character quota slot if we don't already have a manifest from Step 1
+    if (!formData.character_prompt) {
+      const limitCheck = checkLimit('character');
+      if (!limitCheck.allowed) {
+        toast.error(limitCheck.reason);
+        return;
+      }
+    }
 
     setIsFinalizing(true);
     try {

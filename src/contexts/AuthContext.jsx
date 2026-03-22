@@ -7,7 +7,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined); // undefined = loading, null = no session
   const [profile, setProfile] = useState(null);
   const [tier, setTier] = useState(null);
-  const [usage, setUsage] = useState({ image: 0, story: 0 });
+  const [usage, setUsage] = useState({ image: 0, story: 0, character: 0 });
   const [loadingProfile, setLoadingProfile] = useState(false);
 
   // ─── Load profile + tier + current-month usage ──────────────────────────────
@@ -15,7 +15,7 @@ export function AuthProvider({ children }) {
     if (!userId) {
       setProfile(null);
       setTier(null);
-      setUsage({ image: 0, story: 0 });
+      setUsage({ image: 0, story: 0, character: 0 });
       return;
     }
     setLoadingProfile(true);
@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
         .eq('user_id', userId)
         .eq('period', period);
 
-      const usageMap = { image: 0, story: 0 };
+      const usageMap = { image: 0, story: 0, character: 0 };
       (usageRows || []).forEach(row => { usageMap[row.type] = row.count; });
       setUsage(usageMap);
     } catch (err) {
@@ -71,7 +71,7 @@ export function AuthProvider({ children }) {
       } else {
         setProfile(null);
         setTier(null);
-        setUsage({ image: 0, story: 0 });
+        setUsage({ image: 0, story: 0, character: 0 });
       }
     });
 
@@ -120,7 +120,7 @@ export function AuthProvider({ children }) {
   };
 
   // ─── Generation limit check ──────────────────────────────────────────────────
-  // type: 'image' | 'story'
+  // type: 'image' | 'story' | 'character'
   // Returns { allowed: boolean, reason: string | null, current: number, limit: number | null }
   const checkLimit = useCallback((type) => {
     if (!tier) return { allowed: false, reason: 'Not authenticated', current: 0, limit: 0 };
@@ -129,7 +129,11 @@ export function AuthProvider({ children }) {
 
     // Monthly cap (Free / Pro). Enterprise uses daily_image_limit / daily_story_limit
     // but those require a separate daily counter; not yet tracked client-side.
-    const monthlyLimit = type === 'image' ? tier.monthly_image_limit : tier.monthly_story_limit;
+    const monthlyLimit =
+      type === 'image'     ? tier.monthly_image_limit :
+      type === 'story'     ? tier.monthly_story_limit :
+      type === 'character' ? tier.monthly_character_limit :
+      null;
 
     if (monthlyLimit !== null && current >= monthlyLimit) {
       return {
