@@ -8,20 +8,23 @@
 // Compilation Order (ABSOLUTE):
 //   1. Character Identity Lock      — MANDATORY FIRST. Verbatim. Unmodified.
 //   2. Forbidden Changes            — MUST NOT list extracted from identity lock (props toggle affects this section)
-//   3. Pose & Emotion               — Selected or randomized pose/emotion for this sprite
-//   4. User Direction               — Only if allowPrompt toggle is ON
-//   5. Optional: Clothing Change    — Only if allowClothing toggle is ON
-//   6. Edit Instructions            — Only present in the image edit modal flow
-//   7. Critical Constraints         — Final hard MUST NOT reinforcements
+//   3. Art Style Transformation   — Applies art style while preserving identity-locked traits
+//   4. Pose & Emotion               — Selected or randomized pose/emotion for this sprite
+//   5. User Direction               — Only if allowPrompt toggle is ON
+//   6. Optional: Clothing Change    — Only if allowClothing toggle is ON
+//   7. Edit Instructions            — Only present in the image edit modal flow
+//   8. Critical Constraints         — Final hard MUST NOT reinforcements
 //
 // Identity Safety Rules:
 //   - Identity lock is ALWAYS inserted first, verbatim. No summarizing.
 //   - Forbidden changes are always present. They cannot be removed by toggles.
 //   - Outfit/prop changes are FORBIDDEN by default and only unlocked by explicit toggles.
 //   - The compiler does not validate input — it trusts the caller to provide valid data.
+//   - Art style transforms rendering ONLY, never identity-locked traits
 // ─────────────────────────────────────────────────────────────────────────────
 import { getBaseEmotion, getSpecialPreset, getIntensity } from './constants/EMOTION_PRESETS'
 import { getPoseById } from './constants/POSE_PRESETS'
+import { getArtStyleById } from './constants/ART_STYLES'
 
 // ─── Build Identity Lock Section ──────────────────────────────────────────────
 function buildIdentityLockSection(identityLock) {
@@ -104,6 +107,33 @@ function buildForbiddenSection(identityLock, allowClothing, allowProps) {
     '',
   ]
   allForbidden.forEach(f => lines.push(`- ${f}`))
+
+  return lines.join('\n')
+}
+
+// ─── Build Art Style Section ───────────────────────────────────────────────────
+function buildArtStyleSection(artStyleId, identityLock) {
+  // If no art style specified, check identity lock for default
+  const styleId = artStyleId || identityLock?.art_style || null
+  if (!styleId) return ''
+
+  const style = getArtStyleById(styleId)
+  if (!style) return ''
+
+  const lines = [
+    '## ART STYLE TRANSFORMATION',
+    '<!-- Apply art style while preserving all identity-locked traits -->',
+    '',
+    `**Art Style**: ${style.label}`,
+    `**Style Directive**: ${style.nanoPrompt}`,
+    '',
+    'Transform the rendering style while maintaining EXACT character identity:',
+    '- Preserve all immutable facial features, hair, eyes, and outfit exactly as specified in the identity lock',
+    '- Only change: linework style, shading technique, color palette, lighting approach, and artistic rendering method',
+    '- The character must remain immediately recognizable — only the art style transforms',
+    '- Do NOT alter any identity-locked traits regardless of the art style requirements',
+    '',
+  ]
 
   return lines.join('\n')
 }
@@ -304,6 +334,7 @@ function buildCriticalConstraintsSection() {
  * @param {string}  options.clothingDescription  — Clothing change description (if allowed)
  * @param {boolean} options.allowProps           — Whether prop additions are permitted
  * @param {string}  options.editInstructions     — Edit instructions (image edit modal only)
+ * @param {string}  options.artStyle             — Art style ID to apply ( Nano Banana 2 optimized)
  * @returns {string}  Final compiled prompt ready for generation
  */
 export function compileSpritePrompt({
@@ -317,6 +348,7 @@ export function compileSpritePrompt({
   clothingDescription = '',
   allowProps = false,
   editInstructions = '',
+  artStyle = null,
 }) {
   const sections = []
 
@@ -337,25 +369,28 @@ export function compileSpritePrompt({
   // ── SECTION 2: Forbidden Changes ───────────────────────────────────────
   sections.push(buildForbiddenSection(identityLock, allowClothing, allowProps))
 
-  // ── SECTION 3: Pose & Emotion ───────────────────────────────────────────
+  // ── SECTION 3: Art Style Transformation (after identity lock, before pose) ─
+  sections.push(buildArtStyleSection(artStyle, identityLock))
+
+  // ── SECTION 4: Pose & Emotion ───────────────────────────────────────────
   sections.push(buildPoseEmotionSection(poseId, emotionEntry))
 
-  // ── SECTION 4: User Direction (only if enabled) ─────────────────────────
+  // ── SECTION 5: User Direction (only if enabled) ─────────────────────────
   if (allowPrompt && customPrompt?.trim()) {
     sections.push(buildUserDirectionSection(customPrompt))
   }
 
-  // ── SECTION 5: Clothing Change (only if enabled and provided) ────────────
+  // ── SECTION 6: Clothing Change (only if enabled and provided) ────────────
   if (allowClothing && clothingDescription?.trim()) {
     sections.push(buildClothingSection(clothingDescription))
   }
 
-  // ── SECTION 6: Edit Instructions (image edit modal flow only) ────────────
+  // ── SECTION 7: Edit Instructions (image edit modal flow only) ────────────
   if (editInstructions?.trim()) {
     sections.push(buildEditInstructionsSection(editInstructions))
   }
 
-  // ── SECTION 7: Critical Constraints Footer ──────────────────────────────
+  // ── SECTION 8: Critical Constraints Footer ──────────────────────────────
   sections.push(buildCriticalConstraintsSection())
 
   return sections.filter(Boolean).join('\n---\n\n')
@@ -380,6 +415,7 @@ export function compileSpritePrompt({
  * @param {string} options.editInstructions         — User's edit instructions
  * @param {boolean} options.allowClothing
  * @param {boolean} options.allowProps
+ * @param {string} options.artStyle               — Art style ID to apply
  * @returns {string}
  */
 export function compileEditPrompt({
@@ -390,6 +426,7 @@ export function compileEditPrompt({
   editInstructions,
   allowClothing = false,
   allowProps = false,
+  artStyle = null,
 }) {
   return compileSpritePrompt({
     identityLock,
@@ -402,6 +439,7 @@ export function compileEditPrompt({
     clothingDescription: '',
     allowProps,
     editInstructions,
+    artStyle,
   })
 }
 

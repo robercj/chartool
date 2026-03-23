@@ -36,8 +36,10 @@ import { supabase } from '../lib/supabase'
 import { compileSpritePrompt, resolveVariationSpecs } from '../lib/promptCompiler'
 import { RANDOM_POOL } from '../lib/constants/EMOTION_PRESETS'
 import { RANDOM_POSE_POOL } from '../lib/constants/POSE_PRESETS'
+import { ART_STYLES } from '../lib/constants/ART_STYLES'
 import VariationControls from '../components/sprites/VariationControls'
 import ImageEditModal from '../components/sprites/ImageEditModal'
+import ArtStyleSelector from '../components/sprites/ArtStyleSelector'
 import useGenerationQueueStore from '../lib/stores/generationQueueStore'
 
 // ─── Aspect ratio options ─────────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export default function GenerateSprites() {
   const [emotionEntries, setEmotionEntries] = useState([])
   const [toggles, setToggles] = useState(DEFAULT_TOGGLES)
   const [customPrompt, setCustomPrompt] = useState('')
+  const [selectedArtStyle, setSelectedArtStyle] = useState('')
 
   // ── Image edit modal ──────────────────────────────────────────────────────
   const [editModalImage, setEditModalImage] = useState(null)
@@ -468,6 +471,7 @@ export default function GenerateSprites() {
         customPrompt,
         allowClothing: toggles.allowClothing,
         allowProps: toggles.allowProps,
+        artStyle: selectedArtStyle || null,
       })
 
       return {
@@ -482,10 +486,12 @@ export default function GenerateSprites() {
           seed: seedValue ? parseInt(seedValue, 10) : null,
           poseId: spec.poseId,
           emotionEntry: spec.emotionEntry,
+          artStyle: selectedArtStyle || null,
           paramsSnapshot: {
             variationCount, aspectRatio,
             poseId: spec.poseId,
             emotionEntry: spec.emotionEntry,
+            artStyle: selectedArtStyle || null,
             toggles,
           },
         },
@@ -605,10 +611,9 @@ export default function GenerateSprites() {
       {/* Generation settings */}
       <GenerationControls
         variationCount={variationCount}
-        onVariationCountChange={(n) => {
+        onVariationCountChange={n => {
           setVariationCount(n)
-          // Soft-trim emotion list if it now exceeds the new sprite count
-          if (emotionEntries.length > n) {
+          if (n < emotionEntries.length) {
             toast(`Sprite count reduced to ${n}. Last ${emotionEntries.length - n} emotion${emotionEntries.length - n !== 1 ? 's' : ''} removed.`)
             setEmotionEntries(emotionEntries.slice(0, n))
           }
@@ -617,6 +622,8 @@ export default function GenerateSprites() {
         onAspectRatioChange={setAspectRatio}
         seedValue={seedValue}
         onSeedChange={setSeedValue}
+        artStyle={selectedArtStyle}
+        onArtStyleChange={setSelectedArtStyle}
         theme={theme}
       />
 
@@ -1265,7 +1272,17 @@ function AutoFillPrompt({ suggestedAppearance, onAccept, onSkip, theme }) {
 }
 
 // ─── GenerationControls ───────────────────────────────────────────────────────
-function GenerationControls({ variationCount, onVariationCountChange, aspectRatio, onAspectRatioChange, seedValue, onSeedChange, theme }) {
+function GenerationControls({
+  variationCount,
+  onVariationCountChange,
+  aspectRatio,
+  onAspectRatioChange,
+  seedValue,
+  onSeedChange,
+  artStyle,
+  onArtStyleChange,
+  theme,
+}) {
   return (
     <div className="space-y-4 pt-2" style={{ borderTop: `1px solid ${theme.fieldBorder}` }}>
       <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.labelColor }}>
@@ -1299,6 +1316,14 @@ function GenerationControls({ variationCount, onVariationCountChange, aspectRati
           </select>
         </div>
       </div>
+
+      {/* Art Style Selection */}
+      <ArtStyleSelector
+        value={artStyle}
+        onChange={onArtStyleChange}
+        theme={theme}
+      />
+
       <div className="space-y-1">
         <label className="text-xs font-medium flex items-center gap-1.5" style={{ color: theme.textMuted }}>
           <Lock className="w-3 h-3" />

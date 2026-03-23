@@ -505,6 +505,7 @@ Return ONLY valid JSON (no extra text, no markdown fences) with this exact schem
     "eyes": ["list each eye trait separately — color, shape, expression quality, any distinctive features"],
     "outfit": ["list each outfit element separately — every garment, color, pattern, layer; list each accessory separately"]
   },
+  "art_style": "the art style of the reference image (e.g. 'anime', 'manga', 'manhwa', 'western comic', 'etc.) - leave as null if unclear",
   "forbidden_changes": [
     "list each forbidden change as a specific actionable constraint",
     "e.g. 'wardrobe swap or outfit change of any kind'",
@@ -671,7 +672,10 @@ export function parseAppearanceFromIdentityLock(identityLock) {
   }
 
   // ── Art style notes ───────────────────────────────────────────────────────
-  if (identityLock.notes?.length) {
+  // Prefer explicit art_style field from identity lock, fallback to notes parsing
+  if (identityLock?.art_style) {
+    appearance.art_style = identityLock.art_style
+  } else if (identityLock.notes?.length) {
     const artStyleNote = identityLock.notes.find(n =>
       ['anime', 'manga', 'style', 'art', 'illustration', 'render'].some(k =>
         n.toLowerCase().includes(k)
