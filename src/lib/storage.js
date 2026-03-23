@@ -39,21 +39,29 @@ export function useLocalStorage(key, defaultValue) {
 
 // ─── Storyline ────────────────────────────────────────────────────────────────
 // DB table: public.storylines
-// Extra relation: character_batches.storyline_id (instead of embedded batch_ids[])
+// Extra relation: character_batches.storyline_id populates the batch_ids[] field
 export const Storyline = {
-  /** List all storylines for user, newest first, with batch_ids via a join */
+  /** List all storylines for user, newest first, with batch_ids */
   async list(userId) {
     const { data, error } = await supabase
       .from('storylines')
-      .select('*, character_batches(id)')
+      .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return (data || []).map(s => ({
-      ...s,
-      batch_ids: (s.character_batches || []).map(b => b.id),
-      character_batches: undefined,
-    }));
+    // Attach batch_ids array by querying character_batches
+    const ids = (data || []).map(s => s.id);
+    if (ids.length === 0) return data || [];
+    const { data: batches } = await supabase
+      .from('character_batches')
+      .select('id, storyline_id')
+      .in('storyline_id', ids);
+    const batchMap = {};
+    (batches || []).forEach(b => {
+      if (!batchMap[b.storyline_id]) batchMap[b.storyline_id] = [];
+      batchMap[b.storyline_id].push(b.id);
+    });
+    return (data || []).map(s => ({ ...s, batch_ids: batchMap[s.id] || [] }));
   },
 
   /** Get a single storyline by id */
