@@ -83,6 +83,7 @@ export default function GenerateCharacterPage() {
 
   const { draft, isDirty, lastSaved, updateState, saveNow, isInitialized } = useDraftPersistence(draftId, user?.id);
   const [isNewDraft, setIsNewDraft] = useState(false);
+  const [, setAppearanceExpanded] = useState(true);
 
   // Load draft into local state on mount / change
   useEffect(() => {
@@ -179,7 +180,7 @@ export default function GenerateCharacterPage() {
     } finally {
       setIsGeneratingIdentityPrompt(false);
     }
-  }, [formData, updateState]);
+  }, [formData, updateState, checkLimit]);
 
   // ── Appearance description generation ─────────────────────────────────────
   const handleGenerateAppearanceDescription = useCallback(async () => {
@@ -206,7 +207,7 @@ export default function GenerateCharacterPage() {
     } finally {
       setIsGeneratingDescription(false);
     }
-  }, [formData, updateState]);
+  }, [formData, updateState, checkLimit]);
 
   // ── Image generation (uses stored appearance_description — no new Claude call) ──
   const handleGenerate = useCallback(async () => {
@@ -385,7 +386,7 @@ export default function GenerateCharacterPage() {
     } finally {
       setIsFinalizing(false);
     }
-  }, [formData, imageHistory, user, draftId, navigate]);
+  }, [formData, imageHistory, user, draftId, navigate, checkLimit]);
 
   // ── Navigation guard ──────────────────────────────────────────────────────
   const handleNavigate = useCallback((to) => {

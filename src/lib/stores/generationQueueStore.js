@@ -1,10 +1,29 @@
+// ─── generationQueueStore.js ────────────────────────────────────────────────────
+// Zustand store for managing the image generation job queue.
+//
+// Queue Architecture:
+//   sessions[]       — batch sessions, each containing multiple jobs
+//   activeSessionId  — currently focused session
+//   _notifiedChars   — tracks which characters have been notified (prevents duplicate toasts)
+//
+// Job Lifecycle:
+//   queued → generating → complete | failed
+//
+// Persistence:
+//   On mount: restores active jobs from the generation_jobs DB table
+//   On dispatch: inserts jobs to DB for crash recovery
+//   Job state is dual-synced: Zustand (in-memory) + Supabase (persistent)
+//
+// Concurrency:
+//   MAX_CONCURRENT_JOBS (10) limits simultaneous image generations
+//   AUTO_RETRY_MAX (1) retries transient failures once after 2s delay
+// ─────────────────────────────────────────────────────────────────────────────
 import { create } from 'zustand';
 import { supabase } from '../supabase';
 import { generateImage } from '../anthropic';
 import { CharacterImage } from '../storage';
 import { toast } from 'sonner';
 
-const SESSION_TIMEOUT_MS = null;
 const AUTO_RETRY_MAX = 1;
 const AUTO_RETRY_DELAY_MS = 2000;
 const MAX_CONCURRENT_JOBS = 10;

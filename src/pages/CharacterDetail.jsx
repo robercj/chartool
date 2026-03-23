@@ -296,7 +296,7 @@ function CharacterDetailInner() {
   const toggleSection = useCallback((id) => {
     setSectionExpanded(prev => {
       const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem(`char-sections-${characterId}`, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(`char-sections-${characterId}`, JSON.stringify(next)); } catch { /* ignore storage errors */ }
       return next;
     });
   }, [characterId]);

@@ -8,7 +8,6 @@
 //   - ModifierToggles   (optional permissions: prompt, clothing, props)
 //   - CustomPromptPanel (shown only when allowPrompt is ON)
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from 'react'
 import { Wand2 } from 'lucide-react'
 import EmotionListInput from './EmotionListInput'
 import PoseSelector from './PoseSelector'

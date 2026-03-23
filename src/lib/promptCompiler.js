@@ -272,7 +272,7 @@ function buildClothingSection(clothingDescription) {
 }
 
 // ─── Build Critical Constraints Footer ───────────────────────────────────────
-function buildCriticalConstraintsSection(identityLock) {
+function buildCriticalConstraintsSection() {
   const lines = [
     '## CRITICAL GENERATION CONSTRAINTS — READ BEFORE RENDERING',
     '',
@@ -356,7 +356,7 @@ export function compileSpritePrompt({
   }
 
   // ── SECTION 7: Critical Constraints Footer ──────────────────────────────
-  sections.push(buildCriticalConstraintsSection(identityLock))
+  sections.push(buildCriticalConstraintsSection())
 
   return sections.filter(Boolean).join('\n---\n\n')
 }

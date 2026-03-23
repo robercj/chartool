@@ -189,7 +189,7 @@ export default function Layout({ children }) {
                 <li key={item.to}>
                   <Link
                     to={item.to}
-                    state={item.to === '/sprites/generate' && location.pathname === '/sprites/generate' ? { reset: Date.now() } : undefined}
+                    state={item.to === '/sprites/generate' && location.pathname === '/sprites/generate' ? { reset: 'reset' } : undefined}
                     className="rounded-xl flex items-center gap-2 text-sm font-medium transition-all"
                     style={{
                       minHeight:  '44px',
@@ -420,7 +420,7 @@ export default function Layout({ children }) {
                   <Link
                     ref={idx === 0 ? firstNavItem : undefined}
                     to={item.to}
-                    state={isGenerate && location.pathname === '/sprites/generate' ? { reset: Date.now() } : undefined}
+                    state={isGenerate && location.pathname === '/sprites/generate' ? { reset: 'reset' } : undefined}
                     onClick={closeMobileMenu}
                     tabIndex={mobileMenuOpen ? 0 : -1}
                     className="rounded-xl flex items-center gap-3 font-medium transition-all"

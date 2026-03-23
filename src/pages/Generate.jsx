@@ -1527,7 +1527,8 @@ function MultiUploadZone({ theme, values, onChange, required = false }) {
 }
 
 // Single-image upload zone — used for prop reference
-function SingleUploadZone({ theme, value, onChange, hint, icon: UploadIcon = Upload }) {
+function SingleUploadZone({ theme, value, onChange, hint, icon: IconProp = Upload }) {
+  const Icon = IconProp;
   const inputRef = useRef(null)
 
   const handleFile = async (file) => {
@@ -1568,7 +1569,7 @@ function SingleUploadZone({ theme, value, onChange, hint, icon: UploadIcon = Upl
         </div>
       ) : (
         <div>
-          <UploadIcon className="w-6 h-6 mx-auto mb-1" style={{ color: theme.textMuted }} />
+          <Icon className="w-6 h-6 mx-auto mb-1" style={{ color: theme.textMuted }} />
           {hint && <p className="text-xs" style={{ color: theme.textMuted }}>{hint}</p>}
         </div>
       )}

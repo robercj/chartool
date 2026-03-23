@@ -218,12 +218,6 @@ function EmotionEntryRow({ entry, index, onChange, onRemove, theme }) {
     ? getConfidenceHint(entry.confidence, entry.matchedKey)
     : null
 
-  const fieldBase = {
-    background: theme.fieldBg,
-    borderColor: theme.fieldBorder,
-    color: theme.textBody,
-  }
-
   return (
     <div ref={wrapperRef} className="relative">
       {/* Unified bar */}

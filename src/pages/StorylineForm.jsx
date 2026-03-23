@@ -394,7 +394,7 @@ export default function StorylineForm() {
       </div>
 
       {/* ── Folder Assignment ── */}
-      <SectionCard theme={theme} title="Story Folder" className="mb-6">
+      <SectionCard title="Story Folder" className="mb-6">
         <p className="text-sm -mt-1 mb-3 text-base-content/60">
           All outputs from this generation will be saved into this folder in your Storyline Gallery.
         </p>
@@ -755,7 +755,7 @@ export default function StorylineForm() {
       </SectionCard>
 
       {/* ── SECTION B ── */}
-      <SectionCard theme={theme} title="Section B — Narrative Physics Settings" className="mt-6">
+      <SectionCard title="Section B — Narrative Physics Settings" className="mt-6">
 
         {/* Structural overlays */}
         <FieldGroup label="Structural Overlay(s)" theme={theme}>
@@ -1017,7 +1017,7 @@ const FieldGroup = forwardRef(function FieldGroup(
   )
 })
 
-function SectionCard({ theme, title, children, className = '' }) {
+function SectionCard({ title, children, className = '' }) {
   return (
     /*
       overflow-hidden is intentionally NOT applied to the outer wrapper —
@@ -1044,7 +1044,7 @@ function SectionCard({ theme, title, children, className = '' }) {
   )
 }
 
-function TextInput({ value, onChange, placeholder, theme, className = '', 'aria-invalid': ariaInvalid }) {
+function TextInput({ value, onChange, placeholder, className = '', 'aria-invalid': ariaInvalid }) {
   return (
     <input
       type="text"
@@ -1060,7 +1060,7 @@ function TextInput({ value, onChange, placeholder, theme, className = '', 'aria-
   )
 }
 
-function Textarea({ value, onChange, placeholder, hint, rows = 3, theme, 'aria-invalid': ariaInvalid, 'aria-describedby': ariaDescribedBy }) {
+function Textarea({ value, onChange, placeholder, hint, rows = 3, 'aria-invalid': ariaInvalid, 'aria-describedby': ariaDescribedBy }) {
   return (
     <div>
       <textarea
