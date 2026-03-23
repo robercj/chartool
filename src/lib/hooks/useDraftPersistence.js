@@ -5,16 +5,48 @@
 // On mount: hydrates from localStorage first for instant UX, then overwrites
 // with the DB record if one exists (DB is the source of truth).
 //
-// Auto-saves on: debounced state changes, page hide (visibilitychange), and
-// warns on tab close if there are unsaved changes (beforeunload).
+// Auto-saves on:
+//   - onBlur: instant localStorage (no DB) when user leaves a field
+//   - debounced (2s): localStorage + DB if has meaningful data
+//   - visibilitychange: localStorage + DB if has meaningful data
+//   - navigation: saves on route change
+//   - beforeunload: warns on tab close
 //
 // Exports: useDraftPersistence(draftId, userId) and useDraftList(userId)
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CharacterDraft } from '../storage';
 
-// Strip undefined, null, and function values before JSON serialisation.
-// Prevents JSON.stringify from silently dropping those keys.
+const LOCAL_STORAGE_KEY = 'character_draft_';
+const DEBOUNCE_DELAY = 2000;
+
+const MEANINGFUL_FIELDS = [
+  'character_name', 'character_role', 'archetype', 'narrative_function',
+  'age', 'sex', 'gender_expression', 'species_or_race', 'nationality_or_origin',
+  'social_class', 'occupation_or_role', 'dere_presets', 'custom_personality_modifier',
+  'surface_traits', 'hidden_traits', 'emotional_triggers_positive', 'emotional_triggers_negative',
+  'speech_pattern', 'behavioral_tendencies', 'moral_alignment',
+  'values_and_beliefs', 'fears_and_insecurities', 'surface_goal', 'deep_desire',
+  'internal_conflict', 'backstory_summary', 'formative_event', 'knowledge_domain',
+  'relationships', 'tone_of_voice', 'verbal_quirks', 'consistency_anchors', 'contradiction_points',
+  'appearance', 'image_prompt', 'character_prompt', 'appearance_description',
+  'generated_image_url'
+];
+
+function hasMeaningfulData(state) {
+  if (!state) return false;
+  
+  for (const key of MEANINGFUL_FIELDS) {
+    const val = state[key];
+    if (val === undefined || val === null) continue;
+    if (typeof val === 'string' && val.trim() !== '') return true;
+    if (Array.isArray(val) && val.length > 0) return true;
+    if (typeof val === 'object' && Object.keys(val).length > 0) return true;
+    if (typeof val === 'number' && val !== 0) return true;
+  }
+  return false;
+}
+
 function sanitizeForStorage(data) {
   const sanitized = {};
   for (const [key, value] of Object.entries(data)) {
@@ -34,9 +66,6 @@ function sanitizeForStorage(data) {
   return sanitized;
 }
 
-const LOCAL_STORAGE_KEY = 'character_draft_';
-const DEBOUNCE_DELAY = 2000;
-
 export function useDraftPersistence(draftId, userId) {
   const [localState, setLocalState] = useState(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -45,6 +74,7 @@ export function useDraftPersistence(draftId, userId) {
   const [isInitialized, setIsInitialized] = useState(false);
   const debounceTimerRef = useRef(null);
   const hasHydratedRef = useRef(false);
+  const previousNavigationRef = useRef(null);
 
   const getLocalStorageKey = useCallback(() => {
     return `${LOCAL_STORAGE_KEY}${draftId || 'new'}`;
@@ -91,7 +121,7 @@ export function useDraftPersistence(draftId, userId) {
     loadInitialState();
   }, [draftId, userId, getLocalStorageKey]);
 
-  const saveToStorage = useCallback(async (state) => {
+  const saveToStorage = useCallback(async (state, saveToDb = true) => {
     if (!draftId || !hasHydratedRef.current) return;
     
     const sanitizedState = sanitizeForStorage(state);
@@ -100,7 +130,7 @@ export function useDraftPersistence(draftId, userId) {
     setLastSaved(new Date());
     setIsDirty(false);
 
-    if (userId) {
+    if (saveToDb && userId && hasMeaningfulData(state)) {
       setIsSaving(true);
       try {
         await CharacterDraft.upsert(draftId, userId, {
@@ -115,6 +145,10 @@ export function useDraftPersistence(draftId, userId) {
     }
   }, [draftId, userId, getLocalStorageKey]);
 
+  const saveToLocalOnly = useCallback((state) => {
+    saveToStorage(state, false);
+  }, [saveToStorage]);
+
   const updateState = useCallback((updates) => {
     setLocalState(prev => {
       const newState = { ...prev, ...updates };
@@ -128,7 +162,7 @@ export function useDraftPersistence(draftId, userId) {
 
     debounceTimerRef.current = setTimeout(() => {
       setLocalState(current => {
-        saveToStorage(current);
+        saveToStorage(current, true);
         return current;
       });
     }, DEBOUNCE_DELAY);
@@ -141,7 +175,7 @@ export function useDraftPersistence(draftId, userId) {
       clearTimeout(debounceTimerRef.current);
     }
     
-    await saveToStorage(localState);
+    await saveToStorage(localState, true);
   }, [localState, saveToStorage]);
 
   const clearDraft = useCallback(() => {
@@ -152,9 +186,18 @@ export function useDraftPersistence(draftId, userId) {
     setLastSaved(null);
   }, [getLocalStorageKey]);
 
+  const handleFieldBlur = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    if (localState) {
+      saveToLocalOnly(localState);
+    }
+  }, [localState, saveToLocalOnly]);
+
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (isDirty && localState) {
+      if (isDirty && localState && hasMeaningfulData(localState)) {
         e.preventDefault();
         e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
         return e.returnValue;
@@ -166,7 +209,7 @@ export function useDraftPersistence(draftId, userId) {
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }
-        saveToStorage(localState);
+        saveToStorage(localState, true);
       }
     };
 
@@ -186,6 +229,32 @@ export function useDraftPersistence(draftId, userId) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isInitialized || !draftId) return;
+
+    const currentPath = window.location.pathname;
+    if (previousNavigationRef.current === null) {
+      previousNavigationRef.current = currentPath;
+      return;
+    }
+
+    if (currentPath !== previousNavigationRef.current) {
+      previousNavigationRef.current = currentPath;
+      if (localState && hasMeaningfulData(localState)) {
+        saveToStorage(localState, true);
+      }
+    }
+
+    const handlePopState = () => {
+      if (localState && hasMeaningfulData(localState)) {
+        saveToStorage(localState, true);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isInitialized, draftId, localState, saveToStorage]);
+
   return {
     draft: localState,
     isDirty,
@@ -195,6 +264,7 @@ export function useDraftPersistence(draftId, userId) {
     updateState,
     saveNow,
     clearDraft,
+    handleFieldBlur,
   };
 }
 
