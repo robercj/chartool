@@ -1659,7 +1659,7 @@ function IdentityLockSection({ identityLock, sectionExpanded, onToggle }) {
 // seed editing, and edit-to-regenerate functionality.
 function SpriteImagesSection({ characterId, spriteImages, queryClient, character }) {
   const [enlargedImg, setEnlargedImg]           = useState(null);
-  const [deleteTargetUrl, setDeleteTargetUrl]   = useState(null);
+  const [deleteTargetId, setDeleteTargetId]     = useState(null);
   const [isDeleting, setIsDeleting]             = useState(false);
   const [deleteError, setDeleteError]           = useState(null);
 
@@ -1679,14 +1679,14 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient, character
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteTargetUrl) return;
+    if (!deleteTargetId) return;
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await CharacterImage.deleteByUrl(characterId, deleteTargetUrl);
+      await CharacterImage.delete(deleteTargetId);
       queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
-      setDeleteTargetUrl(null);
-      if (enlargedImg?.url === deleteTargetUrl) setEnlargedImg(null);
+      if (enlargedImg?.id === deleteTargetId) setEnlargedImg(null);
+      setDeleteTargetId(null);
       toast.success('Image deleted.');
     } catch (err) {
       console.error('Delete sprite image failed:', err);
@@ -1719,7 +1719,7 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient, character
                 key={img.id || img.url || i}
                 img={img}
                 onDownload={() => handleDownload(img.url)}
-                onDelete={() => setDeleteTargetUrl(img.url)}
+                onDelete={() => setDeleteTargetId(img.id)}
                 onEnlarge={() => setEnlargedImg(img)}
               />
             ))}
@@ -1733,7 +1733,7 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient, character
           img={enlargedImg}
           character={character}
           onClose={() => setEnlargedImg(null)}
-          onDelete={() => { setDeleteTargetUrl(enlargedImg.url); }}
+          onDelete={() => { setDeleteTargetId(enlargedImg.id); }}
           onDownload={() => handleDownload(enlargedImg.url)}
           onNewImageGenerated={(newImg) => {
             setEnlargedImg(newImg);
@@ -1743,10 +1743,10 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient, character
       )}
 
       {/* Delete confirmation modal */}
-      {deleteTargetUrl && (
+      {deleteTargetId && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-          onClick={() => { if (!isDeleting) setDeleteTargetUrl(null); }}
+          onClick={() => { if (!isDeleting) setDeleteTargetId(null); }}
         >
           <div
             className="w-full max-w-sm bg-base-100 rounded-2xl border border-base-300 shadow-2xl p-6 space-y-4"
@@ -1764,7 +1764,7 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient, character
             )}
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => { setDeleteTargetUrl(null); setDeleteError(null); }}
+                onClick={() => { setDeleteTargetId(null); setDeleteError(null); }}
                 disabled={isDeleting}
                 className="btn btn-ghost flex-1"
               >
