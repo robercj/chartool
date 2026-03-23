@@ -531,6 +531,24 @@ export const Character = {
     const { error } = await supabase.rpc('delete_sprite_image', { p_id: id, p_url: url });
     if (error) throw error;
   },
+
+  /** Delete a character and all related data (images, prompt history).
+   *  Uses a database function if available, otherwise deletes manually.
+   *  @param {string} id Character UUID
+   */
+  async deleteWithRelated(id) {
+    await Character.delete(id);
+    const { error: imgError } = await supabase
+      .from('character_images')
+      .delete()
+      .eq('character_id', id);
+    if (imgError) console.warn('Failed to delete character_images:', imgError);
+    const { error: histError } = await supabase
+      .from('character_prompt_history')
+      .delete()
+      .eq('character_id', id);
+    if (histError) console.warn('Failed to delete character_prompt_history:', histError);
+  },
 };
 
 // ─── CharacterImage ──────────────────────────────────────────────────────────

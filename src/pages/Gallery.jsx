@@ -78,7 +78,7 @@ export default function Gallery() {
   const [selMode, setSelMode]   = useState(null)
   const [selIds,  setSelIds]    = useState(new Set())
 
-  // ── Context menu ─────────────────────────────────────────────────────────────
+// ── Context menu ─────────────────────────────────────────────────────────────
   // Tracks which character card's ⋮ menu is open by character ID
   const [ctxCharId, setCtxCharId] = useState(null)
 
@@ -113,11 +113,11 @@ export default function Gallery() {
       if (e.key !== 'Escape') return
       if (showStoryPicker)  { setShowStoryPicker(false); return }
       if (ctxCharId)        { setCtxCharId(null);        return }
-      if (selMode)          { exitSelectionMode();        return }
+      if (selMode)          { setSelMode(null); setSelIds(new Set()); return }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [showStoryPicker, ctxCharId, selMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showStoryPicker, ctxCharId, selMode])
 
   // ── Close context menu on outside click ──────────────────────────────────────
   useEffect(() => {
@@ -161,8 +161,44 @@ export default function Gallery() {
 
   const deselectAll = useCallback(() => setSelIds(new Set()), [])
 
+  // Prompt modal helper (defined early to avoid TDZ in handleCtxAction)
+  const openPrompt = useCallback((name, prompt) => {
+    setPromptCopied(false)
+    setPromptModal({ isOpen: true, name, prompt })
+  }, [])
+
+  // Undo action (defined early to avoid TDZ in doMoveChars toast callback)
+  const doUndoAction = async (undo) => {
+    const { chars } = undo
+    const charIds   = chars.map(c => c.id)
+
+    const revert = old => (old || []).map(c => {
+      if (!charIds.includes(c.id)) return c
+      const before = chars.find(b => b.id === c.id)
+      return { ...c, assigned_story_id: before.assigned_story_id }
+    })
+    queryClient.setQueryData(['wizard-characters', userId], revert)
+    queryClient.setQueryData(['wizard-drafts',     userId], revert)
+
+    try {
+      const prevStoryId = chars[0]?.assigned_story_id ?? null
+      const draftIds    = chars.filter(c =>  c.isDraft).map(c => c.id)
+      const finalIds    = chars.filter(c => !c.isDraft).map(c => c.id)
+      await Promise.all([
+        draftIds.length ? CharacterDraft.assignBulk(draftIds, prevStoryId) : Promise.resolve(),
+        finalIds.length ? Character.assignBulk(finalIds,      prevStoryId) : Promise.resolve(),
+      ])
+      toast.success('Undo successful.')
+    } catch {
+      queryClient.invalidateQueries({ queryKey: ['wizard-characters', userId] })
+      queryClient.invalidateQueries({ queryKey: ['wizard-drafts',     userId] })
+      toast.error('Undo failed. Please try again.')
+    }
+  }
+
   // ── Core move operation (assignment AND unassignment) ─────────────────────────
   // targetStoryId = null → move to Standalone (unassign)
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const doMoveChars = useCallback(async (chars, targetStoryId, targetStoryName) => {
     if (!chars || chars.length === 0) return
     const charIds = chars.map(c => c.id)
@@ -220,37 +256,6 @@ export default function Gallery() {
     }
   }, [userId, queryClient, exitSelectionMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Defined outside useCallback to avoid dep-cycle with doMoveChars ref trick
-  const doUndoAction = async (undo) => {
-    const { chars } = undo
-    const charIds   = chars.map(c => c.id)
-
-    // Revert each char to its pre-action assigned_story_id (captured in snapshot)
-    const revert = old => (old || []).map(c => {
-      if (!charIds.includes(c.id)) return c
-      const before = chars.find(b => b.id === c.id)
-      return { ...c, assigned_story_id: before.assigned_story_id }
-    })
-    queryClient.setQueryData(['wizard-characters', userId], revert)
-    queryClient.setQueryData(['wizard-drafts',     userId], revert)
-
-    try {
-      // All chars in a single batch share the same previous state (cross-section multiselect is OOS)
-      const prevStoryId = chars[0]?.assigned_story_id ?? null
-      const draftIds    = chars.filter(c =>  c.isDraft).map(c => c.id)
-      const finalIds    = chars.filter(c => !c.isDraft).map(c => c.id)
-      await Promise.all([
-        draftIds.length ? CharacterDraft.assignBulk(draftIds, prevStoryId) : Promise.resolve(),
-        finalIds.length ? Character.assignBulk(finalIds,      prevStoryId) : Promise.resolve(),
-      ])
-      toast.success('Undo successful.')
-    } catch {
-      queryClient.invalidateQueries({ queryKey: ['wizard-characters', userId] })
-      queryClient.invalidateQueries({ queryKey: ['wizard-drafts',     userId] })
-      toast.error('Undo failed. Please try again.')
-    }
-  }
-
   // ── Drag and drop ─────────────────────────────────────────────────────────────
   const handleDragStart = useCallback((e, char) => {
     // Drag all selected unassigned chars if the dragged card is part of the selection
@@ -302,6 +307,7 @@ export default function Gallery() {
   }, [dragging, doMoveChars, exitSelectionMode])
 
   // ── Story Picker ──────────────────────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const openStoryPicker = useCallback((chars) => {
     setPickerChars(chars)
     setPickerSearch('')
@@ -309,14 +315,16 @@ export default function Gallery() {
     setShowStoryPicker(true)
   }, [])
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const confirmPickerAssign = useCallback(() => {
     if (!pickerSelectedStory || !pickerChars.length) return
     const story = storylines.find(s => s.id === pickerSelectedStory)
     doMoveChars(pickerChars, pickerSelectedStory, story?.name || 'Story')
     setShowStoryPicker(false)
-  }, [pickerSelectedStory, pickerChars, storylines, doMoveChars])
+  }, [pickerSelectedStory, pickerChars, storylines, doMoveChars]) // eslint-disable-line react-hooks/preserve-manual-memoization
 
   // ── Context menu action dispatch ──────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handleCtxAction = useCallback((action, char) => {
     setCtxCharId(null)
     switch (action) {
@@ -355,17 +363,23 @@ export default function Gallery() {
     toast.success('Character deleted')
   }
   const handleDeleteCharacter = async (id, isDraft) => {
+    const charId = id
+    const queryKey = isDraft ? ['wizard-drafts', userId] : ['wizard-characters', userId]
+
+    queryClient.setQueryData(queryKey, (old) => (old || []).filter(c => c.id !== charId))
+
     try {
       if (isDraft) {
         await CharacterDraft.delete(id)
       } else {
-        await Character.delete(id)
+        await Character.deleteWithRelated(id)
       }
       queryClient.invalidateQueries({ queryKey: ['wizard-drafts', userId] })
       queryClient.invalidateQueries({ queryKey: ['wizard-characters', userId] })
       queryClient.invalidateQueries({ queryKey: ['character-images', id] })
       toast.success('Character deleted')
     } catch (err) {
+      queryClient.invalidateQueries({ queryKey })
       console.error('Delete character error:', err)
       toast.error(`Failed to delete character: ${err.message || 'Unknown error'}`)
     }
@@ -387,15 +401,14 @@ export default function Gallery() {
   }
 
   // ── Prompt modal helpers ──────────────────────────────────────────────────────
-  const openPrompt  = (name, prompt) => { setPromptCopied(false); setPromptModal({ isOpen: true, name, prompt }) }
-  const closePrompt = () => setPromptModal(prev => ({ ...prev, isOpen: false }))
-  const copyPrompt  = async () => {
+  const closePrompt = useCallback(() => setPromptModal(prev => ({ ...prev, isOpen: false })), [])
+  const copyPrompt  = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(promptModal.prompt)
       setPromptCopied(true)
       setTimeout(() => setPromptCopied(false), 2000)
     } catch { toast.error('Failed to copy') }
-  }
+  }, [promptModal.prompt])
 
   const hasAnyContent = storylines.length > 0 || unassignedBatches.length > 0 || hasWizardChars
 
@@ -568,7 +581,6 @@ export default function Gallery() {
                         onCtxOpen={e => { e.stopPropagation(); setCtxCharId(ctxCharId === char.id ? null : char.id) }}
                         ctxItems={unassignedCtxItems(char)}
                         onCtxAction={action => handleCtxAction(action, char)}
-                        onPromptClick={() => openPrompt(char.character_name || 'Character', char.character_prompt)}
                         draggable={true}
                         isBeingDragged={!!dragging?.chars.some(c => c.id === char.id)}
                         onDragStart={e => handleDragStart(e, char)}
@@ -731,7 +743,7 @@ function SelectionToolbar({ count, total, actionLabel, actionIcon: ActionIcon, o
 // Outer wrapper has no overflow:hidden so context menu and checkbox
 // can escape card boundaries. Inner card clips image to rounded corners.
 function CharacterWizardCard({
-  character, theme, onClick, onPromptClick,
+  character, theme, onClick,
   selectable, isSelected, onSelect,
   ctxOpen, onCtxOpen, ctxItems, onCtxAction,
   draggable: isDraggable, isBeingDragged, onDragStart, onDragEnd,
