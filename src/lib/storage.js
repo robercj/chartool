@@ -366,6 +366,7 @@ export const CharacterDraft = {
   },
 
   async upsert(id, userId, data) {
+    console.log('[CharacterDraft.upsert] id:', id, 'userId:', userId, 'data keys:', Object.keys(data));
     const { error } = await supabase
       .from('character_drafts')
       .upsert(

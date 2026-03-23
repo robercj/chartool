@@ -130,7 +130,11 @@ export function useDraftPersistence(draftId, userId) {
     setLastSaved(new Date());
     setIsDirty(false);
 
-    if (saveToDb && userId && hasMeaningfulData(state)) {
+    const meaningful = hasMeaningfulData(state);
+    console.log('[saveToStorage] draftId:', draftId, 'saveToDb:', saveToDb, 'hasMeaningfulData:', meaningful);
+    
+    if (saveToDb && userId && meaningful) {
+      console.log('[saveToStorage] Saving to DB for draft:', draftId);
       setIsSaving(true);
       try {
         await CharacterDraft.upsert(draftId, userId, {
@@ -186,12 +190,13 @@ export function useDraftPersistence(draftId, userId) {
     setLastSaved(null);
   }, [getLocalStorageKey]);
 
-  const handleFieldBlur = useCallback(() => {
+  const handleFieldBlur = useCallback((stateToSave) => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
-    if (localState) {
-      saveToLocalOnly(localState);
+    const state = stateToSave || localState;
+    if (state) {
+      saveToLocalOnly(state);
     }
   }, [localState, saveToLocalOnly]);
 
