@@ -12,7 +12,7 @@ import {
   Copy, RefreshCw, Save, History, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle, Sparkles, X, Plus, RotateCcw,
   Pencil, Clock, Loader2, Image as ImageIcon, Lock, Unlock,
-  Download, Trash2, ZoomIn, LockKeyhole, ArrowLeft,
+  Download, Trash2, ZoomIn, LockKeyhole, ArrowLeft, Eye,
 } from 'lucide-react';
 import { useAuth }  from '../contexts/AuthContext';
 import { Character, PromptHistory, CharacterImage } from '../lib/storage';
@@ -282,6 +282,7 @@ function CharacterDetailInner() {
   const [showSaveConfirm,  setShowSaveConfirm]  = useState(false);
   const [showSaveAs,       setShowSaveAs]       = useState(false);
   const [showHistory,      setShowHistory]      = useState(false);
+  const [showPromptModal,  setShowPromptModal]  = useState(false);
   const [selectedHistImg,  setSelectedHistImg]  = useState(null); // from strip
 
   // ── Section collapse state (localStorage-persisted) ─────────────────────────
@@ -638,13 +639,22 @@ function CharacterDetailInner() {
 
           {/* Actions */}
           <div className="p-4 space-y-2">
-            <button
-              onClick={() => copyPrompt(displayPrompt)}
-              className="btn btn-outline btn-sm btn-block gap-2"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Copy Prompt
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowPromptModal(true)}
+                className="btn btn-outline btn-sm flex-1 gap-2"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                View Prompt
+              </button>
+              <button
+                onClick={() => copyPrompt(displayPrompt)}
+                className="btn btn-outline btn-sm flex-1 gap-2"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Copy Prompt
+              </button>
+            </div>
             <button
               onClick={() => setShowHistory(true)}
               className="text-xs text-base-content/40 hover:text-base-content/60 transition-colors w-full text-left flex items-center gap-1.5 py-1"
@@ -1027,14 +1037,6 @@ function CharacterDetailInner() {
           </CollapsibleSection>
 
           {/* ── §7: Sprite Images section — bottom of detail page ────────── */}
-          {characterImages.length > 0 && (
-            <SpriteImagesSection
-              characterId={characterId}
-              spriteImages={characterImages}
-              queryClient={queryClient}
-              character={savedChar}
-            />
-          )}
         </div>
 
         {/* ── STICKY ACTION BAR ────────────────────────────────────────── */}
@@ -1176,24 +1178,14 @@ function CharacterDetailInner() {
             </div>
           )}
 
-          {/* Prompt text */}
-          <pre className="text-xs text-base-content/80 whitespace-pre-wrap font-sans leading-relaxed">
-            {displayPrompt || <span className="opacity-40 italic">No prompt generated yet.</span>}
-          </pre>
-
-          {/* Appearance description */}
-          {(sessionAppearanceDesc || savedChar.appearance_description) && (
-            <div className="border-t border-base-300 pt-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-base-content/60 uppercase tracking-wide">Appearance Description</p>
-                {appearanceDescRegenerated && (
-                  <span className="text-xs text-success">● Unsaved</span>
-                )}
-              </div>
-              <p className="text-xs text-base-content/70 leading-relaxed">
-                {sessionAppearanceDesc || savedChar.appearance_description}
-              </p>
-            </div>
+          {/* Sprite Images Section */}
+          {characterImages.length > 0 && (
+            <SpriteImagesSection
+              characterId={characterId}
+              spriteImages={characterImages}
+              queryClient={queryClient}
+              character={savedChar}
+            />
           )}
         </div>
       </div>
@@ -1236,6 +1228,43 @@ function CharacterDetailInner() {
           onRestore={handleRestoreHistory}
           characterId={characterId}
         />
+      )}
+
+      {/* View Prompt Modal */}
+      {showPromptModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+          onClick={() => setShowPromptModal(false)}
+        >
+          <div 
+            className="w-full max-w-2xl max-h-[80vh] bg-base-100 rounded-2xl border border-base-300 shadow-2xl flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-base-300">
+              <h2 className="text-lg font-bold text-base-content">Character Prompt</h2>
+              <button 
+                onClick={() => setShowPromptModal(false)}
+                className="btn btn-ghost btn-sm btn-circle"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <pre className="text-sm text-base-content/80 whitespace-pre-wrap font-sans leading-relaxed">
+                {displayPrompt || <span className="opacity-40 italic">No prompt generated yet.</span>}
+              </pre>
+            </div>
+            <div className="p-4 border-t border-base-300 flex justify-end">
+              <button 
+                onClick={() => copyPrompt(displayPrompt)}
+                className="btn btn-outline btn-sm gap-2"
+              >
+                <Copy className="w-4 h-4" />
+                Copy Prompt
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
