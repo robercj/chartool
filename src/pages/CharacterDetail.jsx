@@ -642,14 +642,14 @@ function CharacterDetailInner() {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowPromptModal(true)}
-                className="btn btn-outline btn-sm flex-1 gap-2"
+                className="btn btn-ghost btn-sm flex-1 gap-2"
               >
                 <Eye className="w-3.5 h-3.5" />
                 View Prompt
               </button>
               <button
                 onClick={() => copyPrompt(displayPrompt)}
-                className="btn btn-outline btn-sm flex-1 gap-2"
+                className="btn btn-ghost btn-sm flex-1 gap-2"
               >
                 <Copy className="w-3.5 h-3.5" />
                 Copy Prompt
@@ -1151,33 +1151,9 @@ function CharacterDetailInner() {
         </div>
       </div>
 
-      {/* ── RIGHT PANEL — live prompt view ───────────────────────────── */}
+      {/* ── RIGHT PANEL — sprite gallery ───────────────────────────── */}
       <div className="hidden lg:flex flex-col w-[28%] flex-shrink-0 border-l border-base-300 bg-base-200 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-sm text-base-content">Character Prompt</h3>
-            <div className="flex items-center gap-2">
-              {identityPromptRegenerated && (
-                <span className="badge badge-success badge-sm gap-1">
-                  <CheckCircle className="w-3 h-3" />
-                  Unsaved
-                </span>
-              )}
-              <button onClick={() => copyPrompt(displayPrompt)} className="btn btn-ghost btn-xs gap-1">
-                <Copy className="w-3.5 h-3.5" />
-                Copy
-              </button>
-            </div>
-          </div>
-
-          {/* §8 stale identity banner */}
-          {identityDirty && !identityPromptRegenerated && (
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600">
-              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-              Identity fields have changed since this prompt was generated.
-            </div>
-          )}
-
           {/* Sprite Images Section */}
           {characterImages.length > 0 && (
             <SpriteImagesSection
