@@ -98,21 +98,7 @@ export default function EmotionListInput({ entries, onChange, spriteCount, theme
       </div>
 
       {/* Entry list */}
-      <div className="space-y-2">
-        {/* Field headers */}
-        <div className="flex items-stretch gap-0 pl-10">
-          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: theme.textMuted, minWidth: '100px' }}>
-            Intensity
-          </span>
-          <div style={{ width: '1px', background: theme.fieldBorder }} />
-          <span className="text-xs font-semibold uppercase tracking-wider px-3 py-1" style={{ color: theme.textMuted, minWidth: '80px' }}>
-            Pose
-          </span>
-          <div style={{ width: '1px', background: theme.fieldBorder }} />
-          <span className="text-xs font-semibold uppercase tracking-wider px-3 py-1" style={{ color: theme.textMuted, minWidth: '80px', maxWidth: '160px' }}>
-            Modifiers
-          </span>
-        </div>
+      <div className="space-y-3">
         {entries.map((entry, index) => (
           <EmotionEntryRow
             key={entry.id}
@@ -235,13 +221,9 @@ function EmotionEntryRow({ entry, index, onChange, onRemove, theme }) {
     : null
 
   return (
-    <div ref={wrapperRef} className="relative">
-      {/* Unified bar */}
-      <div
-        className="flex items-stretch gap-0 rounded-xl overflow-hidden"
-        style={{ border: `1px solid ${theme.fieldBorder}`, background: theme.fieldBg }}
-      >
-        {/* Index badge */}
+    <div ref={wrapperRef} className="space-y-2">
+      {/* Emotion row - labeled */}
+      <div className="flex items-stretch gap-0 rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.fieldBorder}`, background: theme.fieldBg }}>
         <div
           className="flex items-center justify-center px-2.5 text-xs font-bold flex-shrink-0"
           style={{
@@ -253,8 +235,6 @@ function EmotionEntryRow({ entry, index, onChange, onRemove, theme }) {
         >
           {index + 1}
         </div>
-
-        {/* Emotion input */}
         <div className="relative flex-1 min-w-0">
           <input
             ref={emotionInputRef}
@@ -333,88 +313,94 @@ function EmotionEntryRow({ entry, index, onChange, onRemove, theme }) {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Divider */}
-        <div style={{ width: '1px', background: theme.fieldBorder, flexShrink: 0 }} />
-
-        {/* Intensity select */}
-        <div className="relative flex-shrink-0" style={{ minWidth: '100px' }}>
-          <select
-            value={entry.intensity}
-            onChange={e => onChange({ intensity: e.target.value })}
-            className="w-full h-full pl-3 pr-7 py-2.5 text-sm bg-transparent border-none outline-none appearance-none cursor-pointer"
-            style={{ color: theme.textBody, minHeight: '44px' }}
-          >
-            {INTENSITY_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <ChevronDown
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
-            style={{ color: theme.textMuted }}
-          />
+      {/* Options row - labeled with inline fields */}
+      <div className="flex items-stretch gap-2">
+        {/* Intensity */}
+        <div className="flex-1 min-w-0">
+          <label className="text-xs font-semibold uppercase tracking-wider mb-1 block" style={{ color: theme.textMuted }}>
+            Intensity
+          </label>
+          <div className="relative">
+            <select
+              value={entry.intensity}
+              onChange={e => onChange({ intensity: e.target.value })}
+              className="w-full px-3 pr-7 py-2 text-sm rounded-lg appearance-none cursor-pointer"
+              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+            >
+              {INTENSITY_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <ChevronDown
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
+              style={{ color: theme.textMuted }}
+            />
+          </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ width: '1px', background: theme.fieldBorder, flexShrink: 0 }} />
-
-        {/* Pose select */}
-        <div className="relative flex-shrink-0" style={{ minWidth: '80px' }}>
-          <select
-            value={entry.pose || 'random'}
-            onChange={e => onChange({ pose: e.target.value })}
-            className="w-full h-full pl-3 pr-7 py-2.5 text-sm bg-transparent border-none outline-none appearance-none cursor-pointer"
-            style={{ color: theme.textBody, minHeight: '44px' }}
-          >
-            <option value="random">Random</option>
-            {POSE_CATALOG.map(pose => (
-              <option key={pose.id} value={pose.id}>{pose.label}</option>
-            ))}
-          </select>
-          <ChevronDown
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
-            style={{ color: theme.textMuted }}
-          />
+        {/* Pose */}
+        <div className="flex-1 min-w-0">
+          <label className="text-xs font-semibold uppercase tracking-wider mb-1 block" style={{ color: theme.textMuted }}>
+            Pose
+          </label>
+          <div className="relative">
+            <select
+              value={entry.pose || 'random'}
+              onChange={e => onChange({ pose: e.target.value })}
+              className="w-full px-3 pr-7 py-2 text-sm rounded-lg appearance-none cursor-pointer"
+              style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
+            >
+              <option value="random">Random</option>
+              {POSE_CATALOG.map(pose => (
+                <option key={pose.id} value={pose.id}>{pose.label}</option>
+              ))}
+            </select>
+            <ChevronDown
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
+              style={{ color: theme.textMuted }}
+            />
+          </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ width: '1px', background: theme.fieldBorder, flexShrink: 0 }} />
-
-        {/* Modifiers input */}
-        <div className="flex-1 min-w-0" style={{ minWidth: '80px', maxWidth: '160px' }}>
+        {/* Modifiers */}
+        <div className="flex-[2] min-w-0">
+          <label className="text-xs font-semibold uppercase tracking-wider mb-1 block" style={{ color: theme.textMuted }}>
+            Modifiers
+          </label>
           <input
             type="text"
             value={entry.modifiers}
             onChange={e => onChange({ modifiers: e.target.value })}
-            placeholder="Add modifiers, e.g. 'no tears'"
-            className="w-full h-full px-3 py-2.5 text-sm bg-transparent border-none outline-none"
-            style={{ color: theme.textBody, minHeight: '44px' }}
+            placeholder="Add modifiers..."
+            className="w-full px-3 py-2 text-sm rounded-lg"
+            style={{ background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}`, color: theme.textBody }}
             autoCorrect="off"
             spellCheck={false}
           />
         </div>
 
-        {/* Divider */}
-        <div style={{ width: '1px', background: theme.fieldBorder, flexShrink: 0 }} />
-
         {/* Remove button */}
-        <button
-          type="button"
-          onClick={onRemove}
-          className="flex items-center justify-center px-3 transition-colors flex-shrink-0"
-          style={{ color: theme.textMuted }}
-          onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#ef444415' }}
-          onMouseLeave={e => { e.currentTarget.style.color = theme.textMuted; e.currentTarget.style.background = 'transparent' }}
-          aria-label="Remove emotion"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={onRemove}
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: theme.textMuted, background: theme.fieldBg, border: `1px solid ${theme.fieldBorder}` }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#ef4444' }}
+            onMouseLeave={e => { e.currentTarget.style.color = theme.textMuted }}
+            aria-label="Remove emotion"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Confidence hint (fuzzy/substring/verbatim) */}
       {confidenceHint && (
         <p
-          className="text-xs mt-1 px-1 flex items-center gap-1"
+          className="text-xs flex items-center gap-1"
           style={{ color: entry.confidence === 'verbatim' ? theme.primary : theme.textMuted }}
         >
           <AlertCircle className="w-3 h-3 flex-shrink-0" />
