@@ -20,7 +20,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { create } from 'zustand';
 import { supabase } from '../supabase';
-import { generateImage } from '../anthropic';
+import { generateImage, removeImageBackground } from '../anthropic';
 import { CharacterImage } from '../storage';
 import { toast } from 'sonner';
 
@@ -217,6 +217,14 @@ const useGenerationQueueStore = create((set, get) => ({
 
     generateImage(restParams, signal)
       .then(async imageUrl => {
+        if (job.contextType === 'sprite') {
+          try {
+            imageUrl = await removeImageBackground(imageUrl, signal);
+          } catch (rembgErr) {
+            console.warn('Background removal failed for sprite:', rembgErr);
+          }
+        }
+
         await supabase
           .from('generation_jobs')
           .update({
