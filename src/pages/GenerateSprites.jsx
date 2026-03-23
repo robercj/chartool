@@ -25,13 +25,13 @@ import { toast } from 'sonner'
 import {
   ArrowLeft, Upload, X, Sparkles, User, Search, Check,
   AlertCircle, RefreshCw, Loader2, Lock, ChevronDown, ChevronUp,
-  Wand2, Eye, ZoomIn,
+  Wand2, ZoomIn,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProgress } from '../contexts/ProgressContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Character, CharacterImage } from '../lib/storage'
-import { analyzeReferenceImage, generateImage, LimitError, parseAppearanceFromIdentityLock } from '../lib/anthropic'
+import { analyzeReferenceImage, LimitError, parseAppearanceFromIdentityLock } from '../lib/anthropic'
 import { supabase } from '../lib/supabase'
 import { compileSpritePrompt, resolveVariationSpecs } from '../lib/promptCompiler'
 import { RANDOM_POOL } from '../lib/constants/EMOTION_PRESETS'
@@ -62,7 +62,7 @@ const DEFAULT_TOGGLES = { allowPrompt: false, allowClothing: false, allowProps: 
 // ─── Main exported page ───────────────────────────────────────────────────────
 export default function GenerateSprites() {
   const { theme } = useTheme()
-  const { startProgress, updateProgress, clearProgress, isCancelled, generating, setGenerating, getAbortSignal } = useProgress()
+  const { generating } = useProgress()
   const { user } = useAuth()
   const userId = user?.id
   const navigate = useNavigate()
@@ -130,66 +130,6 @@ export default function GenerateSprites() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey])
 
-  // ── Session hydration: restore form state from active queue session ─────────
-  const activeSessionId = useGenerationQueueStore(s => s.activeSessionId)
-  const activeSessionFromStore = useGenerationQueueStore(s => s.sessions.find(sess => sess.sessionId === activeSessionId))
-  useEffect(() => {
-    if (!activeSessionFromStore) return
-    if (activeSessionFromStore.returnRoute !== '/sprites/generate') return
-
-    const { formSnapshot, jobs } = activeSessionFromStore
-
-    // Hydrate mode
-    if (formSnapshot?.mode) setMode(formSnapshot.mode)
-
-    // Hydrate new character mode
-    if (formSnapshot?.mode === 'new') {
-      setNewCharName(formSnapshot.newCharName || '')
-      if (formSnapshot.suggestedAppearance) setSuggestedAppearance(formSnapshot.suggestedAppearance)
-      setAutoFillConfirmed(formSnapshot.autoFillConfirmed ?? false)
-    }
-
-    // Hydrate existing character mode
-    if (formSnapshot?.mode === 'existing' && formSnapshot.selectedCharacterId) {
-      const char = allCharacters.find(c => c.id === formSnapshot.selectedCharacterId)
-      if (char) {
-        setSelectedCharacter(char)
-        if (char.reference_image_url) setReferenceImageUrl(char.reference_image_url)
-      }
-    }
-
-    // Hydrate generation controls
-    if (formSnapshot?.variationCount) setVariationCount(formSnapshot.variationCount)
-    if (formSnapshot?.aspectRatio) setAspectRatio(formSnapshot.aspectRatio)
-    if (formSnapshot?.seedValue) setSeedValue(formSnapshot.seedValue)
-    if (formSnapshot?.emotionEntries) setEmotionEntries(formSnapshot.emotionEntries)
-    if (formSnapshot?.selectedPoseId) setSelectedPoseId(formSnapshot.selectedPoseId)
-    if (formSnapshot?.toggles) setToggles(formSnapshot.toggles)
-    if (formSnapshot?.customPrompt) setCustomPrompt(formSnapshot.customPrompt)
-
-    // Hydrate analysis state
-    if (formSnapshot?.consistencyPrompt) setConsistencyPrompt(formSnapshot.consistencyPrompt)
-    if (formSnapshot?.identityLock) setIdentityLock(formSnapshot.identityLock)
-    if (formSnapshot?.referenceImageBase64) setReferenceImageBase64(formSnapshot.referenceImageBase64)
-    if (formSnapshot?.referenceImageUrl) setReferenceImageUrl(formSnapshot.referenceImageUrl)
-
-    // Hydrate live images from completed jobs
-    const completed = jobs
-      .filter(j => j.status === 'complete' && j.imageUrl)
-      .map((j, idx) => ({
-        url: j.imageUrl,
-        label: `Sprite ${idx + 1}`,
-        seed: j.generationParams?.seed ?? null,
-        poseId: j.generationParams?.poseId ?? null,
-        emotionEntry: j.generationParams?.emotionEntry ?? null,
-        params_snapshot: j.generationParams?.paramsSnapshot ?? null,
-        jobId: j.jobId,
-      }))
-    if (completed.length > 0) setLiveImages(completed)
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSessionFromStore?.sessionId])
-
   // ── Fetch all characters for Mode B ──────────────────────────────────────
   const { data: allCharacters = [] } = useQuery({
     queryKey: ['characters', userId],
@@ -239,11 +179,6 @@ export default function GenerateSprites() {
 
   // ── Reset all state ────────────────────────────────────────────────────────
   const resetAll = useCallback(() => {
-    const { activeSessionId, clearSession } = useGenerationQueueStore.getState()
-    if (activeSessionId) {
-      clearSession(activeSessionId)
-    }
-
     setMode(null)
     setNewCharName('')
     setNameError(null)
@@ -560,8 +495,6 @@ export default function GenerateSprites() {
       }
     })
 
-    setGenerating(true)
-
     try {
       const dispatchBatch = useGenerationQueueStore.getState().dispatchBatch
       await dispatchBatch({
@@ -571,8 +504,8 @@ export default function GenerateSprites() {
         jobs,
       })
 
-      toast.info(`Generating ${variationCount} sprite${variationCount !== 1 ? 's' : ''} for ${charName}...`)
-
+      toast.info(`${variationCount} sprite${variationCount !== 1 ? 's' : ''} queued for ${charName}. Check the Queue to track progress.`)
+      resetAll()
     } catch (err) {
       if (!mountedRef.current) return
       console.error('Failed to dispatch generation batch:', err)
@@ -581,25 +514,8 @@ export default function GenerateSprites() {
       } else {
         toast.error(err.message || 'Failed to start generation')
       }
-      setGenerating(false)
     }
   }
-
-  // ── Monitor active session for completion ───────────────────────────────────
-  const activeSessionForMonitor = useGenerationQueueStore(s => s.sessions.find(sess => sess.sessionId === activeSessionId))
-  useEffect(() => {
-    if (!activeSessionForMonitor) return
-
-    // Clear generating flag when all jobs are complete or failed
-    if (activeSessionForMonitor.jobs.length > 0 && activeSessionForMonitor.jobs.every(j => j.status === 'complete' || j.status === 'failed')) {
-      const failed = activeSessionForMonitor.jobs.filter(j => j.status === 'failed')
-      if (failed.length > 0) {
-        const errors = failed.map(j => j.errorMessage || 'Generation failed').join('\n')
-        setGenerationError(errors)
-      }
-      setGenerating(false)
-    }
-  }, [activeSessionForMonitor])
 
   const activeCharacter = createdCharacter || selectedCharacter
 
