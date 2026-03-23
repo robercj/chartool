@@ -1703,21 +1703,18 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient, character
 
   return (
     <>
-      <div className="border border-base-300 rounded-xl overflow-hidden mb-4">
-        <div className="flex items-center gap-3 px-5 py-4 bg-base-200">
-          <ImageIcon className="w-4 h-4 text-primary flex-shrink-0" />
-          <span className="flex-1 font-semibold text-sm text-base-content">
-            Images
-          </span>
-          <span className="text-xs text-base-content/50">
-            {spriteImages.length} image{spriteImages.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-
-        <div className="p-4 bg-base-100">
+      <div className="card bg-base-200 border border-base-300">
+        <div className="card-body p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-primary" />
+              <span className="font-semibold text-sm text-base-content">Images</span>
+            </div>
+            <span className="badge badge-sm">{spriteImages.length}</span>
+          </div>
           <div
-            className="grid gap-3"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}
+            className="grid gap-3 mt-2"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}
           >
             {spriteImages.map((img, i) => (
               <SpriteImageThumbnail
