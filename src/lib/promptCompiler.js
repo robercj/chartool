@@ -417,15 +417,15 @@ export function compileEditPrompt({
  * @param {object[]} randomPosePool      — RANDOM_POSE_POOL from POSE_PRESETS
  * @returns {{ emotionEntry, poseId }[]}  Array of N resolved variation specs
  */
-export function resolveVariationSpecs(userEmotionEntries, poseId, count, randomPool, randomPosePool) {
+export function resolveVariationSpecs(userEmotionEntries, count, randomPool, randomPosePool) {
   const specs = []
 
   // Fill user-provided entries first (up to count)
   for (let i = 0; i < Math.min(userEmotionEntries.length, count); i++) {
     const entry = userEmotionEntries[i]
-    const resolvedPoseId = poseId === 'random'
+    const resolvedPoseId = entry.pose === 'random' || !entry.pose
       ? randomPosePool[Math.floor(Math.random() * randomPosePool.length)].id
-      : poseId
+      : entry.pose
     specs.push({ emotionEntry: entry, poseId: resolvedPoseId })
   }
 
@@ -443,13 +443,13 @@ export function resolveVariationSpecs(userEmotionEntries, poseId, count, randomP
         emotion: poolItem.base,
         rawInput: poolItem.base,
         intensity: poolItem.tier,
+        pose: 'random',
         modifiers: '',
         resolved: { base: poolItem.base, tier: poolItem.tier },
         isVerbatim: false,
       }
 
-      const resolvedPoseId = poseId === 'random' ? randomPose.id : poseId
-      specs.push({ emotionEntry: randomEntry, poseId: resolvedPoseId })
+      specs.push({ emotionEntry: randomEntry, poseId: randomPose.id })
     }
   }
 

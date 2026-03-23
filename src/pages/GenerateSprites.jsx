@@ -110,7 +110,6 @@ export default function GenerateSprites() {
 
   // ── Variation controls (identity lock UI) ─────────────────────────────────
   const [emotionEntries, setEmotionEntries] = useState([])
-  const [selectedPoseId, setSelectedPoseId] = useState('random')
   const [toggles, setToggles] = useState(DEFAULT_TOGGLES)
   const [customPrompt, setCustomPrompt] = useState('')
 
@@ -202,7 +201,6 @@ export default function GenerateSprites() {
     setLiveImages([])
     setGenerationError(null)
     setEmotionEntries([])
-    setSelectedPoseId('random')
     setToggles(DEFAULT_TOGGLES)
     setCustomPrompt('')
     setEditModalImage(null)
@@ -438,7 +436,7 @@ export default function GenerateSprites() {
     const prompt = consistencyPrompt || character.character_consistency_prompt || ''
 
     // Resolve all N variation specs (emotion + pose per sprite)
-    const specs = resolveVariationSpecs(emotionEntries, selectedPoseId, variationCount, RANDOM_POOL, RANDOM_POSE_POOL)
+    const specs = resolveVariationSpecs(emotionEntries, variationCount, RANDOM_POOL, RANDOM_POSE_POOL)
 
     // Build form snapshot for session hydration
     const formSnapshot = {
@@ -451,7 +449,6 @@ export default function GenerateSprites() {
       aspectRatio,
       seedValue,
       emotionEntries,
-      selectedPoseId,
       toggles,
       customPrompt,
       consistencyPrompt: prompt,
@@ -628,8 +625,6 @@ export default function GenerateSprites() {
         spriteCount={variationCount}
         emotionEntries={emotionEntries}
         onEmotionEntriesChange={setEmotionEntries}
-        selectedPoseId={selectedPoseId}
-        onPoseChange={setSelectedPoseId}
         toggles={toggles}
         onTogglesChange={setToggles}
         customPrompt={customPrompt}

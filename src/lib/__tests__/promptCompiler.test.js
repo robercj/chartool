@@ -356,49 +356,55 @@ describe('promptCompiler', () => {
 
     it('should return user-provided entries first', () => {
       const userEntries = [
-        { emotion: 'joy', rawInput: 'joy', resolved: { base: 'joy' }, isVerbatim: false },
-        { emotion: 'sad', rawInput: 'sad', resolved: { base: 'sadness' }, isVerbatim: false },
+        { emotion: 'joy', rawInput: 'joy', resolved: { base: 'joy' }, isVerbatim: false, pose: 'neutral' },
+        { emotion: 'sad', rawInput: 'sad', resolved: { base: 'sadness' }, isVerbatim: false, pose: 'random' },
       ]
 
-      const result = resolveVariationSpecs(userEntries, 'neutral', 4, mockRandomPool, mockPosePool)
+      const result = resolveVariationSpecs(userEntries, 4, mockRandomPool, mockPosePool)
 
       expect(result[0].emotionEntry.emotion).toBe('joy')
+      expect(result[0].poseId).toBe('neutral')
       expect(result[1].emotionEntry.emotion).toBe('sad')
+      expect(result[1].poseId).toBeDefined()
     })
 
     it('should fill remaining slots with random entries', () => {
       const userEntries = [
-        { emotion: 'joy', rawInput: 'joy', resolved: { base: 'joy' }, isVerbatim: false },
+        { emotion: 'joy', rawInput: 'joy', resolved: { base: 'joy' }, isVerbatim: false, pose: 'neutral' },
       ]
 
-      const result = resolveVariationSpecs(userEntries, 'neutral', 4, mockRandomPool, mockPosePool)
+      const result = resolveVariationSpecs(userEntries, 4, mockRandomPool, mockPosePool)
 
       expect(result.length).toBe(4)
       expect(result[1].emotionEntry).toBeDefined()
       expect(result[1].emotionEntry.resolved.base).toBeDefined()
+      expect(result[2].poseId).toBeDefined()
     })
 
     it('should handle no user entries', () => {
-      const result = resolveVariationSpecs([], 'neutral', 3, mockRandomPool, mockPosePool)
+      const result = resolveVariationSpecs([], 3, mockRandomPool, mockPosePool)
 
       expect(result.length).toBe(3)
       result.forEach(spec => {
         expect(spec.emotionEntry.resolved).toBeDefined()
-        expect(spec.poseId).toBe('neutral')
+        expect(spec.poseId).toBeDefined()
       })
     })
 
     it('should respect count parameter exactly', () => {
-      const result = resolveVariationSpecs([], 'neutral', 5, mockRandomPool, mockPosePool)
+      const result = resolveVariationSpecs([], 5, mockRandomPool, mockPosePool)
 
       expect(result.length).toBe(5)
     })
 
-    it('should use random pose when poseId is random', () => {
-      const result = resolveVariationSpecs([], 'random', 3, mockRandomPool, mockPosePool)
+    it('should use random pose when entry pose is random', () => {
+      const userEntries = [
+        { emotion: 'joy', rawInput: 'joy', resolved: { base: 'joy' }, isVerbatim: false, pose: 'random' },
+      ]
+
+      const result = resolveVariationSpecs(userEntries, 3, mockRandomPool, mockPosePool)
 
       expect(result.length).toBe(3)
-      // Each should have a valid pose ID from the pool
       const validPoseIds = mockPosePool.map(p => p.id)
       result.forEach(spec => {
         expect(validPoseIds).toContain(spec.poseId)
@@ -407,24 +413,25 @@ describe('promptCompiler', () => {
 
     it('should not exceed count when user entries exceed requested count', () => {
       const userEntries = [
-        { emotion: 'joy', rawInput: 'joy', resolved: { base: 'joy' }, isVerbatim: false },
-        { emotion: 'sad', rawInput: 'sad', resolved: { base: 'sadness' }, isVerbatim: false },
-        { emotion: 'angry', rawInput: 'angry', resolved: { base: 'anger' }, isVerbatim: false },
-        { emotion: 'fear', rawInput: 'fear', resolved: { base: 'fear' }, isVerbatim: false },
+        { emotion: 'joy', rawInput: 'joy', resolved: { base: 'joy' }, isVerbatim: false, pose: 'neutral' },
+        { emotion: 'sad', rawInput: 'sad', resolved: { base: 'sadness' }, isVerbatim: false, pose: 'neutral' },
+        { emotion: 'angry', rawInput: 'angry', resolved: { base: 'anger' }, isVerbatim: false, pose: 'neutral' },
+        { emotion: 'fear', rawInput: 'fear', resolved: { base: 'fear' }, isVerbatim: false, pose: 'neutral' },
       ]
 
-      const result = resolveVariationSpecs(userEntries, 'neutral', 2, mockRandomPool, mockPosePool)
+      const result = resolveVariationSpecs(userEntries, 2, mockRandomPool, mockPosePool)
 
       expect(result.length).toBe(2)
     })
 
     it('should include proper emotionEntry structure for random entries', () => {
-      const result = resolveVariationSpecs([], 'neutral', 1, mockRandomPool, mockPosePool)
+      const result = resolveVariationSpecs([], 1, mockRandomPool, mockPosePool)
 
       const randomEntry = result[0].emotionEntry
       expect(randomEntry.emotion).toBeDefined()
       expect(randomEntry.rawInput).toBeDefined()
       expect(randomEntry.intensity).toBeDefined()
+      expect(randomEntry.pose).toBe('random')
       expect(randomEntry.resolved).toBeDefined()
       expect(randomEntry.isVerbatim).toBe(false)
     })

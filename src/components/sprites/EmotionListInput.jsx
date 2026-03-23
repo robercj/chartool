@@ -16,6 +16,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Plus, X, Shuffle, AlertCircle, ChevronDown } from 'lucide-react'
 import { resolveEmotion, getEmotionSuggestions, getConfidenceHint } from '../../lib/emotionMatcher'
 import { SUGGESTION_GROUPS } from '../../lib/constants/EMOTION_PRESETS'
+import { POSE_CATALOG } from '../../lib/constants/POSE_PRESETS'
 
 const INTENSITY_OPTIONS = [
   { value: 'subtle', label: 'Subtle' },
@@ -29,6 +30,7 @@ function createEmptyEntry() {
     id: Math.random().toString(36).slice(2),
     emotion: '',
     intensity: 'average',
+    pose: 'random',
     modifiers: '',
     resolved: null,
     isVerbatim: false,
@@ -97,6 +99,20 @@ export default function EmotionListInput({ entries, onChange, spriteCount, theme
 
       {/* Entry list */}
       <div className="space-y-2">
+        {/* Field headers */}
+        <div className="flex items-stretch gap-0 pl-10">
+          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: theme.textMuted, minWidth: '100px' }}>
+            Intensity
+          </span>
+          <div style={{ width: '1px', background: theme.fieldBorder }} />
+          <span className="text-xs font-semibold uppercase tracking-wider px-3 py-1" style={{ color: theme.textMuted, minWidth: '80px' }}>
+            Pose
+          </span>
+          <div style={{ width: '1px', background: theme.fieldBorder }} />
+          <span className="text-xs font-semibold uppercase tracking-wider px-3 py-1" style={{ color: theme.textMuted, minWidth: '80px', maxWidth: '160px' }}>
+            Modifiers
+          </span>
+        </div>
         {entries.map((entry, index) => (
           <EmotionEntryRow
             key={entry.id}
@@ -331,6 +347,28 @@ function EmotionEntryRow({ entry, index, onChange, onRemove, theme }) {
           >
             {INTENSITY_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <ChevronDown
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
+            style={{ color: theme.textMuted }}
+          />
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: '1px', background: theme.fieldBorder, flexShrink: 0 }} />
+
+        {/* Pose select */}
+        <div className="relative flex-shrink-0" style={{ minWidth: '80px' }}>
+          <select
+            value={entry.pose || 'random'}
+            onChange={e => onChange({ pose: e.target.value })}
+            className="w-full h-full pl-3 pr-7 py-2.5 text-sm bg-transparent border-none outline-none appearance-none cursor-pointer"
+            style={{ color: theme.textBody, minHeight: '44px' }}
+          >
+            <option value="random">Random</option>
+            {POSE_CATALOG.map(pose => (
+              <option key={pose.id} value={pose.id}>{pose.label}</option>
             ))}
           </select>
           <ChevronDown

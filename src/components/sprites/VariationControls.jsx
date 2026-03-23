@@ -3,14 +3,12 @@
 // Shown after identity lock analysis completes, before generation.
 //
 // Contains:
-//   - EmotionListInput  (emotion + intensity + modifiers per sprite)
-//   - PoseSelector      (single or random pose)
+//   - EmotionListInput  (emotion + intensity + pose + modifiers per sprite)
 //   - ModifierToggles   (optional permissions: prompt, clothing, props)
 //   - CustomPromptPanel (shown only when allowPrompt is ON)
 // ─────────────────────────────────────────────────────────────────────────────
 import { Wand2 } from 'lucide-react'
 import EmotionListInput from './EmotionListInput'
-import PoseSelector from './PoseSelector'
 import ModifierToggles from './ModifierToggles'
 import CustomPromptPanel from './CustomPromptPanel'
 
@@ -18,8 +16,6 @@ export default function VariationControls({
   spriteCount,
   emotionEntries,
   onEmotionEntriesChange,
-  selectedPoseId,
-  onPoseChange,
   toggles,
   onTogglesChange,
   customPrompt,
@@ -44,7 +40,7 @@ export default function VariationControls({
             Variation Controls
           </p>
           <p className="text-xs" style={{ color: theme.textMuted }}>
-            Set emotion and pose for each sprite, or leave empty to randomize
+            Set emotion, intensity, pose and modifiers for each sprite, or leave empty to randomize
           </p>
         </div>
       </div>
@@ -57,13 +53,6 @@ export default function VariationControls({
         entries={emotionEntries}
         onChange={onEmotionEntriesChange}
         spriteCount={spriteCount}
-        theme={theme}
-      />
-
-      {/* Pose selector */}
-      <PoseSelector
-        selectedPoseId={selectedPoseId}
-        onChange={onPoseChange}
         theme={theme}
       />
 
