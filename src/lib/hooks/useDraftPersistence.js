@@ -162,7 +162,7 @@ export function useDraftPersistence(draftId, userId) {
 
     debounceTimerRef.current = setTimeout(() => {
       setLocalState(current => {
-        saveToStorage(current, true);
+        saveToStorage(current, hasMeaningfulData(current));
         return current;
       });
     }, DEBOUNCE_DELAY);
@@ -175,7 +175,7 @@ export function useDraftPersistence(draftId, userId) {
       clearTimeout(debounceTimerRef.current);
     }
     
-    await saveToStorage(localState, true);
+    await saveToStorage(localState, hasMeaningfulData(localState));
   }, [localState, saveToStorage]);
 
   const clearDraft = useCallback(() => {
@@ -209,7 +209,7 @@ export function useDraftPersistence(draftId, userId) {
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }
-        saveToStorage(localState, true);
+        saveToStorage(localState, hasMeaningfulData(localState));
       }
     };
 

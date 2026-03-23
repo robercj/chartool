@@ -36,8 +36,11 @@ export default function CharacterIdentityForm({
   });
 
   const handleFieldChange = (field, value, triggerBlur = true) => {
-    onChange({ ...formData, [field]: value });
-    if (triggerBlur && onBlur) onBlur();
+    const updatedData = { ...formData, [field]: value };
+    onChange(updatedData);
+    if (triggerBlur && onBlur) {
+      onBlur(updatedData);
+    }
   };
 
   // ── Relationship (Social Web) helpers ─────────────────────────────────────
