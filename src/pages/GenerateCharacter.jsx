@@ -81,7 +81,7 @@ export default function GenerateCharacterPage() {
 
   const abortControllerRef = useRef(null);
 
-  const { draft, isDirty, lastSaved, updateState, saveNow, isInitialized } = useDraftPersistence(draftId, user?.id);
+  const { draft, isDirty, lastSaved, updateState, saveNow, isInitialized, handleFieldBlur } = useDraftPersistence(draftId, user?.id);
   const [isNewDraft, setIsNewDraft] = useState(false);
   const [, setAppearanceExpanded] = useState(true);
 
@@ -470,6 +470,7 @@ export default function GenerateCharacterPage() {
             <CharacterIdentityForm
               formData={formData}
               onChange={handleFormChange}
+              onBlur={handleFieldBlur}
               disabled={anyBusy}
             />
           )}
@@ -480,6 +481,7 @@ export default function GenerateCharacterPage() {
               <AppearanceForm
                 appearanceData={formData.appearance || {}}
                 onChange={handleAppearanceChange}
+                onBlur={handleFieldBlur}
                 disabled={anyBusy}
                 characterData={formData}
                 onJsonChange={handleJsonChange}

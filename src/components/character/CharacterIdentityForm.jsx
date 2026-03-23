@@ -24,6 +24,7 @@ const LABEL_CLS    = 'label label-text font-medium pb-1';
 export default function CharacterIdentityForm({
   formData,
   onChange,
+  onBlur,
   disabled = false,
 }) {
   const { user } = useAuth();
@@ -34,8 +35,9 @@ export default function CharacterIdentityForm({
     enabled: !!user,
   });
 
-  const handleFieldChange = (field, value) => {
+  const handleFieldChange = (field, value, triggerBlur = true) => {
     onChange({ ...formData, [field]: value });
+    if (triggerBlur && onBlur) onBlur();
   };
 
   // ── Relationship (Social Web) helpers ─────────────────────────────────────
@@ -101,7 +103,8 @@ export default function CharacterIdentityForm({
           <Field id="character-name" label="Character Name">
             <input id="character-name" type="text" className={INPUT_CLS} disabled={disabled}
               value={formData.character_name || ''} placeholder="Enter character name"
-              onChange={(e) => handleFieldChange('character_name', e.target.value)} />
+              onChange={(e) => handleFieldChange('character_name', e.target.value)}
+              onBlur={onBlur} />
           </Field>
 
           <Field id="character-role" label="Role in Story">

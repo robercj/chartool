@@ -9,6 +9,7 @@ const LABEL_CLS = 'label label-text font-medium pb-1';
 export default function AppearanceForm({
   appearanceData,
   onChange,
+  onBlur,
   disabled = false,
   characterData = null,
   onJsonChange = null,
@@ -17,6 +18,7 @@ export default function AppearanceForm({
 }) {
   const handleFieldChange = (field, value) => {
     onChange({ ...appearanceData, [field]: value });
+    if (onBlur) onBlur();
   };
 
   return (
