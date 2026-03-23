@@ -24,7 +24,14 @@ import { GenerationContextProvider } from './components/GenerationContextProvide
 import './index.css'
 // seedSettings.js no longer needed — API keys are managed by Supabase Edge Function secrets
 
-export const queryClient = new QueryClient()
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,          // Don't refetch data that's less than 1 minute old
+      refetchOnWindowFocus: false, // Prevent a burst of DB queries on every tab switch
+    },
+  },
+})
 
 function NotFound() {
   return (
