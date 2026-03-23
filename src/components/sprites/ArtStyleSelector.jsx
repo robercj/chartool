@@ -25,11 +25,6 @@ export default function ArtStyleSelector({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="select select-bordered w-full text-sm"
-        style={{
-          background: theme.fieldBg,
-          borderColor: theme.fieldBorder,
-          color: theme.textBody,
-        }}
       >
         <option value="">Same as reference (no style change)</option>
         {ART_STYLES.map((cat) => (

@@ -1295,7 +1295,6 @@ function GenerationControls({
             value={variationCount}
             onChange={e => onVariationCountChange(Number(e.target.value))}
             className="select select-bordered w-full"
-            style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
           >
             {[1, 2, 3, 4, 5, 6, 8, 10].map(n => (
               <option key={n} value={n}>{n} sprite{n !== 1 ? 's' : ''}</option>
@@ -1308,7 +1307,6 @@ function GenerationControls({
             value={aspectRatio}
             onChange={e => onAspectRatioChange(e.target.value)}
             className="select select-bordered w-full"
-            style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
           >
             {ASPECT_RATIOS.map(r => (
               <option key={r.value} value={r.value}>{r.label}</option>

@@ -983,7 +983,6 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
                 value={character.shotType || 'Full-body'}
                 onChange={e => onUpdate({ shotType: e.target.value })}
                 className="select select-bordered bg-base-300 w-full text-sm"
-                style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
               >
                 {['Portrait', 'Half-body', 'Full-body'].map(opt => (
                   <option key={opt} value={opt}>{opt}</option>
@@ -998,7 +997,6 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
                 value={character.aspectRatio || '3:4'}
                 onChange={e => onUpdate({ aspectRatio: e.target.value })}
                 className="select select-bordered bg-base-300 w-full text-sm"
-                style={{ height: '44px', background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
               >
                 {ASPECT_RATIOS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -1249,7 +1247,6 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
             value={genre}
             onChange={(e) => setGenre(e.target.value)}
             className="select select-bordered bg-base-300 w-full"
-            style={{ background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
           >
             {Object.entries(GENRES).map(([key, g]) => (
               <option key={key} value={key}>{g.emoji} {g.label}</option>
@@ -1268,7 +1265,6 @@ function NewStorylineModal({ theme, onClose, onConfirm }) {
               value={artStyle}
               onChange={(e) => setArtStyle(e.target.value)}
               className="select select-bordered bg-base-300 w-full"
-              style={{ background: theme.fieldBg, borderColor: theme.fieldBorder, color: theme.textBody }}
             >
               <option value="">Select style...</option>
               {ART_STYLES.map(cat => (

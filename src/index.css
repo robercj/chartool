@@ -290,3 +290,56 @@ textarea {
   min-width:  2.75rem;   /* 44px */
   min-height: 2.75rem;
 }
+
+/* ─── DaisyUI Select Override ────────────────────────────────────────────────── */
+/*
+  DaisyUI's select uses base-200/300 which may not match our custom theme.
+  Force selects to use the theme's field colors for consistency.
+*/
+.select {
+  background-color: var(--color-base-300, #191b27) !important;
+  border-color: oklch(22% 0.04 264) !important;
+  color: oklch(95% 0.01 240) !important;
+}
+
+.select:focus {
+  outline-color: oklch(48% 0.22 15) !important;
+}
+
+.select::placeholder {
+  color: oklch(65% 0.04 240) !important;
+}
+
+.select option {
+  background-color: oklch(14% 0.03 264) !important;
+  color: oklch(95% 0.01 240) !important;
+}
+
+/* ─── DaisyUI Dropdown / Menu Override ────────────────────────────────────────── */
+/*
+  DaisyUI dropdown menus need to match the custom theme card backgrounds.
+  Override the default dropdown-content styling.
+*/
+.dropdown-content {
+  background-color: oklch(10% 0.025 264) !important;
+  border-color: oklch(22% 0.04 264) !important;
+  color: oklch(95% 0.01 240) !important;
+}
+
+/* Menu component (used in dropdowns and context menus) */
+.menu {
+  background-color: oklch(10% 0.025 264) !important;
+  color: oklch(95% 0.01 240) !important;
+}
+
+.menu li > a {
+  color: oklch(95% 0.01 240) !important;
+}
+
+.menu li > a:hover {
+  background-color: oklch(14% 0.03 264) !important;
+}
+
+.menu li > a:focus {
+  outline-color: oklch(48% 0.22 15) !important;
+}
