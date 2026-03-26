@@ -21,6 +21,7 @@ import {
   generateAppearanceDescription,
   generateCharacterImage,
   generateImage,
+  removeImageBackground,
   LimitError,
 } from '../lib/anthropic';
 import { compileEditPrompt } from '../lib/promptCompiler';
@@ -402,10 +403,20 @@ function CharacterDetailInner() {
         prompt: promptToUse,
         seed: seedLocked ? seed : null,
       });
-      setSessionCurrentImage(result.url);
+      let imageUrl = result.url;
+      
+      // Apply background removal
+      try {
+        imageUrl = await removeImageBackground(imageUrl);
+      } catch (rembgErr) {
+        console.warn('Background removal failed:', rembgErr);
+        toast.warning('Background removal failed - image saved with background');
+      }
+      
+      setSessionCurrentImage(imageUrl);
       setSeed(result.seed ?? seed);
       setImageRegenerated(true);
-      setSessionImgHistory(prev => [result.url, ...prev.filter(u => u !== result.url)].slice(0, 10));
+      setSessionImgHistory(prev => [imageUrl, ...prev.filter(u => u !== imageUrl)].slice(0, 10));
       toast.success('Image regenerated!');
     } catch { toast.error('Failed to regenerate image. Please try again.'); }
     finally { setIsRegeneratingImage(false); }
