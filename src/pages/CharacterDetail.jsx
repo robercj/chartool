@@ -13,6 +13,7 @@ import {
   AlertTriangle, CheckCircle, Sparkles, X, Plus, RotateCcw,
   Pencil, Clock, Loader2, Image as ImageIcon, Lock, Unlock,
   Download, Trash2, ZoomIn, LockKeyhole, ArrowLeft, Eye, Image,
+  MoreVertical,
 } from 'lucide-react';
 import { useAuth }  from '../contexts/AuthContext';
 import { Character, PromptHistory, CharacterImage } from '../lib/storage';
@@ -289,7 +290,7 @@ function CharacterDetailInner() {
 
   // ── Section collapse state (localStorage-persisted) ─────────────────────────
   const defaultExpanded = { 'identity-role': true, demographics: true, personality: true,
-    psychology: true, backstory: true, 'social-web': true, 'voice-speech': true, appearance: true, 'image-gallery': true };
+    psychology: true, backstory: true, 'social-web': true, 'voice-speech': true, appearance: true };
   const [sectionExpanded, setSectionExpanded] = useState(() => {
     try {
       const stored = localStorage.getItem(`char-sections-${characterId}`);
@@ -1059,63 +1060,6 @@ function CharacterDetailInner() {
               onChange={v => handleAppearanceChange('visual_motifs', v)} />
           </CollapsibleSection>
 
-          {/* ── Image Gallery: all primary images ──────────────────────────────── */}
-          {uniqueImages.length > 0 && (
-            <div className="border border-base-300 rounded-xl overflow-hidden mb-4">
-              <button
-                type="button"
-                onClick={() => toggleSection('image-gallery')}
-                className="w-full flex items-center gap-3 px-5 py-4 bg-base-200 hover:bg-base-300 transition-colors text-left"
-                aria-expanded={sectionExpanded['image-gallery']}
-              >
-                <ImageIcon className="w-4 h-4 text-primary flex-shrink-0" />
-                <span className="flex-1 font-semibold text-sm text-base-content">Image Gallery</span>
-                <span className="badge badge-ghost badge-sm">{uniqueImages.length}</span>
-                {sectionExpanded['image-gallery']
-                  ? <ChevronUp className="w-4 h-4 opacity-50" />
-                  : <ChevronDown className="w-4 h-4 opacity-50" />
-                }
-              </button>
-              {sectionExpanded['image-gallery'] && (
-                <div className="p-4 bg-base-100">
-                  <p className="text-xs text-base-content/50 mb-3">
-                    All generated primary images for this character
-                  </p>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                    {uniqueImages.map((url, i) => (
-                      <div key={i} className="relative group aspect-[3/4] rounded-lg overflow-hidden bg-base-300">
-                        <img 
-                          src={url} 
-                          alt={`Image ${i + 1}`}
-                          className={`w-full h-full object-cover cursor-pointer transition-all ${
-                            url === displayImage ? 'ring-2 ring-primary' : 'hover:opacity-90'
-                          }`}
-                          onClick={() => {
-                            setSelectedHistImg(url === selectedHistImg ? null : url);
-                            if (url !== savedChar?.generated_image_url) {
-                              setPendingPrimaryImage(url);
-                              toast('Click save to use this as primary image');
-                            }
-                          }}
-                        />
-                        {url === savedChar?.generated_image_url && (
-                          <div className="absolute top-1 right-1">
-                            <span className="badge badge-primary badge-xs">Primary</span>
-                          </div>
-                        )}
-                        {url === sessionCurrentImage && (
-                          <div className="absolute top-1 right-1">
-                            <span className="badge badge-secondary badge-xs">Current</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* ── §7: Sprite Images section — bottom of detail page ────────── */}
         </div>
 
@@ -1234,13 +1178,16 @@ function CharacterDetailInner() {
       {/* ── RIGHT PANEL — sprite gallery ───────────────────────────── */}
       <div className="hidden lg:flex flex-col w-[28%] flex-shrink-0 border-l border-base-300 bg-base-200 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Sprite Images Section */}
-          {characterImages.length > 0 && (
-            <SpriteImagesSection
+          {/* All Images: primary + sprites */}
+          {(uniqueImages.length > 0 || characterImages.length > 0) && (
+            <AllImagesSection
               characterId={characterId}
+              primaryImages={uniqueImages}
               spriteImages={characterImages}
+              currentPrimaryUrl={savedChar?.generated_image_url}
+              sessionCurrentImage={sessionCurrentImage}
+              onSetPrimary={setPendingPrimaryImage}
               queryClient={queryClient}
-              character={savedChar}
             />
           )}
         </div>
@@ -1834,6 +1781,194 @@ function IdentityLockSection({ identityLock, sectionExpanded, onToggle }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── AllImagesSection ─────────────────────────────────────────────────
+// Combined image gallery showing primary images + sprites in right panel.
+// Each image has an ellipsis menu (⋮) with actions.
+function AllImagesSection({ 
+  characterId, 
+  primaryImages, 
+  spriteImages, 
+  currentPrimaryUrl, 
+  sessionCurrentImage,
+  onSetPrimary,
+  queryClient
+}) {
+  const [ctxOpenImg, setCtxOpenImg] = useState(null);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  // Combine and dedupe all images
+  const allImages = useMemo(() => {
+    const combined = [
+      ...(primaryImages || []).map(url => ({ type: 'primary', url })),
+      ...(spriteImages || []).map(img => ({ type: 'sprite', id: img.id, url: img.url, label: img.label })),
+    ];
+    // Dedupe by URL
+    const seen = new Set();
+    return combined.filter(img => {
+      if (seen.has(img.url)) return false;
+      seen.add(img.url);
+      return true;
+    });
+  }, [primaryImages, spriteImages]);
+
+  const handleDownload = async (url) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `character-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Download failed. Try right-clicking the image to save.');
+    }
+  };
+
+  const handleSetPrimary = (url) => {
+    onSetPrimary(url);
+    setCtxOpenImg(null);
+    toast('Image staged as primary — save to commit');
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTargetId) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await CharacterImage.delete(deleteTargetId);
+      queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
+      if (ctxOpenImg === deleteTargetId) setCtxOpenImg(null);
+      setDeleteTargetId(null);
+      toast.success('Image deleted.');
+    } catch (err) {
+      console.error('Delete sprite image failed:', err);
+      setDeleteError("Couldn't delete image. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="card bg-base-200 border border-base-300">
+        <div className="card-body p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-primary" />
+              <span className="font-semibold text-sm text-base-content">All Images</span>
+            </div>
+            <span className="badge badge-sm">{allImages.length}</span>
+          </div>
+          <div
+            className="grid gap-3 mt-2"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}
+          >
+            {allImages.map((img, i) => {
+              const isPrimary = img.url === currentPrimaryUrl;
+              const isCurrent = img.url === sessionCurrentImage;
+              const isSprite = img.type === 'sprite';
+              const imgId = isSprite ? img.id : `primary-${i}`;
+
+              return (
+                <div key={imgId} className="relative group">
+                  <div className="aspect-[3/4] rounded-lg overflow-hidden bg-base-300">
+                    <img
+                      src={img.url}
+                      alt={img.label || `Image ${i + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  {/* Badges */}
+                  {(isPrimary || isCurrent) && (
+                    <div className="absolute top-1 left-1 flex gap-1">
+                      {isPrimary && <span className="badge badge-primary badge-xs">Primary</span>}
+                      {isCurrent && <span className="badge badge-secondary badge-xs">Current</span>}
+                    </div>
+                  )}
+                  {/* ⋮ Menu button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setCtxOpenImg(ctxOpenImg === imgId ? null : imgId); }}
+                    className="absolute top-1 right-1 z-10 flex items-center justify-center rounded-lg bg-black/60 hover:bg-primary border-none text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ width: '24px', height: '24px' }}
+                    aria-label={`Options for image ${i + 1}`}
+                  >
+                    <MoreVertical className="w-3 h-3" />
+                  </button>
+                  {/* Context menu dropdown */}
+                  {ctxOpenImg === imgId && (
+                    <div
+                      className="absolute top-7 right-1 z-50 min-w-[140px] rounded-xl border shadow-lg overflow-hidden"
+                      style={{ background: 'var(--fallback-b2, oklch(var(--b2)))' }}
+                    >
+                      <button
+                        onClick={() => { handleDownload(img.url); setCtxOpenImg(null); }}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-base-300 flex items-center gap-2"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </button>
+                      {!isPrimary && (
+                        <button
+                          onClick={() => handleSetPrimary(img.url)}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-base-300 flex items-center gap-2"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          Set as Primary
+                        </button>
+                      )}
+                      {isSprite && (
+                        <button
+                          onClick={() => { setDeleteTargetId(img.id); setCtxOpenImg(null); }}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-error/10 text-error flex items-center gap-2"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Delete confirmation modal */}
+      {deleteTargetId && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => { if (!isDeleting) setDeleteTargetId(null); }}
+        >
+          <div
+            className="w-full max-w-sm bg-base-100 rounded-2xl border border-base-300 shadow-2xl p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-base-content">Delete this image?</h2>
+            <p className="text-sm text-base-content/60">
+              This action cannot be undone. Deleted images will not restore any used image credits.
+            </p>
+            {deleteError && <p className="text-sm text-error">{deleteError}</p>}
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setDeleteTargetId(null)} disabled={isDeleting} className="btn btn-ghost flex-1">
+                Cancel
+              </button>
+              <button onClick={handleDeleteConfirm} disabled={isDeleting} className="btn btn-error flex-1 gap-2">
+                {isDeleting && <span className="loading loading-spinner loading-sm" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
