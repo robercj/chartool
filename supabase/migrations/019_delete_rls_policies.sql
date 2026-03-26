@@ -10,15 +10,35 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ── characters ────────────────────────────────────────────────────────────────
-CREATE POLICY "Users can delete their own characters"
-  ON public.characters
-  FOR DELETE
-  TO authenticated
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename  = 'characters'
+      AND policyname = 'Users can delete their own characters'
+  ) THEN
+    CREATE POLICY "Users can delete their own characters"
+      ON public.characters
+      FOR DELETE
+      TO authenticated
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- ── character_drafts ──────────────────────────────────────────────────────────
-CREATE POLICY "Users can delete their own character drafts"
-  ON public.character_drafts
-  FOR DELETE
-  TO authenticated
-  USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename  = 'character_drafts'
+      AND policyname = 'Users can delete their own character drafts'
+  ) THEN
+    CREATE POLICY "Users can delete their own character drafts"
+      ON public.character_drafts
+      FOR DELETE
+      TO authenticated
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;
