@@ -1103,7 +1103,7 @@ function CharacterDetailInner() {
                             <span className="badge badge-primary badge-xs">Primary</span>
                           </div>
                         )}
-                        {url === sessionCurrentImage && !imageRegenerated && (
+                        {url === sessionCurrentImage && (
                           <div className="absolute top-1 right-1">
                             <span className="badge badge-secondary badge-xs">Current</span>
                           </div>
