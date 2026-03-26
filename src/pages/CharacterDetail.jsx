@@ -1220,6 +1220,7 @@ function CharacterDetailInner() {
               sessionCurrentImage={sessionCurrentImage}
               onSetPrimary={setPendingPrimaryImage}
               queryClient={queryClient}
+              character={savedChar}
             />
           )}
         </div>
@@ -1891,18 +1892,20 @@ function AllImagesSection({
   currentPrimaryUrl, 
   sessionCurrentImage,
   onSetPrimary,
-  queryClient
+  queryClient,
+  character
 }) {
   const [ctxOpenImg, setCtxOpenImg] = useState(null);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [enlargedImg, setEnlargedImg] = useState(null);
 
   // Combine and dedupe all images
   const allImages = useMemo(() => {
     const combined = [
-      ...(primaryImages || []).map(url => ({ type: 'primary', url })),
-      ...(spriteImages || []).map(img => ({ type: 'sprite', id: img.id, url: img.url, label: img.label })),
+      ...(primaryImages || []).map((url, i) => ({ type: 'primary', url, id: `primary-${i}` })),
+      ...(spriteImages || []).map(img => ({ type: 'sprite', id: img.id, url: img.url, label: img.label, params_snapshot: img.params_snapshot, emotion_entry: img.emotion_entry, pose_id: img.pose_id })),
     ];
     // Dedupe by URL
     const seen = new Set();
@@ -1912,6 +1915,20 @@ function AllImagesSection({
       return true;
     });
   }, [primaryImages, spriteImages]);
+
+  // Click outside to close ellipsis menu
+  useEffect(() => {
+    if (!ctxOpenImg) return;
+    const handleClickOutside = (e) => {
+      const menu = document.getElementById(`ctx-menu-${ctxOpenImg}`);
+      const button = document.getElementById(`ctx-btn-${ctxOpenImg}`);
+      if (menu && !menu.contains(e.target) && button && !button.contains(e.target)) {
+        setCtxOpenImg(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [ctxOpenImg]);
 
   const handleDownload = async (url) => {
     try {
@@ -1975,7 +1992,10 @@ function AllImagesSection({
 
               return (
                 <div key={imgId} className="relative group">
-                  <div className="aspect-[3/4] rounded-lg overflow-hidden bg-base-300">
+                  <div 
+                    className="aspect-[3/4] rounded-lg overflow-hidden bg-base-300 cursor-pointer"
+                    onClick={() => isSprite && setEnlargedImg(img)}
+                  >
                     <img
                       src={img.url}
                       alt={img.label || `Image ${i + 1}`}
@@ -1991,6 +2011,7 @@ function AllImagesSection({
                   )}
                   {/* ⋮ Menu button */}
                   <button
+                    id={`ctx-btn-${imgId}`}
                     onClick={(e) => { e.stopPropagation(); setCtxOpenImg(ctxOpenImg === imgId ? null : imgId); }}
                     className="absolute top-1 right-1 z-10 flex items-center justify-center rounded-lg bg-black/60 hover:bg-primary border-none text-white opacity-0 group-hover:opacity-100 transition-opacity"
                     style={{ width: '24px', height: '24px' }}
@@ -2001,6 +2022,7 @@ function AllImagesSection({
                   {/* Context menu dropdown */}
                   {ctxOpenImg === imgId && (
                     <div
+                      id={`ctx-menu-${imgId}`}
                       className="absolute top-7 right-1 z-50 min-w-[140px] rounded-xl border shadow-lg overflow-hidden"
                       style={{ background: 'var(--fallback-b2, oklch(var(--b2)))' }}
                     >
@@ -2062,8 +2084,23 @@ function AllImagesSection({
                 Delete
               </button>
             </div>
+            </div>
           </div>
-        </div>
+        )}
+
+      {/* Enlarged image modal for sprite images */}
+      {enlargedImg && (
+        <SpriteImageModal
+          img={enlargedImg}
+          character={character}
+          onClose={() => setEnlargedImg(null)}
+          onDelete={() => { setDeleteTargetId(enlargedImg.id); }}
+          onDownload={() => handleDownload(enlargedImg.url)}
+          onNewImageGenerated={(newImg) => {
+            setEnlargedImg(newImg);
+            queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
+          }}
+        />
       )}
     </>
   );
@@ -2202,7 +2239,8 @@ function SpriteImagesSection({ characterId, spriteImages, queryClient, character
 
 // ─── SpriteImageModal ─────────────────────────────────────────────────────────
 // Enhanced modal for viewing and editing sprite images with:
-// - Prominent image display
+// - Stage 1: Prominent image display with regen/edit controls
+// - Stage 2: Full/native size view for fine detail inspection
 // - Collapsible prompt view (collapsed by default)
 // - Seed display and editing (locked by default)
 // - Edit-to-regenerate functionality
@@ -2215,6 +2253,7 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [viewingImg, setViewingImg] = useState(img);
+  const [fullSizeView, setFullSizeView] = useState(false);
   const abortRef = useRef(null);
 
   useEffect(() => {
@@ -2311,6 +2350,29 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
                         viewingImg?.params_snapshot?.editInstructions ||
                         'Prompt not available';
 
+  // Stage 2: Full size view - dismisses on click outside
+  if (fullSizeView) {
+    return (
+      <div
+        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-0"
+        onClick={() => setFullSizeView(false)}
+      >
+        <button
+          className="absolute top-4 right-4 btn btn-ghost btn-sm text-white hover:bg-white/10 gap-2"
+          onClick={() => setFullSizeView(false)}
+        >
+          <X className="w-5 h-5" /> Close
+        </button>
+        <img
+          src={viewingImg?.url}
+          alt={viewingImg?.label}
+          className="max-w-[95vw] max-h-[95vh] object-contain"
+          onClick={e => e.stopPropagation()}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -2337,6 +2399,15 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
             </p>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setFullSizeView(true)}
+              className="btn btn-ghost btn-sm btn-square"
+              style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+              aria-label="View full size"
+              title="View full size"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
             <button
               onClick={onDownload}
               className="btn btn-ghost btn-sm btn-square"

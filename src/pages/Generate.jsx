@@ -1676,7 +1676,7 @@ function buildGenerationPrompt(char, description, variation, genre, shotType, as
   else if (shotType === 'Half-body') shotInstructions = 'frame from waist up'
   else shotInstructions = 'entire character head to toe must be visible'
 
-  const backgroundRule = removeBackground ? 'CHROMAKEY GREEN (#00b140) background — character fully isolated' : 'Simple solid color background'
+  const backgroundRule = removeBackground ? 'Remove all background — character as isolated subject' : ''
   const heldItemsRule = !allowedItems ? 'NO holding, gripping, or touching any prop, weapon, or item' : `May hold: ${allowedItems}`
   const propNote = hasPropImage ? `\n- The last provided reference image shows the prop/item — replicate it accurately in the character's hand` : ''
 

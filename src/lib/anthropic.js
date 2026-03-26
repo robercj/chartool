@@ -273,6 +273,19 @@ export async function generateCharacterManifest(characterData) {
 
   const systemPrompt = `You are a character profile writer. Your task is to produce a high-fidelity character manifest from the provided data.
 
+## TOKEN LIMIT ENFORCEMENT
+
+Your output is subject to a HARD CEILING of 2,000 tokens. This is a critical constraint.
+
+TOKEN THRESHOLD GUIDELINES:
+- BELOW 1,500 tokens: Business as usual — write rich, detailed content
+- 1,501 - 1,650 tokens: Buffer zone — only for finishing complete thoughts, sentences, or including critically important details that would otherwise be missing
+- 1,651 - 1,850 tokens: HIGH SCRUTINY — every element must be justified. Only include if the detail is essential to the character's core identity, personality, or roleplay quality.
+- 1,851 - 1,999 tokens: FINAL BUFFER — reserve for finishing critical refinements from the 1,651-1,850 range only
+- 2,000 tokens: HARD CEILING — you MUST strategically refactor the prompt to fit at 2,000 tokens or fewer
+
+QUALITY STANDARD: Every token should push toward a more powerful and premium character AI roleplaying experience. Fluff, prose without functional value, or redundant details should be eliminated.
+
 The manifest is a ready-to-use AI roleplay system prompt. It must cover:
 1. Core identity (name, role, archetype)
 2. Personality breakdown (surface traits, hidden traits, dere type if applicable)
@@ -296,7 +309,7 @@ ${JSON.stringify(summary, null, 2)}`;
   const data = await callEdgeFunction('anthropic-proxy', {
     _generation_type: 'character_manifest',
     model: 'claude-sonnet-4-5',
-    max_tokens: hasImage ? 2500 : 3200,
+    max_tokens: 2000,
     temperature: 0.7,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
@@ -366,6 +379,19 @@ export async function generateCharacterIdentityPrompt(identityData) {
 
   const systemPrompt = `You are a character profile writer specializing in AI roleplay system prompts. Your task is to generate a high-fidelity character roleplay prompt — a ready-to-use system prompt for an AI language model — from the provided character identity data.
 
+## TOKEN LIMIT ENFORCEMENT
+
+Your output is subject to a HARD CEILING of 2,000 tokens. This is a critical constraint.
+
+TOKEN THRESHOLD GUIDELINES:
+- BELOW 1,500 tokens: Business as usual — write rich, detailed content
+- 1,501 - 1,650 tokens: Buffer zone — only for finishing complete thoughts, sentences, or including critically important details that would otherwise be missing
+- 1,651 - 1,850 tokens: HIGH SCRUTINY — every element must be justified. Only include if the detail is essential to the character's core identity, personality, or roleplay quality.
+- 1,851 - 1,999 tokens: FINAL BUFFER — reserve for finishing critical refinements from the 1,651-1,850 range only
+- 2,000 tokens: HARD CEILING — you MUST strategically refactor the prompt to fit at 2,000 tokens or fewer
+
+QUALITY STANDARD: Every token should push toward a more powerful and premium character AI roleplaying experience. Fluff, prose without functional value, or redundant details should be eliminated.
+
 The prompt must cover all of the following in rich, immersive prose:
 1. Core identity (name, role, archetype, narrative function)
 2. Personality breakdown (surface traits, hidden traits, dere type behaviors if applicable — describe specific surface mannerisms AND the hidden emotional truth beneath them)
@@ -389,7 +415,7 @@ ${JSON.stringify(summary, null, 2)}`;
   const data = await callEdgeFunction('anthropic-proxy', {
     _generation_type: 'character_identity_prompt',
     model: 'claude-sonnet-4-5',
-    max_tokens: 4000,
+    max_tokens: 2000,
     temperature: 1.0,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
