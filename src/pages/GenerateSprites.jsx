@@ -40,6 +40,7 @@ import { ART_STYLES } from '../lib/constants/ART_STYLES'
 import VariationControls from '../components/sprites/VariationControls'
 import ImageEditModal from '../components/sprites/ImageEditModal'
 import ArtStyleSelector from '../components/sprites/ArtStyleSelector'
+import QuickBatchSection from '../components/sprites/QuickBatchSection'
 import useGenerationQueueStore from '../lib/stores/generationQueueStore'
 
 // ─── Aspect ratio options ─────────────────────────────────────────────────────
@@ -785,6 +786,17 @@ export default function GenerateSprites() {
             }
           </button>
 
+          {/* Quick Batch Section */}
+          <QuickBatchSection
+            character={createdCharacter || selectedCharacter}
+            consistencyPrompt={consistencyPrompt || createdCharacter?.character_consistency_prompt || ''}
+            identityLock={identityLock || createdCharacter?.character_identity_lock || null}
+            referenceImageBase64={referenceImageBase64}
+            referenceImageUrl={createdCharacter?.reference_image_url || referenceImageUrl}
+            theme={theme}
+            enabled={canGenerateNew}
+          />
+
           {/* Link to created character */}
           {createdCharacter && (
             <div
@@ -985,6 +997,17 @@ export default function GenerateSprites() {
                 }
               </button>
             )}
+
+            {/* Quick Batch Section */}
+            <QuickBatchSection
+              character={selectedCharacter}
+              consistencyPrompt={consistencyPrompt || selectedCharacter?.character_consistency_prompt || ''}
+              identityLock={identityLock || selectedCharacter?.character_identity_lock || null}
+              referenceImageBase64={referenceImageBase64}
+              referenceImageUrl={selectedCharacter?.generated_image_url || referenceImageUrl}
+              theme={theme}
+              enabled={canGenerateExisting}
+            />
 
             {/* Link to character */}
             {activeCharacter && liveImages.length > 0 && (
