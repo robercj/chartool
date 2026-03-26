@@ -224,18 +224,21 @@ function CharacterDetailInner() {
     queryKey: ['character', characterId],
     queryFn:  () => Character.get(characterId),
     enabled:  !!characterId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: promptHistory = [] } = useQuery({
     queryKey: ['character-history', characterId],
     queryFn:  () => PromptHistory.list(characterId),
-    enabled:  !!characterId,
+    enabled:  !!characterId && showHistory,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: characterImages = [] } = useQuery({
     queryKey: ['character-images', characterId],
     queryFn:  () => CharacterImage.forCharacter(characterId),
     enabled:  !!characterId,
+    staleTime: 5 * 60 * 1000,
   });
 
   // ── Redirect non-finalized characters ──────────────────────────────────────

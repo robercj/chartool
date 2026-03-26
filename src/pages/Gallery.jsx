@@ -29,23 +29,27 @@ export default function Gallery() {
     queryKey: ['storylines', userId],
     queryFn:  () => Storyline.list(userId),
     enabled:  !!userId,
+    staleTime: 5 * 60 * 1000,
   })
   const { data: allBatches = [] } = useQuery({
     queryKey: ['batches', userId],
-    queryFn:  () => CharacterBatch.list(userId),
+    queryFn:  () => CharacterBatch.listForGallery(userId),
     enabled:  !!userId,
+    staleTime: 5 * 60 * 1000,
   })
 
   // ── Wizard character queries ─────────────────────────────────────────────────
   const { data: wizardCharacters = [] } = useQuery({
     queryKey: ['wizard-characters', userId],
-    queryFn:  () => Character.list(userId),
+    queryFn:  () => Character.listForGallery(userId),
     enabled:  !!userId,
+    staleTime: 5 * 60 * 1000,
   })
   const { data: wizardDrafts = [] } = useQuery({
     queryKey: ['wizard-drafts', userId],
-    queryFn:  () => CharacterDraft.list(userId),
+    queryFn:  () => CharacterDraft.listForGallery(userId),
     enabled:  !!userId,
+    staleTime: 5 * 60 * 1000,
   })
 
   // Merge finalized + drafts; group by assigned_story_id

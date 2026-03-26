@@ -64,6 +64,17 @@ export const Storyline = {
     return (data || []).map(s => ({ ...s, batch_ids: batchMap[s.id] || [] }));
   },
 
+  /** Light query for folder list rendering - only needed columns */
+  async listForFolders(userId) {
+    const { data, error } = await supabase
+      .from('storylines')
+      .select('id, name, storyline_prompt_id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
   /** Get a single storyline by id */
   async get(id) {
     const { data, error } = await supabase
@@ -120,6 +131,17 @@ export const CharacterBatch = {
     const { data, error } = await supabase
       .from('character_batches')
       .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /** Light query for legacy batch list rendering */
+  async listForGallery(userId) {
+    const { data, error } = await supabase
+      .from('character_batches')
+      .select('id, name, reference_image_url, image_count, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -303,6 +325,28 @@ export const PromptHistory = {
     return data || [];
   },
 
+  /** Light query for history drawer - only summary columns */
+  async listSummaries(characterId) {
+    const { data, error } = await supabase
+      .from('character_prompt_history')
+      .select('id, saved_at, save_type, label')
+      .eq('character_id', characterId)
+      .order('saved_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /** Fetch a single history entry by ID (for restore action) */
+  async get(id) {
+    const { data, error } = await supabase
+      .from('character_prompt_history')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   /** Write a new history entry on Save or Save As. */
   async create(characterId, entry) {
     const { data: created, error } = await supabase
@@ -335,6 +379,31 @@ export const CharacterDraft = {
       .order('last_modified_at', { ascending: false });
     if (error) throw error;
     return data || [];
+  },
+
+  /** Light query for gallery card rendering - only needed columns */
+  async listForGallery(userId) {
+    const { data, error } = await supabase
+      .from('character_drafts')
+      .select('id, character_name, generated_image_url, creation_status, creation_source, archetype, assigned_story_id, last_modified_at')
+      .eq('user_id', userId)
+      .order('last_modified_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /** Paginated gallery query */
+  async listForGalleryPaginated(userId, page = 0, pageSize = 20) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error, count } = await supabase
+      .from('character_drafts')
+      .select('id, character_name, generated_image_url, creation_status, creation_source, archetype, assigned_story_id, last_modified_at', { count: 'exact' })
+      .eq('user_id', userId)
+      .order('last_modified_at', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    return { data: data || [], count };
   },
 
   async get(id) {
@@ -417,6 +486,43 @@ export const Character = {
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /** Light query for gallery card rendering - only needed columns */
+  async listForGallery(userId) {
+    const { data, error } = await supabase
+      .from('characters')
+      .select('id, character_name, generated_image_url, creation_status, creation_source, archetype, assigned_story_id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /** Paginated gallery query */
+  async listForGalleryPaginated(userId, page = 0, pageSize = 20) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error, count } = await supabase
+      .from('characters')
+      .select('id, character_name, generated_image_url, creation_status, creation_source, archetype, assigned_story_id, created_at', { count: 'exact' })
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    return { data: data || [], count };
+  },
+
+  /** Light query for character selection dropdown (Mode B) - minimal columns */
+  async listForSelection(userId) {
+    const { data, error } = await supabase
+      .from('characters')
+      .select('id, character_name, generated_image_url, creation_status, character_consistency_prompt, character_identity_lock')
+      .eq('user_id', userId)
+      .eq('creation_status', 'finalized')
+      .order('character_name', { ascending: true });
     if (error) throw error;
     return data || [];
   },

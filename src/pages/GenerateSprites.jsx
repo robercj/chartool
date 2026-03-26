@@ -136,8 +136,9 @@ export default function GenerateSprites() {
   // ── Fetch all characters for Mode B ──────────────────────────────────────
   const { data: allCharacters = [] } = useQuery({
     queryKey: ['characters', userId],
-    queryFn: () => Character.list(userId),
+    queryFn: () => Character.listForSelection(userId),
     enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
   })
 
   const filteredCharacters = allCharacters.filter(c =>
