@@ -142,6 +142,10 @@ function buildArtStyleSection(artStyleId, identityLock) {
 function buildPoseEmotionSection(poseId, emotionEntry) {
   const lines = ['## POSE & EMOTION FOR THIS VARIATION', '']
 
+  // Framing guidance - always include full body with margins
+  lines.push('**Framing**: Full body shot, centered with headroom above and space below (do not crop head or feet)')
+  lines.push('')
+
   // Pose
   const pose = poseId ? getPoseById(poseId) : null
   if (pose) {
