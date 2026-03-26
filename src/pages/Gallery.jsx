@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import {
   FolderOpen, Images, Plus, Trash2, FolderInput, ImagePlus,
   BookOpen, ChevronRight, BookMarked, X as XIcon,
-  Sparkles, FileText, Copy, Check,
+  Sparkles, FileText, Copy, Check, Image, LockKeyhole,
   MoreVertical, FolderMinus, CheckSquare,
   AlertTriangle,
 } from 'lucide-react'
@@ -104,7 +104,7 @@ export default function Gallery() {
   const [pendingDelete,   setPendingDelete]   = useState(null)
 
   // ── Prompt modal ──────────────────────────────────────────────────────────────
-  const [promptModal,  setPromptModal]  = useState({ isOpen: false, name: '', prompt: '' })
+  const [promptModal,  setPromptModal]  = useState({ isOpen: false, name: '', prompt: '', type: 'character' })
   const [promptCopied, setPromptCopied] = useState(false)
 
   // ── Keyboard: Escape for modal/menu/selection dismissal ──────────────────────
@@ -162,10 +162,17 @@ export default function Gallery() {
   const deselectAll = useCallback(() => setSelIds(new Set()), [])
 
   // Prompt modal helper (defined early to avoid TDZ in handleCtxAction)
-  const openPrompt = useCallback((name, prompt) => {
+  const openPrompt = useCallback((name, prompt, type = 'character') => {
     setPromptCopied(false)
-    setPromptModal({ isOpen: true, name, prompt })
+    setPromptModal({ isOpen: true, name, prompt, type })
   }, [])
+
+  // Open image prompt modal
+  const openImagePrompt = useCallback((char) => {
+    if (char.character_consistency_prompt) {
+      openPrompt(char.character_name || 'Character', char.character_consistency_prompt, 'image')
+    }
+  }, [openPrompt])
 
   // Undo action (defined early to avoid TDZ in doMoveChars toast callback)
   const doUndoAction = async (undo) => {
@@ -342,14 +349,17 @@ export default function Gallery() {
         navigate(char.isDraft ? `/characters/generate/${char.id}` : `/characters/${char.id}`)
         break
       case 'prompt':
-        openPrompt(char.character_name || 'Character', char.character_prompt)
+        openPrompt(char.character_name || 'Character', char.character_prompt, 'character')
+        break
+      case 'image-prompt':
+        openImagePrompt(char)
         break
       case 'delete':
         setPendingDelete({ type: 'character', id: char.id, isDraft: char.isDraft, name: char.character_name || 'Untitled Draft' })
         break
       default: break
     }
-  }, [openStoryPicker, doMoveChars, navigate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [openStoryPicker, doMoveChars, navigate, openPrompt, openImagePrompt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Legacy handlers (unchanged) ───────────────────────────────────────────────
   const handleDeleteStoryline = async (id) => {
@@ -424,7 +434,8 @@ export default function Gallery() {
     { key: 'assign',  label: 'Assign to Story',  icon: FolderInput  },
     { key: 'select',  label: 'Select',           icon: CheckSquare  },
     { key: 'view',    label: 'View Character',   icon: ChevronRight },
-    ...(char.character_prompt  ? [{ key: 'prompt', label: 'View Prompt', icon: FileText }] : []),
+    ...(char.character_prompt  ? [{ key: 'prompt', label: 'View Roleplay Prompt', icon: FileText }] : []),
+    ...(char.character_consistency_prompt ? [{ key: 'image-prompt', label: 'View Image Prompt', icon: Image }] : []),
     { key: 'delete', label: 'Delete', icon: Trash2, danger: true },
   ]
   // Filtered stories for picker search
@@ -680,8 +691,17 @@ export default function Gallery() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-base-300 flex-shrink-0">
               <div>
                 <h2 className="text-lg font-semibold text-base-content flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-primary" />
-                  Character Prompt
+                  {promptModal.type === 'image' ? (
+                    <>
+                      <Image className="w-5 h-5 text-secondary" />
+                      Image Prompt
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-5 h-5 text-primary" />
+                      Character Prompt
+                    </>
+                  )}
                 </h2>
                 <p className="text-sm text-base-content/50 mt-0.5">{promptModal.name}</p>
               </div>
@@ -697,11 +717,11 @@ export default function Gallery() {
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-base-300 flex-shrink-0">
               <button
                 onClick={copyPrompt}
-                className={`btn btn-sm gap-2 ${promptCopied ? 'btn-success' : 'btn-primary'}`}
+                className={`btn btn-sm gap-2 ${promptCopied ? 'btn-success' : promptModal.type === 'image' ? 'btn-secondary' : 'btn-primary'}`}
               >
                 {promptCopied
                   ? <><Check className="w-4 h-4" />Copied!</>
-                  : <><Copy className="w-4 h-4" />Copy Prompt</>
+                  : <><Copy className="w-4 h-4" />{promptModal.type === 'image' ? 'Copy Image Prompt' : 'Copy Prompt'}</>
                 }
               </button>
               <button onClick={closePrompt} className="btn btn-ghost btn-sm">Close</button>
@@ -756,6 +776,8 @@ function CharacterWizardCard({
     finalized:   { label: 'Complete', cls: 'bg-base-content/20 text-base-content/70' },
   }
   const status = STATUS[character.creation_status] || STATUS.draft
+  const hasIdentityLock = !!character.character_identity_lock
+  const hasImageAnalysis = !!character.character_consistency_prompt
 
   return (
     // Outer wrapper: provides positioning context for checkbox + context menu
@@ -822,8 +844,20 @@ function CharacterWizardCard({
           style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.85))' }}
         >
           <div className="font-medium text-white truncate text-sm">{name}</div>
-        <div className="mt-1">
+        <div className="mt-1 flex flex-wrap gap-1">
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${status.cls}`}>{status.label}</span>
+          {hasIdentityLock && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/80 text-white flex items-center gap-1">
+              <LockKeyhole className="w-2.5 h-2.5" />
+              Locked
+            </span>
+          )}
+          {hasImageAnalysis && !hasIdentityLock && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/60 text-white flex items-center gap-1">
+              <Sparkles className="w-2.5 h-2.5" />
+              Analyzed
+            </span>
+          )}
         </div>
         </div>
 

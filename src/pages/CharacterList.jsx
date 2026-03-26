@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { Sparkles, Plus, Clock, Check, ChevronRight, Trash2, Image, FileText, Copy, X } from 'lucide-react';
+import { Sparkles, Plus, Clock, Check, ChevronRight, Trash2, Image, FileText, Copy, X, Lock, LockKeyhole } from 'lucide-react';
 import { Character, CharacterDraft } from '../lib/storage';
 
 export default function CharacterListPage() {
@@ -19,6 +19,7 @@ export default function CharacterListPage() {
     isOpen: false,
     characterName: '',
     prompt: '',
+    type: 'character', // 'character' or 'image'
   });
   const [promptCopied, setPromptCopied] = useState(false);
 
@@ -57,17 +58,22 @@ export default function CharacterListPage() {
   };
 
   // Open the prompt modal (works for both finalized chars and drafts)
-  const openPromptModal = useCallback((characterName, prompt, e) => {
+  const openPromptModal = useCallback((characterName, prompt, e, type = 'character') => {
     e.preventDefault();
     e.stopPropagation();
     setPromptCopied(false);
-    setPromptModal({ isOpen: true, characterName, prompt });
+    setPromptModal({ isOpen: true, characterName, prompt, type });
   }, []);
 
   const closePromptModal = useCallback(() => {
     setPromptModal(prev => ({ ...prev, isOpen: false }));
     setPromptCopied(false);
   }, []);
+
+  // Open image prompt modal (character consistency prompt)
+  const openImagePromptModal = useCallback((characterName, prompt, e) => {
+    openPromptModal(characterName, prompt, e, 'image');
+  }, [openPromptModal]);
 
   const handleCopyPrompt = useCallback(async () => {
     try {
@@ -145,6 +151,7 @@ export default function CharacterListPage() {
               {characters.map(char => {
                 // Show Prompt button if character has a prompt (character_prompt or character_manifest)
                 const promptText = char.character_prompt || char.character_manifest || null;
+                const hasIdentityLock = !!char.character_identity_lock;
                 return (
                   <Link
                     key={char.id}
@@ -163,24 +170,47 @@ export default function CharacterListPage() {
                           <Image className="w-12 h-12 text-base-content/20" />
                         </div>
                       )}
-                      {/* §3.1 — muted "Complete" pill (bottom-left) + optional Prompt button (top-right) */}
-                      <div className="absolute bottom-3 left-3">
+                      {/* Status badges - top row */}
+                      <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 max-w-[70%]">
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-base-content/20 text-base-content/70">
                           Complete
                         </span>
+                        {hasIdentityLock && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/80 text-primary-content flex items-center gap-1">
+                            <LockKeyhole className="w-3 h-3" />
+                            <span className="hidden sm:inline">Locked</span>
+                          </span>
+                        )}
+                        {char.character_consistency_prompt && !hasIdentityLock && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/60 text-primary-content flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            <span className="hidden sm:inline">Analyzed</span>
+                          </span>
+                        )}
                       </div>
-                      {promptText && (
-                        <div className="absolute top-3 right-3">
+                      {/* Action buttons - top right */}
+                      <div className="absolute top-3 right-3 flex flex-col gap-1.5 sm:flex-row">
+                        {promptText && (
                           <button
-                            onClick={(e) => openPromptModal(char.character_name || 'Character', promptText, e)}
+                            onClick={(e) => openPromptModal(char.character_name || 'Character', promptText, e, 'character')}
                             className="badge badge-neutral gap-1 cursor-pointer hover:badge-primary transition-colors"
                             aria-label="View character prompt"
                           >
                             <FileText className="w-3 h-3" />
-                            Prompt
+                            <span className="hidden lg:inline text-xs">Roleplay</span>
                           </button>
-                        </div>
-                      )}
+                        )}
+                        {char.character_consistency_prompt && (
+                          <button
+                            onClick={(e) => openImagePromptModal(char.character_name || 'Character', char.character_consistency_prompt, e)}
+                            className="badge badge-secondary gap-1 cursor-pointer hover:badge-secondary-focus transition-colors"
+                            aria-label="View image prompt"
+                          >
+                            <Image className="w-3 h-3" />
+                            <span className="hidden lg:inline text-xs">Image</span>
+                          </button>
+                        )}
+                      </div>
                     </figure>
                     <div className="card-body p-4 gap-1">
                       <h3 className="card-title text-base group-hover:text-primary transition-colors">
@@ -245,15 +275,26 @@ export default function CharacterListPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Prompt button — only shown when character_prompt is available */}
+                    {/* Image prompt button - only shown when character_consistency_prompt is available */}
+                    {draft.character_consistency_prompt && (
+                      <button
+                        onClick={(e) => openImagePromptModal(draft.character_name || 'Draft', draft.character_consistency_prompt, e)}
+                        className="btn btn-ghost btn-sm gap-1.5 text-base-content/50 hover:text-secondary"
+                        aria-label="View image prompt"
+                        title="Image Prompt"
+                      >
+                        <Image className="w-4 h-4" />
+                      </button>
+                    )}
+                    {/* Character prompt button — only shown when character_prompt is available */}
                     {draft.character_prompt && (
                       <button
-                        onClick={(e) => openPromptModal(draft.character_name || 'Draft', draft.character_prompt, e)}
+                        onClick={(e) => openPromptModal(draft.character_name || 'Draft', draft.character_prompt, e, 'character')}
                         className="btn btn-ghost btn-sm gap-1.5 text-base-content/50 hover:text-primary"
                         aria-label="View character prompt"
                       >
                         <FileText className="w-4 h-4" />
-                        <span className="hidden sm:inline text-xs">Prompt</span>
+                        <span className="hidden sm:inline text-xs">Roleplay</span>
                       </button>
                     )}
                     <button
@@ -293,8 +334,17 @@ export default function CharacterListPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-base-300 flex-shrink-0">
               <div>
                 <h2 className="text-lg font-semibold text-base-content flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-primary" />
-                  Character Prompt
+                  {promptModal.type === 'image' ? (
+                    <>
+                      <Image className="w-5 h-5 text-secondary" />
+                      Image Prompt
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="w-5 h-5 text-primary" />
+                      Character Prompt
+                    </>
+                  )}
                 </h2>
                 <p className="text-sm text-base-content/50 mt-0.5">
                   {promptModal.characterName}
@@ -320,7 +370,7 @@ export default function CharacterListPage() {
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-base-300 flex-shrink-0">
               <button
                 onClick={handleCopyPrompt}
-                className={`btn btn-sm gap-2 ${promptCopied ? 'btn-success' : 'btn-primary'}`}
+                className={`btn btn-sm gap-2 ${promptCopied ? 'btn-success' : promptModal.type === 'image' ? 'btn-secondary' : 'btn-primary'}`}
               >
                 {promptCopied ? (
                   <>
@@ -330,7 +380,7 @@ export default function CharacterListPage() {
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    Copy Prompt
+                    {promptModal.type === 'image' ? 'Copy Image Prompt' : 'Copy Prompt'}
                   </>
                 )}
               </button>
