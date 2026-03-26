@@ -656,8 +656,8 @@ function CharacterDetailInner() {
                 Copy Prompt
               </button>
             </div>
-            {/* Image Prompt button - shown when character has consistency prompt */}
-            {(savedChar.character_consistency_prompt || savedChar.character_identity_lock) && (
+            {/* Image Prompt button - shown when character has any image prompt */}
+            {(savedChar.character_consistency_prompt || savedChar.character_identity_lock || savedChar.appearance_description || sessionAppearanceDesc) && (
               <button
                 onClick={() => setShowImagePromptModal(true)}
                 className="btn btn-ghost btn-sm flex-1 gap-2 text-secondary hover:text-secondary"
@@ -1277,10 +1277,36 @@ function CharacterDetailInner() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              {savedChar.character_consistency_prompt ? (
-                <pre className="text-sm text-base-content/80 whitespace-pre-wrap font-sans leading-relaxed">
-                  {savedChar.character_consistency_prompt}
-                </pre>
+              {(savedChar.character_consistency_prompt || sessionAppearanceDesc || savedChar.appearance_description) ? (
+                <div className="space-y-4">
+                  {/* Current generation prompt (appearance_description) */}
+                  {(sessionAppearanceDesc || savedChar.appearance_description) && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-4 h-4 text-secondary" />
+                        <span className="text-sm font-medium text-secondary">Current Generation Prompt</span>
+                        {sessionAppearanceDesc && <span className="badge badge-secondary badge-xs">Unsaved</span>}
+                      </div>
+                      <pre className="text-sm text-base-content/80 whitespace-pre-wrap font-sans leading-relaxed bg-base-200 p-3 rounded-lg">
+                        {sessionAppearanceDesc || savedChar.appearance_description}
+                      </pre>
+                    </div>
+                  )}
+                  
+                  {/* Legacy consistency prompt from image analysis */}
+                  {savedChar.character_consistency_prompt && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <LockKeyhole className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium text-primary">Image Analysis Prompt</span>
+                        <span className="text-xs text-base-content/50">(from reference image)</span>
+                      </div>
+                      <pre className="text-sm text-base-content/60 whitespace-pre-wrap font-sans leading-relaxed">
+                        {savedChar.character_consistency_prompt}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               ) : savedChar.character_identity_lock ? (
                 <div className="space-y-3">
                   <p className="text-sm text-base-content/60 mb-4">
@@ -1304,14 +1330,23 @@ function CharacterDetailInner() {
                 <span className="opacity-40 italic">No image prompt available.</span>
               )}
             </div>
-            <div className="p-4 border-t border-base-300 flex justify-end">
-              {savedChar.character_consistency_prompt && (
+            <div className="p-4 border-t border-base-300 flex justify-end gap-2">
+              {(sessionAppearanceDesc || savedChar.appearance_description) && (
                 <button 
-                  onClick={() => copyPrompt(savedChar.character_consistency_prompt)}
+                  onClick={() => copyPrompt(sessionAppearanceDesc || savedChar.appearance_description)}
                   className="btn btn-secondary btn-sm gap-2"
                 >
                   <Copy className="w-4 h-4" />
-                  Copy Image Prompt
+                  Copy Current
+                </button>
+              )}
+              {savedChar.character_consistency_prompt && (
+                <button 
+                  onClick={() => copyPrompt(savedChar.character_consistency_prompt)}
+                  className="btn btn-outline btn-sm gap-2"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy Analysis
                 </button>
               )}
             </div>
