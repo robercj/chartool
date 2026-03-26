@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const falKey = Deno.env.get('FAL_KEY')
     if (!falKey) throw new Error('FAL_KEY secret not set')
 
-    const { prompt, seed, aspect_ratio = '3:4', num_images = 1 } = await req.json()
+    const { prompt, seed, aspect_ratio = '9:16', num_images = 1 } = await req.json()
 
     if (!prompt || typeof prompt !== 'string') {
       return json({ error: 'Prompt is required' }, 400)
