@@ -289,7 +289,7 @@ function CharacterDetailInner() {
 
   // ── Section collapse state (localStorage-persisted) ─────────────────────────
   const defaultExpanded = { 'identity-role': true, demographics: true, personality: true,
-    psychology: true, backstory: true, 'social-web': true, 'voice-speech': true, appearance: true };
+    psychology: true, backstory: true, 'social-web': true, 'voice-speech': true, appearance: true, 'image-gallery': true };
   const [sectionExpanded, setSectionExpanded] = useState(() => {
     try {
       const stored = localStorage.getItem(`char-sections-${characterId}`);
@@ -403,9 +403,9 @@ function CharacterDetailInner() {
         prompt: promptToUse,
         seed: seedLocked ? seed : null,
       });
-      let imageUrl = result.url;
       
-      // Apply background removal
+      // Apply background removal BEFORE showing to user
+      let imageUrl = result.url;
       try {
         imageUrl = await removeImageBackground(imageUrl);
       } catch (rembgErr) {
@@ -413,6 +413,7 @@ function CharacterDetailInner() {
         toast.warning('Background removal failed - image saved with background');
       }
       
+      // Update session state so user sees the processed image immediately
       setSessionCurrentImage(imageUrl);
       setSeed(result.seed ?? seed);
       setImageRegenerated(true);
@@ -1057,6 +1058,63 @@ function CharacterDetailInner() {
               value={editData.appearance?.visual_motifs || []}
               onChange={v => handleAppearanceChange('visual_motifs', v)} />
           </CollapsibleSection>
+
+          {/* ── Image Gallery: all primary images ──────────────────────────────── */}
+          {uniqueImages.length > 0 && (
+            <div className="border border-base-300 rounded-xl overflow-hidden mb-4">
+              <button
+                type="button"
+                onClick={() => toggleSection('image-gallery')}
+                className="w-full flex items-center gap-3 px-5 py-4 bg-base-200 hover:bg-base-300 transition-colors text-left"
+                aria-expanded={sectionExpanded['image-gallery']}
+              >
+                <ImageIcon className="w-4 h-4 text-primary flex-shrink-0" />
+                <span className="flex-1 font-semibold text-sm text-base-content">Image Gallery</span>
+                <span className="badge badge-ghost badge-sm">{uniqueImages.length}</span>
+                {sectionExpanded['image-gallery']
+                  ? <ChevronUp className="w-4 h-4 opacity-50" />
+                  : <ChevronDown className="w-4 h-4 opacity-50" />
+                }
+              </button>
+              {sectionExpanded['image-gallery'] && (
+                <div className="p-4 bg-base-100">
+                  <p className="text-xs text-base-content/50 mb-3">
+                    All generated primary images for this character
+                  </p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                    {uniqueImages.map((url, i) => (
+                      <div key={i} className="relative group aspect-[3/4] rounded-lg overflow-hidden bg-base-300">
+                        <img 
+                          src={url} 
+                          alt={`Image ${i + 1}`}
+                          className={`w-full h-full object-cover cursor-pointer transition-all ${
+                            url === displayImage ? 'ring-2 ring-primary' : 'hover:opacity-90'
+                          }`}
+                          onClick={() => {
+                            setSelectedHistImg(url === selectedHistImg ? null : url);
+                            if (url !== savedChar?.generated_image_url) {
+                              setPendingPrimaryImage(url);
+                              toast('Click save to use this as primary image');
+                            }
+                          }}
+                        />
+                        {url === savedChar?.generated_image_url && (
+                          <div className="absolute top-1 right-1">
+                            <span className="badge badge-primary badge-xs">Primary</span>
+                          </div>
+                        )}
+                        {url === sessionCurrentImage && !imageRegenerated && (
+                          <div className="absolute top-1 right-1">
+                            <span className="badge badge-secondary badge-xs">Current</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── §7: Sprite Images section — bottom of detail page ────────── */}
         </div>
