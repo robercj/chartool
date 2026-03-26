@@ -249,13 +249,14 @@ const useGenerationQueueStore = create((set, get) => ({
           }),
         }));
 
-        const { data: existing } = await supabase
+        const { data: existing, error: checkError } = await supabase
           .from('character_images')
           .select('id')
           .eq('job_id', job.jobId)
-          .single();
+          .eq('user_id', userId)
+          .maybeSingle();
 
-        if (!existing) {
+        if (!existing && !checkError) {
           try {
             await CharacterImage.add(job.contextId, userId, {
               url: imageUrl,

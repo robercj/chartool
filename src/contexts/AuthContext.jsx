@@ -1,18 +1,25 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(undefined); // undefined = loading, null = no session
+  const [session, setSession] = useState(undefined);
   const [profile, setProfile] = useState(null);
   const [tier, setTier] = useState(null);
   const [usage, setUsage] = useState({ image: 0, story: 0, character: 0 });
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // ─── Load profile + tier + current-month usage ──────────────────────────────
   const loadProfile = useCallback(async (userId) => {
     if (!userId) {
+      if (!mountedRef.current) return;
       setProfile(null);
       setTier(null);
       setUsage({ image: 0, story: 0, character: 0 });
@@ -20,7 +27,6 @@ export function AuthProvider({ children }) {
     }
     setLoadingProfile(true);
     try {
-      // Profile + tier in one query via join
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*, tier:tiers(*)')
@@ -28,10 +34,10 @@ export function AuthProvider({ children }) {
         .single();
 
       if (profileError) throw profileError;
+      if (!mountedRef.current) return;
       setProfile(profileData);
       setTier(profileData.tier);
 
-      // Current month usage
       const period = currentPeriod();
       const { data: usageRows } = await supabase
         .from('usage')
@@ -39,27 +45,28 @@ export function AuthProvider({ children }) {
         .eq('user_id', userId)
         .eq('period', period);
 
+      if (!mountedRef.current) return;
       const usageMap = { image: 0, story: 0, character: 0 };
       (usageRows || []).forEach(row => { usageMap[row.type] = row.count; });
       setUsage(usageMap);
     } catch (err) {
       console.error('loadProfile error:', err);
     } finally {
-      setLoadingProfile(false);
+      if (mountedRef.current) setLoadingProfile(false);
     }
   }, []);
 
   // ─── Session listener ────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mountedRef.current) return;
       setSession(session);
       if (session?.user) loadProfile(session.user.id);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // TOKEN_REFRESHED fires on tab focus — don't reload the profile for it,
-      // the session is already valid and re-running loadProfile sets loadingProfile=true
-      // which unmounts protected pages mid-flow.
+      if (!mountedRef.current) return;
+      
       if (event === 'TOKEN_REFRESHED') {
         setSession(session);
         return;

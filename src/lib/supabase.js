@@ -21,6 +21,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    clockTolerance: 60, // tolerate up to 60 s of clock skew between client and server
+    clockTolerance: 60,
+  },
+  global: {
+    fetch: (url, options) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+    },
   },
 });
