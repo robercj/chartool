@@ -66,7 +66,7 @@ export const QUICK_BATCH_COMPREHENSIVE = [
 export const QUICK_BATCH_BASIC_COUNT = 10
 export const QUICK_BATCH_COMPREHENSIVE_COUNT = 30
 
-export const QUICK_BATCH_ASPECT_RATIO = '9:16'
+export const QUICK_BATCH_ASPECT_RATIO = '3:4'
 
 export const QUICK_BATCH_TOGGLES = {
   allowPrompt: false,
