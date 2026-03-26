@@ -12,7 +12,7 @@ import {
   Copy, RefreshCw, Save, History, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle, Sparkles, X, Plus, RotateCcw,
   Pencil, Clock, Loader2, Image as ImageIcon, Lock, Unlock,
-  Download, Trash2, ZoomIn, LockKeyhole, ArrowLeft, Eye,
+  Download, Trash2, ZoomIn, LockKeyhole, ArrowLeft, Eye, Image,
 } from 'lucide-react';
 import { useAuth }  from '../contexts/AuthContext';
 import { Character, PromptHistory, CharacterImage } from '../lib/storage';
@@ -283,6 +283,7 @@ function CharacterDetailInner() {
   const [showSaveAs,       setShowSaveAs]       = useState(false);
   const [showHistory,      setShowHistory]      = useState(false);
   const [showPromptModal,  setShowPromptModal]  = useState(false);
+  const [showImagePromptModal, setShowImagePromptModal] = useState(false);
   const [selectedHistImg,  setSelectedHistImg]  = useState(null); // from strip
 
   // ── Section collapse state (localStorage-persisted) ─────────────────────────
@@ -655,6 +656,16 @@ function CharacterDetailInner() {
                 Copy Prompt
               </button>
             </div>
+            {/* Image Prompt button - shown when character has consistency prompt */}
+            {(savedChar.character_consistency_prompt || savedChar.character_identity_lock) && (
+              <button
+                onClick={() => setShowImagePromptModal(true)}
+                className="btn btn-ghost btn-sm flex-1 gap-2 text-secondary hover:text-secondary"
+              >
+                <Image className="w-3.5 h-3.5" />
+                View Image Prompt
+              </button>
+            )}
             <button
               onClick={() => setShowHistory(true)}
               className="text-xs text-base-content/40 hover:text-base-content/60 transition-colors w-full text-left flex items-center gap-1.5 py-1"
@@ -1238,6 +1249,71 @@ function CharacterDetailInner() {
                 <Copy className="w-4 h-4" />
                 Copy Prompt
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Image Prompt Modal */}
+      {showImagePromptModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+          onClick={() => setShowImagePromptModal(false)}
+        >
+          <div 
+            className="w-full max-w-2xl max-h-[80vh] bg-base-100 rounded-2xl border border-base-300 shadow-2xl flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-base-300">
+              <h2 className="text-lg font-bold text-base-content flex items-center gap-2">
+                <Image className="w-5 h-5 text-secondary" />
+                Image Prompt
+              </h2>
+              <button 
+                onClick={() => setShowImagePromptModal(false)}
+                className="btn btn-ghost btn-sm btn-circle"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {savedChar.character_consistency_prompt ? (
+                <pre className="text-sm text-base-content/80 whitespace-pre-wrap font-sans leading-relaxed">
+                  {savedChar.character_consistency_prompt}
+                </pre>
+              ) : savedChar.character_identity_lock ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-base-content/60 mb-4">
+                    This character has an Identity Lock with structured traits. Use the Identity Lock section below to view the full details.
+                  </p>
+                  <div className="text-sm text-base-content/80">
+                    <div className="font-medium mb-2">Locked Traits:</div>
+                    {savedChar.character_identity_lock.immutable_traits && Object.entries(savedChar.character_identity_lock.immutable_traits).map(([category, traits]) => (
+                      <div key={category} className="mb-2">
+                        <span className="capitalize font-medium">{category}:</span>
+                        <ul className="ml-4 text-base-content/70">
+                          {traits.map((trait, i) => (
+                            <li key={i}>{trait}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <span className="opacity-40 italic">No image prompt available.</span>
+              )}
+            </div>
+            <div className="p-4 border-t border-base-300 flex justify-end">
+              {savedChar.character_consistency_prompt && (
+                <button 
+                  onClick={() => copyPrompt(savedChar.character_consistency_prompt)}
+                  className="btn btn-secondary btn-sm gap-2"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy Image Prompt
+                </button>
+              )}
             </div>
           </div>
         </div>
