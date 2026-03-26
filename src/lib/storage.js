@@ -385,7 +385,7 @@ export const CharacterDraft = {
   async listForGallery(userId) {
     const { data, error } = await supabase
       .from('character_drafts')
-      .select('id, character_name, generated_image_url, creation_status, creation_source, archetype, assigned_story_id, last_modified_at')
+      .select('id, character_name, generated_image_url, creation_status, assigned_story_id, last_modified_at')
       .eq('user_id', userId)
       .order('last_modified_at', { ascending: false });
     if (error) throw error;
@@ -398,7 +398,7 @@ export const CharacterDraft = {
     const to = from + pageSize - 1;
     const { data, error, count } = await supabase
       .from('character_drafts')
-      .select('id, character_name, generated_image_url, creation_status, creation_source, archetype, assigned_story_id, last_modified_at', { count: 'exact' })
+      .select('id, character_name, generated_image_url, creation_status, assigned_story_id, last_modified_at', { count: 'exact' })
       .eq('user_id', userId)
       .order('last_modified_at', { ascending: false })
       .range(from, to);

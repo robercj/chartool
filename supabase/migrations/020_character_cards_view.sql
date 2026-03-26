@@ -29,14 +29,13 @@ COMMENT ON VIEW character_cards IS
   'Use this view instead of the base characters table for list/gallery queries.';
 
 -- View for character drafts
+-- Note: character_drafts has fewer columns than characters table
 CREATE OR REPLACE VIEW character_draft_cards AS
 SELECT
   id,
   character_name,
   generated_image_url,
   creation_status,
-  creation_source,
-  archetype,
   assigned_story_id,
   last_modified_at,
   user_id
