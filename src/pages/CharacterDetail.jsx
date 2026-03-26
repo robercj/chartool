@@ -230,7 +230,7 @@ function CharacterDetailInner() {
   const { data: promptHistory = [] } = useQuery({
     queryKey: ['character-history', characterId],
     queryFn:  () => PromptHistory.list(characterId),
-    enabled:  !!characterId && showHistory,
+    enabled:  !!characterId,
     staleTime: 5 * 60 * 1000,
   });
 
