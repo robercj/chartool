@@ -23,6 +23,7 @@ import {
   generateCharacterImage,
   generateImage,
   removeImageBackground,
+  analyzeReferenceImage,
   LimitError,
 } from '../lib/anthropic';
 import { compileEditPrompt } from '../lib/promptCompiler';
@@ -286,6 +287,8 @@ function CharacterDetailInner() {
   const [showHistory,      setShowHistory]      = useState(false);
   const [showPromptModal,  setShowPromptModal]  = useState(false);
   const [showImagePromptModal, setShowImagePromptModal] = useState(false);
+  const [showIdentityLockRerun, setShowIdentityLockRerun] = useState(false);
+  const [isRerunningIdentityLock, setIsRerunningIdentityLock] = useState(false);
   const [selectedHistImg,  setSelectedHistImg]  = useState(null); // from strip
 
   // ── Section collapse state (localStorage-persisted) ─────────────────────────
@@ -422,6 +425,34 @@ function CharacterDetailInner() {
       toast.success('Image regenerated!');
     } catch { toast.error('Failed to regenerate image. Please try again.'); }
     finally { setIsRegeneratingImage(false); }
+  };
+
+  // ── Rerun Identity Lock ─────────────────────────────────────────────────
+  const handleRerunIdentityLock = async () => {
+    const imageUrl = savedChar?.generated_image_url;
+    if (!imageUrl) { toast.error('No primary image to analyze'); return; }
+
+    setIsRerunningIdentityLock(true);
+    try {
+      const result = await analyzeReferenceImage(imageUrl);
+      
+      // Save the new identity lock and consistency prompt
+      const payload = {
+        character_consistency_prompt: result.consistencyPrompt,
+        character_identity_lock: result.identityLock,
+      };
+      
+      await Character.update(characterId, payload);
+      queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+      
+      toast.success('Identity lock re-run complete!');
+      setShowIdentityLockRerun(false);
+    } catch (err) {
+      console.error('Identity lock rerun failed:', err);
+      toast.error('Failed to re-run identity lock: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsRerunningIdentityLock(false);
+    }
   };
 
   // ── Copy prompt to clipboard ─────────────────────────────────────────────────
@@ -734,12 +765,13 @@ function CharacterDetailInner() {
 
           <h1 className="text-xl font-bold text-base-content mb-6">Edit Character</h1>
 
-          {/* ── §8: Identity Lock — sprites flow ─────────────────────────── */}
-          {savedChar.character_identity_lock && (
+      {/* ── §8: Identity Lock — sprites flow ─────────────────────────── */}
+          {(savedChar.character_identity_lock || savedChar.character_consistency_prompt) && (
             <IdentityLockSection
               identityLock={savedChar.character_identity_lock}
               sectionExpanded={sectionExpanded}
               onToggle={toggleSection}
+              onRerun={() => setShowIdentityLockRerun(true)}
             />
           )}
 
@@ -1194,6 +1226,52 @@ function CharacterDetailInner() {
       </div>
 
       {/* ── MODALS & DRAWERS ─────────────────────────────────────────────── */}
+
+      {/* Identity Lock Re-run Confirmation */}
+      {showIdentityLockRerun && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !isRerunningIdentityLock && setShowIdentityLockRerun(false)}
+        >
+          <div
+            className="w-full max-w-md bg-base-100 rounded-2xl border border-base-300 shadow-2xl p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-base-content flex items-center gap-2">
+              <LockKeyhole className="w-5 h-5 text-primary" />
+              Re-run Identity Lock?
+            </h2>
+            <p className="text-sm text-base-content/60">
+              This will analyze the current primary image and generate a new identity lock. 
+              The existing identity lock will be replaced. This may resolve conflicts with the sprite generation prompt.
+            </p>
+            <div className="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
+              <ImageIcon className="w-8 h-8 text-base-content/50" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-base-content/50">Primary image to analyze:</p>
+                <p className="text-sm font-medium truncate">{savedChar?.character_name}</p>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setShowIdentityLockRerun(false)} 
+                disabled={isRerunningIdentityLock}
+                className="btn btn-ghost flex-1"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleRerunIdentityLock} 
+                disabled={isRerunningIdentityLock}
+                className="btn btn-primary flex-1 gap-2"
+              >
+                {isRerunningIdentityLock && <span className="loading loading-spinner loading-sm" />}
+                Re-run
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save Confirmation */}
       {showSaveConfirm && (
@@ -1688,28 +1766,47 @@ function ConsistencyPromptSection({ prompt, sectionExpanded, onToggle }) {
 // ─── IdentityLockSection ──────────────────────────────────────────────────────
 // Read-only display of the structured identity lock. Never editable.
 // Shown in CharacterDetail when character_identity_lock is present.
-function IdentityLockSection({ identityLock, sectionExpanded, onToggle }) {
+function IdentityLockSection({ identityLock, sectionExpanded, onToggle, onRerun }) {
   const id = 'identity-lock';
   const isExpanded = sectionExpanded[id] ?? false;
   const traits = identityLock?.immutable_traits || {};
   const traitCount = Object.values(traits).flat().length;
+  const hasLock = !!identityLock;
 
   return (
-    <div className="border border-primary/30 rounded-xl overflow-hidden mb-4 bg-primary/5">
+    <div className={`border rounded-xl overflow-hidden mb-4 ${hasLock ? 'border-primary/30 bg-primary/5' : 'border-base-300 bg-base-200'}`}>
       <button
         type="button"
         onClick={() => onToggle(id)}
         className="w-full flex items-center gap-3 px-5 py-4 hover:bg-primary/10 transition-colors text-left"
         aria-expanded={isExpanded}
       >
-        <LockKeyhole className="w-4 h-4 text-primary flex-shrink-0" />
+        <LockKeyhole className={`w-4 h-4 flex-shrink-0 ${hasLock ? 'text-primary' : 'text-base-content/50'}`} />
         <div className="flex-1 min-w-0">
-          <span className="font-semibold text-sm text-base-content">Identity Lock</span>
-          <span className="ml-2 text-xs text-base-content/50">
-            {traitCount} trait{traitCount !== 1 ? 's' : ''} locked
+          <span className="font-semibold text-sm text-base-content">
+            {hasLock ? 'Identity Lock' : 'Character Consistency Prompt'}
           </span>
+          {hasLock && (
+            <span className="ml-2 text-xs text-base-content/50">
+              {traitCount} trait{traitCount !== 1 ? 's' : ''} locked
+            </span>
+          )}
         </div>
-        <span className="badge badge-primary badge-sm mr-1">Active</span>
+        {hasLock ? (
+          <span className="badge badge-primary badge-sm mr-1">Active</span>
+        ) : (
+          <span className="badge badge-ghost badge-sm mr-1">Legacy</span>
+        )}
+        {/* Rerun button */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRerun(); }}
+          className="btn btn-ghost btn-xs gap-1 mr-2"
+          title="Re-run identity lock from current primary image"
+        >
+          <RefreshCw className="w-3 h-3" />
+          <span className="hidden sm:inline">Refresh</span>
+        </button>
         {isExpanded
           ? <ChevronUp  className="w-4 h-4 opacity-50 flex-shrink-0" />
           : <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0" />
