@@ -1423,7 +1423,8 @@ async function resizeImageFile(file) {
         }
         canvas.width = width; canvas.height = height
         canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-        resolve(canvas.toDataURL('image/jpeg', 0.8))
+        const mediaType = file.type === 'image/png' ? 'image/png' : file.type === 'image/webp' ? 'image/webp' : 'image/jpeg'
+        resolve(canvas.toDataURL(mediaType, mediaType === 'image/png' ? undefined : 0.8))
       }
       img.src = e.target.result
     }

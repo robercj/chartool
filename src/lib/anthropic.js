@@ -463,7 +463,10 @@ async function compressBase64Image(dataUrl) {
       canvas.width = width;
       canvas.height = height;
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
+      const isPng = dataUrl.startsWith('data:image/png');
+      const isWebp = dataUrl.startsWith('data:image/webp');
+      const mediaType = isPng ? 'image/png' : isWebp ? 'image/webp' : 'image/jpeg';
+      resolve(canvas.toDataURL(mediaType, mediaType === 'image/png' ? undefined : 0.85));
     };
     img.onerror = () => reject(new Error('Failed to load image for compression'));
     img.src = dataUrl;
