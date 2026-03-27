@@ -49,12 +49,12 @@ function buildIdentityLockSection(identityLock) {
     lines.push('')
   }
   if (traits.eyes?.length) {
-    lines.push('**Eyes** (IMMUTABLE):')
+    lines.push('**Eyes** (IMMUTABLE — eye color and shape must be EXACT):')
     traits.eyes.forEach(t => lines.push(`- ${t}`))
     lines.push('')
   }
   if (traits.outfit?.length) {
-    lines.push('**Outfit** (IMMUTABLE):')
+    lines.push('**Outfit & Accessories** (IMMUTABLE — include all accessories exactly as specified, add nothing):')
     traits.outfit.forEach(t => lines.push(`- ${t}`))
     lines.push('')
   }
@@ -75,11 +75,12 @@ function buildForbiddenSection(identityLock, allowClothing, allowProps) {
   // Always forbidden regardless of toggles (core identity constraints)
   const coreConstraints = [
     'DO NOT alter facial structure, proportions, or any identifying facial features',
-    'DO NOT change hair color, style, or length',
-    'DO NOT change eye color or shape',
-    'DO NOT alter skin tone or complexion',
+    'DO NOT change hair color, style, length, or texture',
+    'DO NOT change eye color, shape, or pattern — eye color is ABSOLUTELY immutable',
+    'DO NOT change skin tone or complexion',
     'DO NOT add facial markings, tattoos, scars, or features not present in the reference',
     'DO NOT change age impression or body proportions',
+    'DO NOT add accessories, jewelry, or items not explicitly listed in the identity lock',
   ]
 
   // Conditionally forbidden based on toggles
@@ -128,6 +129,8 @@ function buildArtStyleSection(artStyleId, identityLock) {
     `**Style Directive**: ${style.nanoPrompt}`,
     '',
     'Transform the rendering style while maintaining EXACT character identity:',
+    '- EYE COLOR IS ABSOLUTELY IMMUTABLE — never alter eye color regardless of art style',
+    '- DO NOT add accessories or jewelry not present in the reference image',
     '- Preserve all immutable facial features, hair, eyes, and outfit exactly as specified in the identity lock',
     '- Only change: linework style, shading technique, color palette, lighting approach, and artistic rendering method',
     '- The character must remain immediately recognizable — only the art style transforms',
@@ -311,6 +314,8 @@ function buildCriticalConstraintsSection() {
     '## CRITICAL GENERATION CONSTRAINTS — READ BEFORE RENDERING',
     '',
     '- CHARACTER IDENTITY IS ABSOLUTE. Every listed immutable trait must be pixel-perfect consistent.',
+    '- EYE COLOR IS IMMUTABLE. Do not shift, tint, or alter eye color under any circumstances.',
+    '- No accessories, jewelry, or items not in the reference image — this is strictly forbidden.',
     '- Only facial muscles and expression may change. Facial structure, proportions, and geometry are locked.',
     '- If emotional expression conflicts with identity lock, REDUCE intensity. Do not bend identity.',
     '- Pose must be physically plausible for this character\'s body type, height, and outfit.',
