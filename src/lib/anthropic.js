@@ -747,7 +747,6 @@ Rules:
 - Output ONLY the description text. No headers, no JSON, no explanation.`;
   */
 
-  // NEW STRICT PROMPT - Chroma key green background, neutral pose/expression, head-to-toe
   const systemPrompt = `You are a character visual design specialist. Your task is to write a vivid, detailed prose description of a character's physical appearance for use as an AI image generation prompt (fal.ai / Nano Banana 2 model).
 
 From the provided appearance data, write a single cohesive paragraph that includes:
@@ -763,13 +762,12 @@ CRITICAL MANDATORY CONSTRAINTS - You MUST include these exact elements in every 
 - POSE: Character standing straight in a neutral standing pose, arms relaxed at sides or slightly relaxed, facing directly forward toward the camera
 - EXPRESSION: Calm, neutral facial expression with mouth closed or a slight neutral smile — no extreme emotions
 - CAMERA VIEW: Full frontal view, character visible from head to toe (full body shot)
-- BACKGROUND: Solid flat Chroma Key Green background (#00FF00) with absolutely no background details, environment, or objects — pure solid color only
 - ART STYLE: Anime / visual novel character sprite style, clean illustration look
 - ASPECT RATIO: 9:16 vertical portrait orientation
 
 Rules:
 - Write in vivid, descriptive prose — specific and evocative
-- Include the mandatory pose, expression, and background constraints naturally in the description
+- Include the mandatory pose and expression constraints naturally in the description
 - Do NOT include NSFW or inappropriate content
 - Keep under 200 words — image prompts must be concise
 - Output ONLY the description text. No headers, no JSON, no explanation.`;
