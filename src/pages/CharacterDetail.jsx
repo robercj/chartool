@@ -291,6 +291,8 @@ function CharacterDetailInner() {
   const [showPromptModal,  setShowPromptModal]  = useState(false);
   const [showImagePromptModal, setShowImagePromptModal] = useState(false);
   const [showIdentityLockRerun, setShowIdentityLockRerun] = useState(false);
+  const [showIdentityLockEdit, setShowIdentityLockEdit] = useState(false);
+  const [editIdentityLock, setEditIdentityLock] = useState(null);
   const [isRerunningIdentityLock, setIsRerunningIdentityLock] = useState(false);
   const [selectedHistImg,  setSelectedHistImg]  = useState(null); // from strip
 
@@ -775,6 +777,7 @@ function CharacterDetailInner() {
               sectionExpanded={sectionExpanded}
               onToggle={toggleSection}
               onRerun={() => setShowIdentityLockRerun(true)}
+              onEdit={() => { setEditIdentityLock(savedChar.character_identity_lock); setShowIdentityLockEdit(true); }}
             />
           )}
 
@@ -1277,6 +1280,26 @@ function CharacterDetailInner() {
         </div>
       )}
 
+      {/* Identity Lock Edit Modal */}
+      {showIdentityLockEdit && (
+        <IdentityLockEditModal
+          identityLock={editIdentityLock}
+          isOpen={showIdentityLockEdit}
+          onClose={() => { setShowIdentityLockEdit(false); setEditIdentityLock(null); }}
+          onSave={async (updatedLock) => {
+            try {
+              await Character.update(characterId, { character_identity_lock: updatedLock });
+              queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+              toast.success('Identity lock updated!');
+              setShowIdentityLockEdit(false);
+              setEditIdentityLock(null);
+            } catch (err) {
+              toast.error('Failed to save: ' + (err.message || 'Unknown error'));
+            }
+          }}
+        />
+      )}
+
       {/* Save Confirmation */}
       {showSaveConfirm && (
         <SaveConfirmModal
@@ -1492,7 +1515,196 @@ function SaveConfirmModal({ characterName, identityDirty, appearanceDirty,
   );
 }
 
-// ─── Save As Modal ────────────────────────────────────────────────────────────
+// ─── Identity Lock Edit Modal ──────────────────────────────────────────────────
+function IdentityLockEditModal({ identityLock, isOpen, onClose, onSave }) {
+  const [editedLock, setEditedLock] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (identityLock) {
+      setEditedLock(JSON.parse(JSON.stringify(identityLock)));
+    }
+  }, [identityLock]);
+
+  if (!isOpen || !editedLock) return null;
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    await onSave(editedLock);
+    setIsSaving(false);
+  };
+
+  const updateTrait = (category, index, value) => {
+    const newTraits = { ...editedLock.immutable_traits };
+    newTraits[category] = [...(newTraits[category] || [])];
+    newTraits[category][index] = value;
+    setEditedLock({ ...editedLock, immutable_traits: newTraits });
+  };
+
+  const addTrait = (category) => {
+    const newTraits = { ...editedLock.immutable_traits };
+    newTraits[category] = [...(newTraits[category] || []), ''];
+    setEditedLock({ ...editedLock, immutable_traits: newTraits });
+  };
+
+  const removeTrait = (category, index) => {
+    const newTraits = { ...editedLock.immutable_traits };
+    newTraits[category] = (newTraits[category] || []).filter((_, i) => i !== index);
+    setEditedLock({ ...editedLock, immutable_traits: newTraits });
+  };
+
+  const updateForbidden = (index, value) => {
+    const newForbidden = [...(editedLock.forbidden_changes || [])];
+    newForbidden[index] = value;
+    setEditedLock({ ...editedLock, forbidden_changes: newForbidden });
+  };
+
+  const addForbidden = () => {
+    const newForbidden = [...(editedLock.forbidden_changes || []), ''];
+    setEditedLock({ ...editedLock, forbidden_changes: newForbidden });
+  };
+
+  const removeForbidden = (index) => {
+    const newForbidden = (editedLock.forbidden_changes || []).filter((_, i) => i !== index);
+    setEditedLock({ ...editedLock, forbidden_changes: newForbidden });
+  };
+
+  const updateNotes = (index, value) => {
+    const newNotes = [...(editedLock.notes || [])];
+    newNotes[index] = value;
+    setEditedLock({ ...editedLock, notes: newNotes });
+  };
+
+  const addNotes = () => {
+    const newNotes = [...(editedLock.notes || []), ''];
+    setEditedLock({ ...editedLock, notes: newNotes });
+  };
+
+  const removeNotes = (index) => {
+    const newNotes = (editedLock.notes || []).filter((_, i) => i !== index);
+    setEditedLock({ ...editedLock, notes: newNotes });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div className="w-full max-w-2xl max-h-[85vh] bg-base-100 rounded-2xl border border-base-300 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-base-300">
+          <h2 className="text-lg font-bold text-base-content flex items-center gap-2">
+            <Pencil className="w-5 h-5 text-primary" />
+            Edit Identity Lock
+          </h2>
+          <button onClick={onClose} className="btn btn-ghost btn-sm btn-square">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          {/* Immutable Traits */}
+          {['face', 'hair', 'eyes', 'outfit'].map(category => (
+            <div key={category}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-base-content/60 mb-2 capitalize">
+                {category} Traits
+              </p>
+              <div className="space-y-2">
+                {(editedLock.immutable_traits?.[category] || []).map((trait, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={trait}
+                      onChange={(e) => updateTrait(category, i, e.target.value)}
+                      className={IC}
+                      placeholder={`Enter ${category} trait...`}
+                    />
+                    <button onClick={() => removeTrait(category, i)} className="btn btn-ghost btn-sm text-error">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <button onClick={() => addTrait(category)} className="btn btn-ghost btn-sm gap-1">
+                  <Plus className="w-4 h-4" /> Add {category} trait
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Forbidden Changes */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-error/70 mb-2">
+              Forbidden Changes
+            </p>
+            <div className="space-y-2">
+              {(editedLock.forbidden_changes || []).map((f, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={f}
+                    onChange={(e) => updateForbidden(i, e.target.value)}
+                    className={IC}
+                    placeholder="Enter forbidden change..."
+                  />
+                  <button onClick={() => removeForbidden(i)} className="btn btn-ghost btn-sm text-error">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button onClick={addForbidden} className="btn btn-ghost btn-sm gap-1">
+                <Plus className="w-4 h-4" /> Add forbidden change
+              </button>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-base-content/60 mb-2">
+              Notes
+            </p>
+            <div className="space-y-2">
+              {(editedLock.notes || []).map((note, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={(e) => updateNotes(i, e.target.value)}
+                    className={IC}
+                    placeholder="Enter note..."
+                  />
+                  <button onClick={() => removeNotes(i)} className="btn btn-ghost btn-sm text-error">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button onClick={addNotes} className="btn btn-ghost btn-sm gap-1">
+                <Plus class="w-4 h-4" /> Add note
+              </button>
+            </div>
+          </div>
+
+          {/* Art Style */}
+          <div>
+            <Field label="Art Style" htmlFor="il-artstyle">
+              <input
+                id="il-artstyle"
+                type="text"
+                value={editedLock.art_style || ''}
+                onChange={(e) => setEditedLock({ ...editedLock, art_style: e.target.value })}
+                className={IC}
+                placeholder="e.g., anime, manga, manhwa..."
+              />
+            </Field>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 p-4 border-t border-base-300">
+          <button onClick={onClose} className="btn btn-ghost">Cancel</button>
+          <button onClick={handleSave} disabled={isSaving} className="btn btn-primary gap-2">
+            {isSaving && <span className="loading loading-spinner loading-sm" />}
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function SaveAsModal({ currentName, characterId, userId, isSaving, onConfirm, onCancel }) {
   const [name, setName]         = useState(currentName || '');
   const [nameError, setNameError] = useState(null);
@@ -1770,7 +1982,7 @@ function ConsistencyPromptSection({ prompt, sectionExpanded, onToggle }) {
 // ─── IdentityLockSection ──────────────────────────────────────────────────────
 // Read-only display of the structured identity lock. Never editable.
 // Shown in CharacterDetail when character_identity_lock is present.
-function IdentityLockSection({ identityLock, sectionExpanded, onToggle, onRerun }) {
+function IdentityLockSection({ identityLock, sectionExpanded, onToggle, onRerun, onEdit }) {
   const id = 'identity-lock';
   const isExpanded = sectionExpanded[id] ?? false;
   const traits = identityLock?.immutable_traits || {};
@@ -1801,7 +2013,16 @@ function IdentityLockSection({ identityLock, sectionExpanded, onToggle, onRerun 
         ) : (
           <span className="badge badge-ghost badge-sm mr-1">Legacy</span>
         )}
-        {/* Rerun button */}
+        {/* Rerun and Edit buttons */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          className="btn btn-ghost btn-xs gap-1 mr-1"
+          title="Manually edit the identity lock"
+        >
+          <Pencil className="w-3 h-3" />
+          <span className="hidden sm:inline">Edit</span>
+        </button>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRerun(); }}
