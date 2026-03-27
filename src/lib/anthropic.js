@@ -269,7 +269,7 @@ export async function generateCharacterManifest(characterData) {
   }
 
   const imagePromptSection = hasImage ? '' : `
-3. "image_prompt": A single vivid paragraph for an AI image generator (fal.ai/FLUX). Include: full-body or portrait framing, pose, expression, hair colour/style, eye colour, clothing, accessories, background/setting, mood, lighting, and art-style tags (e.g. "anime illustration", "manga style"). Under 300 words. Output the raw prompt string only — no JSON nesting inside this field.`;
+3. "image_prompt": A single vivid paragraph for an AI image generator (fal.ai/nano-banana-2). Include: full-body or portrait framing, pose, expression, hair colour/style, eye colour, clothing, accessories, mood, lighting, and art-style tags (e.g. "anime illustration", "manga style"). Under 300 words. Output the raw prompt string only — no JSON nesting inside this field.`;
 
   const systemPrompt = `You are a character profile writer. Your task is to produce a high-fidelity character manifest from the provided data.
 
