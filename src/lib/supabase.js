@@ -26,7 +26,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     fetch: (url, options) => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
+      const timeout = setTimeout(() => controller.abort(), 30 * 60 * 1000);
       return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
     },
   },
