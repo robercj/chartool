@@ -38,6 +38,8 @@ function buildIdentityLockSection(identityLock) {
 
   const traits = identityLock.immutable_traits || {}
 
+  const hasHeterochromia = (traits.eyes?.some(e => e.toLowerCase().includes('heterochromia')) ?? false)
+
   if (traits.face?.length) {
     lines.push('**Face** (IMMUTABLE):')
     traits.face.forEach(t => lines.push(`- ${t}`))
@@ -51,6 +53,13 @@ function buildIdentityLockSection(identityLock) {
   if (traits.eyes?.length) {
     lines.push('**Eyes** (IMMUTABLE — eye color and shape must be EXACT):')
     traits.eyes.forEach(t => lines.push(`- ${t}`))
+    if (hasHeterochromia) {
+      lines.push('')
+      lines.push('**HETEROCHROMIA ENFORCEMENT**:')
+      lines.push('- Each eye must maintain its EXACT designated color — NO blending, merging, or normalization')
+      lines.push('- Left eye color and right eye color are independently locked — do not confuse or swap')
+      lines.push('- Heterochromia is a core identity trait: violate it and you violate the character')
+    }
     lines.push('')
   }
   if (traits.outfit?.length) {
@@ -77,6 +86,7 @@ function buildForbiddenSection(identityLock, allowClothing, allowProps) {
     'DO NOT alter facial structure, proportions, or any identifying facial features',
     'DO NOT change hair color, style, length, or texture',
     'DO NOT change eye color, shape, or pattern — eye color is ABSOLUTELY immutable',
+    'FOR HETEROCHROMIA: Each eye must keep its exact color — NO blending, merging, normalization, or confusion between left/right eye',
     'DO NOT change skin tone or complexion',
     'DO NOT add facial markings, tattoos, scars, or features not present in the reference',
     'DO NOT change age impression or body proportions',
@@ -315,6 +325,7 @@ function buildCriticalConstraintsSection() {
     '',
     '- CHARACTER IDENTITY IS ABSOLUTE. Every listed immutable trait must be pixel-perfect consistent.',
     '- EYE COLOR IS IMMUTABLE. Do not shift, tint, or alter eye color under any circumstances.',
+    '- HETEROCHROMIA ENFORCEMENT: Each eye maintains its exact designated color — NO blending, merging, normalization, or confusion between left and right eye. Heterochromia is a core identity trait.',
     '- No accessories, jewelry, or items not in the reference image — this is strictly forbidden.',
     '- Only facial muscles and expression may change. Facial structure, proportions, and geometry are locked.',
     '- If emotional expression conflicts with identity lock, REDUCE intensity. Do not bend identity.',

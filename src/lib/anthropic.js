@@ -518,12 +518,17 @@ export async function analyzeReferenceImage(imageInput) {
 Write a detailed, specific character consistency description for use as an image generation reference prompt. Include:
 - Physical appearance: body type, height/build, skin tone, distinctive features
 - Hair: exact color(s), style, length, texture
-- Eyes: exact color, shape
+- Eyes: exact color, shape — IF HETEROCHROMIA IS PRESENT, specify LEFT eye color and RIGHT eye color SEPARATELY with explicit "left eye: [color]" and "right eye: [color]" notation
 - Clothing: exact colors, patterns, style, layers, any insignia or details
 - Accessories: jewelry, bags, weapons, tools, hats, glasses, etc.
 - Art style: anime/manga style, line weight, shading technique, color palette
 - Any unique design elements, motifs, or identifiers
 Be extremely specific and detailed. Write in direct descriptive style for an image generation prompt.
+
+IMPORTANT HETEROCHROMIA RULE: If the character has heterochromia (different colored eyes), you MUST:
+1. Explicitly note "heterochromia: yes" in your analysis
+2. List each eye color separately with left/right designation
+3. Note that eye colors must NEVER be blended, merged, normalized, or confused between eyes
 
 --- IDENTITY_LOCK_JSON ---
 Return ONLY valid JSON (no extra text, no markdown fences) with this exact schema:
@@ -531,7 +536,7 @@ Return ONLY valid JSON (no extra text, no markdown fences) with this exact schem
   "immutable_traits": {
     "face": ["list each immutable facial feature as a separate string — face shape, age impression, skin tone, distinguishing marks, nose shape, jaw, etc."],
     "hair": ["list each hair trait separately — color, style, length, texture, any distinctive elements"],
-    "eyes": ["list each eye trait separately — color, shape, expression quality, any distinctive features"],
+    "eyes": ["list each eye trait separately — color, shape, expression quality, any distinctive features. IF HETEROCHROMIA: list left eye color and right eye color SEPARATELY"],
     "outfit": ["list each outfit element separately — every garment, color, pattern, layer; list each accessory separately"]
   },
   "art_style": "the art style of the reference image (e.g. 'anime', 'manga', 'manhwa', 'western comic', 'etc.) - leave as null if unclear",
@@ -544,7 +549,8 @@ Return ONLY valid JSON (no extra text, no markdown fences) with this exact schem
   "notes": [
     "list any important constraints about how this character must be drawn",
     "e.g. pose plausibility with clothing",
-    "e.g. any art style consistency requirements"
+    "e.g. any art style consistency requirements",
+    "IF HETEROCHROMIA: include explicit note about heterochromia enforcement — each eye must maintain its exact color with no blending, merging, or normalization"
   ]
 }`,
   })
