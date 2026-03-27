@@ -8,13 +8,19 @@ export function GenerationContextProvider({ children }) {
   const initialize = useGenerationQueueStore(s => s.initialize);
   const channelRef = useRef(null);
   const imagesChannelRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     let channel, imagesChannel;
 
     async function setupRealtime() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || !mountedRef.current) return;
 
       channel = supabase
         .channel('generation_jobs_realtime')

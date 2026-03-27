@@ -51,8 +51,9 @@ const useGenerationQueueStore = create((set, get) => ({
   initialize: async () => {
     if (get()._initialized) return;
     
+    let mounted = true;
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    if (!mounted || !user) {
       set({ _initialized: true });
       return;
     }
@@ -63,6 +64,11 @@ const useGenerationQueueStore = create((set, get) => ({
       .eq('user_id', user.id)
       .in('status', ['queued', 'generating'])
       .order('created_at');
+
+    if (!mounted) {
+      set({ _initialized: true });
+      return;
+    }
 
     if (error) {
       console.error('Failed to restore queue from DB:', error);
@@ -108,6 +114,11 @@ const useGenerationQueueStore = create((set, get) => ({
     });
 
     const sessions = Object.values(sessionsMap).sort((a, b) => b.dispatchedAt - a.dispatchedAt);
+
+    if (!mounted) {
+      set({ _initialized: true });
+      return;
+    }
 
     set({
       sessions,
