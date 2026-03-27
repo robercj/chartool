@@ -759,11 +759,11 @@ From the provided appearance data, write a single cohesive paragraph that includ
 7. Visual motifs and distinctive elements
 
 CRITICAL MANDATORY CONSTRAINTS - You MUST include these exact elements in every description:
-- POSE: Character standing straight in a neutral standing pose, arms relaxed at sides or slightly relaxed, facing directly forward toward the camera
-- EXPRESSION: Calm, neutral facial expression with mouth closed or a slight neutral smile — no extreme emotions
-- CAMERA VIEW: Full frontal view, character visible from head to toe (full body shot)
+- POSE: Natural standing pose, arms relaxed at sides, facing forward toward the camera
+- EXPRESSION: Natural facial expression — no extreme emotions
+- CAMERA VIEW: Full frontal view, character visible from head to toe with slight margins at the top and bottom
 - ART STYLE: Anime / visual novel character sprite style, clean illustration look
-- ASPECT RATIO: 9:16 vertical portrait orientation
+- ASPECT RATIO: 3:4 portrait orientation
 
 Rules:
 - Write in vivid, descriptive prose — specific and evocative
