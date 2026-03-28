@@ -19,7 +19,7 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const FAL_MODEL = 'fal-ai/nano-banana-2/edit'
+const DEFAULT_MODEL = 'fal-ai/nano-banana-2/edit'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
     if (!falKey) throw new Error('FAL_KEY secret not set')
 
     const { input } = await req.json()
+    const model = input?.model || DEFAULT_MODEL
 
     // Validate reference images
     const imageUrls = (input.image_urls ?? []).filter(Boolean)
@@ -66,7 +67,7 @@ Deno.serve(async (req) => {
       sync_mode: true,
     }
 
-    console.log('Calling fal.ai sync, images:', imageUrls.length, 'prompt:', falInput.prompt?.slice(0, 80))
+    console.log('Calling fal.ai sync, model:', model, 'images:', imageUrls.length, 'prompt:', falInput.prompt?.slice(0, 80))
 
     // Retry up to 3 attempts with linear backoff + jitter for transient 5xx errors (e.g. 504).
     // Delays: ~1s, ~2s (each ± up to 500ms of random jitter to reduce thundering-herd spikes).
@@ -82,7 +83,7 @@ Deno.serve(async (req) => {
       const timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUT_MS)
 
       try {
-        falRes = await fetch(`https://fal.run/${FAL_MODEL}`, {
+        falRes = await fetch(`https://fal.run/${model}`, {
           method: 'POST',
           headers: {
             'Authorization': `Key ${falKey}`,

@@ -199,9 +199,10 @@ export async function callLLM({ prompt, imageUrls = [], responseSchema = null, g
 // @param {string[]} [referenceImageUrls]  Preferred: multiple source angles
 // @param {string}   [propImageUrl]        Appended after reference images
 // @param {string}   [aspectRatio='3:4']
+// @param {string}   [model]               fal.ai model to use (default: nano-banana-2/edit)
 // @param {AbortSignal} [signal]
 // @returns {Promise<string>} CDN URL of the generated image
-export async function generateImage({ prompt, referenceImageUrl, referenceImageUrls, propImageUrl, aspectRatio = '3:4' }, signal = null) {
+export async function generateImage({ prompt, referenceImageUrl, referenceImageUrls, propImageUrl, aspectRatio = '3:4', model = null }, signal = null) {
   const sourceImages = [];
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     sourceImages.push(...referenceImageUrls.filter(Boolean));
@@ -217,6 +218,7 @@ export async function generateImage({ prompt, referenceImageUrl, referenceImageU
     output_format: 'png',
     resolution: '1K',
     image_urls: sourceImages,
+    ...(model && { model }),
   };
 
   const result = await callEdgeFunction('fal-generate', { input }, signal);
@@ -332,9 +334,13 @@ ${JSON.stringify(summary, null, 2)}`;
   }
 }
 
-// ─── Character Image Generation: fal.ai nanoBanana2 (text-to-image) ──────────────
-export async function generateCharacterImage({ prompt, seed = null }, signal = null) {
-  const result = await callEdgeFunction('fal-generate-character', { prompt, seed }, signal);
+// ─── Character Image Generation: fal.ai (text-to-image) ───────────────────────────
+// @param {string}   prompt         Image generation prompt
+// @param {number}  [seed]         Optional seed for reproducibility
+// @param {string}  [model]        fal.ai model to use (default: nano-banana-2)
+// @param {AbortSignal} [signal]    Optional abort signal
+export async function generateCharacterImage({ prompt, seed = null, model = null }, signal = null) {
+  const result = await callEdgeFunction('fal-generate-character', { prompt, seed, model }, signal);
 
   const images = result?.images;
   if (!images?.[0]) throw new Error('fal.ai returned no image');

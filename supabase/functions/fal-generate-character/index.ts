@@ -20,7 +20,7 @@ const CORS = {
 }
 
 // Uses nano-banana-2 (text-to-image) - no reference image required
-const FAL_MODEL = 'fal-ai/nano-banana-2'
+const DEFAULT_MODEL = 'fal-ai/nano-banana-2'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -47,11 +47,13 @@ Deno.serve(async (req) => {
     const falKey = Deno.env.get('FAL_KEY')
     if (!falKey) throw new Error('FAL_KEY secret not set')
 
-    const { prompt, seed, aspect_ratio = '9:16', num_images = 1 } = await req.json()
+    const { prompt, seed, aspect_ratio = '9:16', num_images = 1, model } = await req.json()
 
     if (!prompt || typeof prompt !== 'string') {
       return json({ error: 'Prompt is required' }, 400)
     }
+
+    const falModel = model || DEFAULT_MODEL
 
     // Build fal.ai input - NO reference image required for nano-banana-2
     const falInput = {
@@ -63,7 +65,7 @@ Deno.serve(async (req) => {
       ...(seed !== null && seed !== undefined && { seed }),
     }
 
-    console.log('Calling fal.ai nano-banana-2 for character generation, prompt:', prompt.slice(0, 80))
+    console.log('Calling fal.ai for character generation, model:', falModel, 'prompt:', prompt.slice(0, 80))
 
     // Retry up to 3 attempts with linear backoff + jitter
     const MAX_ATTEMPTS = 3
@@ -76,7 +78,7 @@ Deno.serve(async (req) => {
       const timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUT_MS)
 
       try {
-        falRes = await fetch(`https://fal.run/${FAL_MODEL}`, {
+        falRes = await fetch(`https://fal.run/${falModel}`, {
           method: 'POST',
           headers: {
             'Authorization': `Key ${falKey}`,

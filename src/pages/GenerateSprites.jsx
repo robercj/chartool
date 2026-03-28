@@ -57,6 +57,12 @@ const ASPECT_RATIOS = [
   { value: '9:16', label: '9:16 — Vertical' },
 ]
 
+// ─── Image model options (for sprites with reference image) ─────────────────────
+const IMAGE_MODELS = [
+  { value: 'fal-ai/nano-banana-2/edit', label: 'Nano Banana 2 (Default)' },
+  { value: 'fal-ai/grok-2-imagine-edit', label: 'Grok Imagine Edit' },
+]
+
 const DEFAULT_VARIATION_COUNT = 5
 
 // Default toggle state: all optional permissions OFF
@@ -107,6 +113,7 @@ export default function GenerateSprites() {
   // ── Generation controls ───────────────────────────────────────────────────
   const [variationCount, setVariationCount] = useState(DEFAULT_VARIATION_COUNT)
   const [aspectRatio, setAspectRatio] = useState('3:4')
+  const [model, setModel] = useState('fal-ai/nano-banana-2/edit')
   const [seedValue, setSeedValue] = useState('')
   const [liveImages, setLiveImages] = useState([])
   const [generationError, setGenerationError] = useState(null)
@@ -485,12 +492,13 @@ export default function GenerateSprites() {
           prompt: finalPrompt,
           referenceImageUrls: [refImageBase64 || refImageUrl].filter(Boolean),
           aspectRatio,
+          model,
           seed: seedValue ? parseInt(seedValue, 10) : null,
           poseId: spec.poseId,
           emotionEntry: spec.emotionEntry,
           artStyle: selectedArtStyle || null,
           paramsSnapshot: {
-            variationCount, aspectRatio,
+            variationCount, aspectRatio, model,
             poseId: spec.poseId,
             emotionEntry: spec.emotionEntry,
             artStyle: selectedArtStyle || null,
@@ -622,6 +630,8 @@ export default function GenerateSprites() {
         }}
         aspectRatio={aspectRatio}
         onAspectRatioChange={setAspectRatio}
+        model={model}
+        onModelChange={setModel}
         seedValue={seedValue}
         onSeedChange={setSeedValue}
         artStyle={selectedArtStyle}
@@ -1301,6 +1311,8 @@ function GenerationControls({
   onVariationCountChange,
   aspectRatio,
   onAspectRatioChange,
+  model,
+  onModelChange,
   seedValue,
   onSeedChange,
   artStyle,
@@ -1325,6 +1337,20 @@ function GenerationControls({
             ))}
           </select>
         </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium" style={{ color: theme.textMuted }}>Model</label>
+          <select
+            value={model}
+            onChange={e => onModelChange(e.target.value)}
+            className="select select-bordered w-full"
+          >
+            {IMAGE_MODELS.map(m => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
           <label className="text-xs font-medium" style={{ color: theme.textMuted }}>Aspect Ratio</label>
           <select

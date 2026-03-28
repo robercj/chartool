@@ -53,6 +53,12 @@ const STEPS = [
   { id: 2, label: 'Appearance' },
 ];
 
+// Image model options (for text-to-image generation)
+const IMAGE_MODELS = [
+  { value: 'fal-ai/nano-banana-2', label: 'Nano Banana 2 (Default)' },
+  { value: 'fal-ai/grok-2-imagine', label: 'Grok Imagine' },
+];
+
 export default function GenerateCharacterPage() {
   const navigate      = useNavigate();
   const { draftId }   = useParams();
@@ -78,6 +84,7 @@ export default function GenerateCharacterPage() {
   // Image generation / finalization
   const [isGenerating,                 setIsGenerating]                 = useState(false);
   const [isFinalizing,                 setIsFinalizing]                 = useState(false);
+  const [imageModel, setImageModel] = useState('fal-ai/nano-banana-2');
 
   const abortControllerRef = useRef(null);
 
@@ -221,7 +228,7 @@ export default function GenerateCharacterPage() {
 
     try {
       const result = await generateCharacterImage(
-        { prompt: formData.appearance_description, seed: formData.seed_locked ? formData.seed : null },
+        { prompt: formData.appearance_description, seed: formData.seed_locked ? formData.seed : null, model: imageModel },
         abortControllerRef.current.signal
       );
       const newHistory = [result.url, ...imageHistory.filter(u => u !== result.url)].slice(0, 10);
@@ -259,7 +266,7 @@ export default function GenerateCharacterPage() {
       }
 
       const result = await generateCharacterImage(
-        { prompt: finalPrompt, seed: formData.seed_locked ? formData.seed : null },
+        { prompt: finalPrompt, seed: formData.seed_locked ? formData.seed : null, model: imageModel },
         abortControllerRef.current.signal
       );
       const newHistory = [result.url, ...imageHistory.filter(u => u !== result.url)].slice(0, 10);
@@ -334,7 +341,7 @@ export default function GenerateCharacterPage() {
 
         if (!finalImageUrl && manifestResult.imagePrompt) {
           const imgResult = await generateCharacterImage(
-            { prompt: manifestResult.imagePrompt, seed: formData.seed_locked ? formData.seed : null },
+            { prompt: manifestResult.imagePrompt, seed: formData.seed_locked ? formData.seed : null, model: imageModel },
             abortControllerRef.current?.signal
           );
           finalImageUrl     = imgResult.url;
@@ -525,6 +532,21 @@ export default function GenerateCharacterPage() {
                   </p>
                 </div>
               )}
+
+              {/* ── Model selector ──────────────────────────────────────────────── */}
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium">Model:</label>
+                <select
+                  value={imageModel}
+                  onChange={(e) => setImageModel(e.target.value)}
+                  className="select select-bordered select-sm flex-1"
+                  disabled={isGenerating || isFinalizing}
+                >
+                  {IMAGE_MODELS.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
 
               {/* ── Two action buttons (side-by-side) ────────────────────── */}
               <div className="flex flex-col sm:flex-row gap-3">

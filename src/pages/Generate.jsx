@@ -57,6 +57,11 @@ const ASPECT_RATIOS = [
   { value: '9:16', label: '9:16 — Vertical' },
 ]
 
+const IMAGE_MODELS = [
+  { value: 'fal-ai/nano-banana-2/edit', label: 'Nano Banana 2 (Default)' },
+  { value: 'fal-ai/grok-2-imagine-edit', label: 'Grok Imagine Edit' },
+]
+
 const POSE_PRESETS = [
   'Standing straight neutral', 'Arms crossed', 'One hand on hip',
   'Leaning forward', 'Hands behind back', 'Pointing forward',
@@ -368,6 +373,7 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
               referenceImageUrls: charSourceImages,
               propImageUrl: charPropImage,
               aspectRatio: char.aspectRatio || '3:4',
+              model: char.model,
             }, signal)
 
             if (char.removeBackground !== false) {
@@ -424,6 +430,7 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
                   batchId: batch.id,
                   removeBackground: char.removeBackground !== false,
                   aspectRatio: char.aspectRatio || '3:4',
+                  model: char.model,
                   errorMsg: err.message || 'Unknown error',
                 }
               ]
@@ -500,6 +507,7 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
         propImageUrl: failedItem.propImageUrl,
         referenceImageUrl: failedItem.referenceImageUrl,  // legacy fallback
         aspectRatio: failedItem.aspectRatio || '3:4',
+        model: failedItem.model,
       }, signal)
 
       if (failedItem.removeBackground) {
@@ -999,6 +1007,20 @@ function CharacterSlot({ character, index, theme, onUpdate, onRemove, canRemove,
                 className="select select-bordered bg-base-300 w-full text-sm"
               >
                 {ASPECT_RATIOS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <div className="label label-text font-medium uppercase tracking-widest mb-1" style={{ fontSize: 'var(--font-size-label)', color: theme.labelColor }}>
+                Model
+              </div>
+              <select
+                value={character.model || 'fal-ai/nano-banana-2/edit'}
+                onChange={e => onUpdate({ model: e.target.value })}
+                className="select select-bordered bg-base-300 w-full text-sm"
+              >
+                {IMAGE_MODELS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
@@ -1657,6 +1679,7 @@ function createEmptyCharacter() {
     removeBackground: true,
     shotType: 'Full-body',
     aspectRatio: '3:4',
+    model: 'fal-ai/nano-banana-2/edit',
     allowHeldItems: false,
     allowedItems: '',
     poseOverrides: [],
