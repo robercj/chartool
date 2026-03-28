@@ -56,7 +56,7 @@ const STEPS = [
 // Image model options (for text-to-image generation)
 const IMAGE_MODELS = [
   { value: 'fal-ai/nano-banana-2', label: 'Nano Banana 2 (Default)' },
-  { value: 'fal-ai/grok-2-imagine', label: 'Grok Imagine' },
+  { value: 'xai/grok-imagine-image', label: 'Grok Imagine' },
 ];
 
 export default function GenerateCharacterPage() {

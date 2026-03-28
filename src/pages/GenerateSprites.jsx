@@ -60,7 +60,7 @@ const ASPECT_RATIOS = [
 // ─── Image model options (for sprites with reference image) ─────────────────────
 const IMAGE_MODELS = [
   { value: 'fal-ai/nano-banana-2/edit', label: 'Nano Banana 2 (Default)' },
-  { value: 'fal-ai/grok-2-imagine-edit', label: 'Grok Imagine Edit' },
+  { value: 'xai/grok-imagine-image/edit', label: 'Grok Imagine Edit' },
 ]
 
 const DEFAULT_VARIATION_COUNT = 5

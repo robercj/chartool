@@ -59,7 +59,7 @@ const ASPECT_RATIOS = [
 
 const IMAGE_MODELS = [
   { value: 'fal-ai/nano-banana-2/edit', label: 'Nano Banana 2 (Default)' },
-  { value: 'fal-ai/grok-2-imagine-edit', label: 'Grok Imagine Edit' },
+  { value: 'xai/grok-imagine-image/edit', label: 'Grok Imagine Edit' },
 ]
 
 const POSE_PRESETS = [
