@@ -413,17 +413,18 @@ function CharacterDetailInner() {
         seed: seedLocked ? seed : null,
       });
       
+      // REMBG DISABLED
       // Apply background removal BEFORE showing to user
-      let imageUrl = result.url;
-      try {
-        imageUrl = await removeImageBackground(imageUrl);
-      } catch (rembgErr) {
-        console.warn('Background removal failed:', rembgErr);
-        toast.warning('Background removal failed - image saved with background');
-      }
+      // let imageUrl = result.url;
+      // try {
+      //   imageUrl = await removeImageBackground(imageUrl);
+      // } catch (rembgErr) {
+      //   console.warn('Background removal failed:', rembgErr);
+      //   toast.warning('Background removal failed - image saved with background');
+      // }
       
       // Update session state so user sees the processed image immediately
-      setSessionCurrentImage(imageUrl);
+      setSessionCurrentImage(result.url);
       setSeed(result.seed ?? seed);
       setImageRegenerated(true);
       setSessionImgHistory(prev => [imageUrl, ...prev.filter(u => u !== imageUrl)].slice(0, 10));

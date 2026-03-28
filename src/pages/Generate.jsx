@@ -376,14 +376,15 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
               model: char.model,
             }, signal)
 
-            if (char.removeBackground !== false) {
-              try {
-                imgUrl = await removeImageBackground(imgUrl, signal)
-              } catch (rembgErr) {
-                console.warn('Background removal failed:', rembgErr)
-                toast.warning(`Background removal failed for image ${i + 1}: ${rembgErr.message}`)
-              }
-            }
+            // REMBG DISABLED
+            // if (char.removeBackground !== false) {
+            //   try {
+            //     imgUrl = await removeImageBackground(imgUrl, signal)
+            //   } catch (rembgErr) {
+            //     console.warn('Background removal failed:', rembgErr)
+            //     toast.warning(`Background removal failed for image ${i + 1}: ${rembgErr.message}`)
+            //   }
+            // }
 
             await GeneratedImage.create(userId, {
               batch_id: batch.id,
@@ -510,14 +511,15 @@ Return JSON: { "variations": [ { "pose": "...(max 8 words)", "emotion": "...(max
         model: failedItem.model,
       }, signal)
 
-      if (failedItem.removeBackground) {
-        try {
-          imgUrl = await removeImageBackground(imgUrl, signal)
-        } catch (rembgErr) {
-          console.warn('Background removal failed on retry:', rembgErr)
-          toast.warning(`Background removal failed: ${rembgErr.message}`)
-        }
-      }
+      // REMBG DISABLED
+      // if (failedItem.removeBackground) {
+      //   try {
+      //     imgUrl = await removeImageBackground(imgUrl, signal)
+      //   } catch (rembgErr) {
+      //     console.warn('Background removal failed on retry:', rembgErr)
+      //     toast.warning(`Background removal failed: ${rembgErr.message}`)
+      //   }
+      // }
 
       await GeneratedImage.create(userId, {
         batch_id: failedItem.batchId,

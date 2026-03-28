@@ -229,11 +229,12 @@ const useGenerationQueueStore = create((set, get) => ({
     generateImage(restParams, signal)
       .then(async imageUrl => {
         if (job.contextType === 'sprite') {
-          try {
-            imageUrl = await removeImageBackground(imageUrl, signal);
-          } catch (rembgErr) {
-            console.warn('Background removal failed for sprite:', rembgErr);
-          }
+          // REMBG DISABLED
+          // try {
+          //   imageUrl = await removeImageBackground(imageUrl, signal);
+          // } catch (rembgErr) {
+          //   console.warn('Background removal failed for sprite:', rembgErr);
+          // }
         }
 
         await supabase

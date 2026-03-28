@@ -160,15 +160,15 @@ export default function BatchDetail() {
       for (const img of images) {
         const prompt = `${batch.character_description}\n\nLabel: ${img.label}\n\nCOMPLETELY REIMAGINE in ${style.label} style. Keep the same pose but transform the art style entirely.`
         let newUrl = await generateImage({ prompt, referenceImageUrl: batch.reference_image_url, aspectRatio: batch.aspect_ratio || '3:4' }, signal)
-        // Apply background removal — surface failure as a warning so user knows
-        if (batch.remove_background !== false) {
-          try {
-            newUrl = await removeImageBackground(newUrl, signal)
-          } catch (rembgErr) {
-            console.warn('Background removal failed:', rembgErr)
-            toast.warning(`Background removal failed for "${img.label}": ${rembgErr.message}`)
-          }
-        }
+        // REMBG DISABLED
+        // if (batch.remove_background !== false) {
+        //   try {
+        //     newUrl = await removeImageBackground(newUrl, signal)
+        //   } catch (rembgErr) {
+        //     console.warn('Background removal failed:', rembgErr)
+        //     toast.warning(`Background removal failed for "${img.label}": ${rembgErr.message}`)
+        //   }
+        // }
         if (!mountedRef.current) return
         // Create new image record instead of overwriting
         await GeneratedImage.create(userId, {
@@ -205,14 +205,15 @@ export default function BatchDetail() {
         referenceImageUrl: batch.reference_image_url,
         aspectRatio: batch.aspect_ratio || '3:4'
       }, signal)
-      if (batch.remove_background !== false) {
-        try {
-          url = await removeImageBackground(url, signal)
-        } catch (rembgErr) {
-          console.warn('Background removal failed:', rembgErr)
-          toast.warning(`Background removal failed: ${rembgErr.message}`)
-        }
-      }
+      // REMBG DISABLED
+      // if (batch.remove_background !== false) {
+      //   try {
+      //     url = await removeImageBackground(url, signal)
+      //   } catch (rembgErr) {
+      //     console.warn('Background removal failed:', rembgErr)
+      //     toast.warning(`Background removal failed: ${rembgErr.message}`)
+      //   }
+      // }
       if (!mountedRef.current) return
       await GeneratedImage.create(userId, {
         batch_id: batchId,
@@ -256,14 +257,15 @@ export default function BatchDetail() {
         propImageUrl: propImageUrl || null,
         aspectRatio: batch.aspect_ratio || '3:4',
       }, signal)
-      if (batch.remove_background !== false) {
-        try {
-          url = await removeImageBackground(url, signal)
-        } catch (rembgErr) {
-          console.warn('Background removal failed:', rembgErr)
-          toast.warning(`Background removal failed: ${rembgErr.message}`)
-        }
-      }
+      // REMBG DISABLED
+      // if (batch.remove_background !== false) {
+      //   try {
+      //     url = await removeImageBackground(url, signal)
+      //   } catch (rembgErr) {
+      //     console.warn('Background removal failed:', rembgErr)
+      //     toast.warning(`Background removal failed: ${rembgErr.message}`)
+      //   }
+      // }
 
       if (!mountedRef.current) return
       await GeneratedImage.create(userId, {
@@ -612,14 +614,15 @@ export default function BatchDetail() {
               referenceImageUrl: batch.reference_image_url,
               aspectRatio: batch.aspect_ratio || '3:4'
             }, signal)
-            if (batch.remove_background !== false) {
-              try {
-                newUrl = await removeImageBackground(newUrl, signal)
-              } catch (rembgErr) {
-                console.warn('Background removal failed:', rembgErr)
-                toast.warning(`Background removal failed: ${rembgErr.message}`)
-              }
-            }
+            // REMBG DISABLED
+            // if (batch.remove_background !== false) {
+            //   try {
+            //     newUrl = await removeImageBackground(newUrl, signal)
+            //   } catch (rembgErr) {
+            //     console.warn('Background removal failed:', rembgErr)
+            //     toast.warning(`Background removal failed: ${rembgErr.message}`)
+            //   }
+            // }
             if (!mountedRef.current) return
             // Create a new image record — preserve the original
             const newImg = await GeneratedImage.create(userId, {
