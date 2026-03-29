@@ -2979,6 +2979,13 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
         aspectRatio: '3:4',
       }, controller.signal);
 
+      // Persist immediately into image_history so the image survives a page
+      // refresh without requiring a manual save. Prepend, dedupe, cap at 20.
+      const existingHistory = character?.image_history || [];
+      await Character.update(characterId, {
+        image_history: [newUrl, ...existingHistory.filter(u => u !== newUrl)].slice(0, 20),
+      });
+
       setViewingUrl(newUrl);
       onRegenerate(newUrl);
       toast.success('Image regenerated!');
