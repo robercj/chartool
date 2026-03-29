@@ -2187,7 +2187,7 @@ function AllImagesSection({
     try {
       const JSZip = (await import('https://esm.sh/jszip@3.10.1')).default;
       const zip = new JSZip();
-      const charName = (character?.name || 'character').replace(/[^a-z0-9]/gi, '_').slice(0, 50);
+      const charName = (character?.character_name || 'character').replace(/[^a-z0-9]/gi, '_').slice(0, 50);
 
       for (let i = 0; i < allImages.length; i++) {
         const img = allImages[i];
