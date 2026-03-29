@@ -1220,17 +1220,21 @@ function CharacterDetailInner() {
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* All Images: primary + sprites */}
           {(uniqueImages.length > 0 || characterImages.length > 0) && (
-            <AllImagesSection
-              characterId={characterId}
-              primaryImages={uniqueImages}
-              spriteImages={characterImages}
-              currentPrimaryUrl={savedChar?.generated_image_url}
-              sessionCurrentImage={sessionCurrentImage}
-              onSetPrimary={setPendingPrimaryImage}
-              onClearSessionImage={() => { setSessionCurrentImage(null); setSessionImgHistory([]); }}
-              queryClient={queryClient}
-              character={savedChar}
-            />
+             <AllImagesSection
+               characterId={characterId}
+               primaryImages={uniqueImages}
+               spriteImages={characterImages}
+               currentPrimaryUrl={savedChar?.generated_image_url}
+               sessionCurrentImage={sessionCurrentImage}
+               onSetPrimary={setPendingPrimaryImage}
+               onClearSessionImage={() => { setSessionCurrentImage(null); setSessionImgHistory([]); }}
+               onRegenerate={(newUrl) => {
+                 setSessionCurrentImage(newUrl);
+                 setSessionImgHistory(prev => [newUrl, ...prev.filter(u => u !== newUrl)].slice(0, 10));
+               }}
+               queryClient={queryClient}
+               character={savedChar}
+             />
           )}
         </div>
       </div>
@@ -2120,6 +2124,7 @@ function AllImagesSection({
   sessionCurrentImage,
   onSetPrimary,
   onClearSessionImage,
+  onRegenerate,
   queryClient,
   character
 }) {
@@ -2380,8 +2385,7 @@ function AllImagesSection({
           onDownload={() => handleDownload(enlargedPrimaryImg.url)}
           onSetPrimary={() => handleSetPrimary(enlargedPrimaryImg.url)}
           onRegenerate={(newUrl) => {
-            setSessionCurrentImage(newUrl);
-            setSessionImgHistory(prev => [newUrl, ...prev.filter(u => u !== newUrl)].slice(0, 10));
+            onRegenerate(newUrl);
             queryClient.invalidateQueries({ queryKey: ['character', characterId] });
           }}
         />
