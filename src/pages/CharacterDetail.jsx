@@ -427,7 +427,7 @@ function CharacterDetailInner() {
       setSessionCurrentImage(result.url);
       setSeed(result.seed ?? seed);
       setImageRegenerated(true);
-      setSessionImgHistory(prev => [imageUrl, ...prev.filter(u => u !== imageUrl)].slice(0, 10));
+      setSessionImgHistory(prev => [result.url, ...prev.filter(u => u !== result.url)].slice(0, 10));
       toast.success('Image regenerated!');
     } catch { toast.error('Failed to regenerate image. Please try again.'); }
     finally { setIsRegeneratingImage(false); }
