@@ -2905,6 +2905,8 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
   const [editInstructions, setEditInstructions] = useState('');
   const [seed, setSeed] = useState('');
   const [seedLocked, setSeedLocked] = useState(true);
+  const [allowClothing, setAllowClothing] = useState(false);
+  const [allowProps, setAllowProps] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [viewingUrl, setViewingUrl] = useState(img?.url);
@@ -2950,24 +2952,34 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
       const identityLock = character?.character_identity_lock || null;
       const consistencyPrompt = character?.character_consistency_prompt || '';
       const basePrompt = character?.appearance_description || '';
+
+      // Mirror the full sprite-generation prompt pipeline:
+      //   • identityLock Section 1 — structured identity traits (or flat fallback)
+      //   • Section 2 — forbidden changes (clothing/props locked by default)
+      //   • Section 3 — art style from identityLock.art_style
+      //   • Section 7 — edit instructions
+      //   • Section 8 — critical constraints footer
       const finalPrompt = compileEditPrompt({
         identityLock,
         consistencyPrompt,
         originalPoseId: null,
         originalEmotionEntry: null,
         editInstructions: editInstructions.trim(),
-        allowClothing: true,
-        allowProps: true,
+        allowClothing,
+        allowProps,
+        artStyle: identityLock?.art_style || null,
       }) || `${basePrompt}. ${editInstructions.trim()}. Generate in 3:4 portrait orientation with slight padding at top and bottom to prevent cutoff.`;
 
-      const result = await generateCharacterImage({
+      // Use the reference-image-guided model (same as sprite editing) so the
+      // identity lock enforces against a concrete visual anchor rather than
+      // text alone. viewingUrl is the image currently shown in the modal.
+      const newUrl = await generateImage({
         prompt: finalPrompt,
-        ...(seedLocked && seed ? { seed: parseInt(seed, 10) } : {}),
+        referenceImageUrl: viewingUrl,
+        aspectRatio: '3:4',
       }, controller.signal);
 
-      const newUrl = result.url;
       setViewingUrl(newUrl);
-      setSeed(String(result.seed ?? seed));
       onRegenerate(newUrl);
       toast.success('Image regenerated!');
     } catch (err) {
@@ -2980,7 +2992,7 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
     } finally {
       setGenerating(false);
     }
-  }, [generating, editInstructions, character, seedLocked, seed, onRegenerate]);
+  }, [generating, editInstructions, character, allowClothing, allowProps, viewingUrl, onRegenerate]);
 
   const displayPrompt = character?.appearance_description || character?.character_consistency_prompt || 'Prompt not available';
 
@@ -3198,8 +3210,38 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
                 onBlur={e => { e.target.style.borderColor = 'var(--fallback-b3, oklch(var(--b3)))'; }}
               />
               <p className="text-xs" style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}>
-                Character identity remains locked. Focus edits on pose, expression, clothing, or other changes.
+                Face, hair, and eyes are always locked. Enable the toggles below to permit outfit or prop changes.
               </p>
+            </div>
+
+            {/* Identity lock toggles */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setAllowClothing(v => !v)}
+                className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl text-xs font-medium transition-colors"
+                style={{
+                  background: allowClothing ? 'var(--fallback-p, oklch(var(--p)))15' : 'var(--fallback-b2, oklch(var(--b2)))',
+                  border: `1px solid ${allowClothing ? 'var(--fallback-p, oklch(var(--p)))' : 'var(--fallback-b3, oklch(var(--b3)))'}`,
+                  color: allowClothing ? 'var(--fallback-p, oklch(var(--p)))' : 'var(--fallback-bc, oklch(var(--bc))/0.6)',
+                }}
+              >
+                {allowClothing ? <Unlock className="w-3 h-3 flex-shrink-0" /> : <Lock className="w-3 h-3 flex-shrink-0" />}
+                Clothing
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllowProps(v => !v)}
+                className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl text-xs font-medium transition-colors"
+                style={{
+                  background: allowProps ? 'var(--fallback-p, oklch(var(--p)))15' : 'var(--fallback-b2, oklch(var(--b2)))',
+                  border: `1px solid ${allowProps ? 'var(--fallback-p, oklch(var(--p)))' : 'var(--fallback-b3, oklch(var(--b3)))'}`,
+                  color: allowProps ? 'var(--fallback-p, oklch(var(--p)))' : 'var(--fallback-bc, oklch(var(--bc))/0.6)',
+                }}
+              >
+                {allowProps ? <Unlock className="w-3 h-3 flex-shrink-0" /> : <Lock className="w-3 h-3 flex-shrink-0" />}
+                Props
+              </button>
             </div>
 
             {/* Error */}
