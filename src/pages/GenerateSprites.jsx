@@ -503,6 +503,7 @@ export default function GenerateSprites() {
             emotionEntry: spec.emotionEntry,
             artStyle: selectedArtStyle || null,
             toggles,
+            prompt: finalPrompt,
           },
         },
       }

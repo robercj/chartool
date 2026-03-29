@@ -16,7 +16,7 @@
 // would need to be updated accordingly.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Lock, Unlock, RefreshCw, Download, Loader2, AlertCircle, Wand2 } from 'lucide-react'
+import { X, Lock, Unlock, RefreshCw, Download, Loader2, AlertCircle, Wand2, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { generateImage, LimitError } from '../../lib/anthropic'
 import { compileEditPrompt } from '../../lib/promptCompiler'
 
@@ -39,6 +39,7 @@ export default function ImageEditModal({
   const [error, setError] = useState(null)
   const [newImages, setNewImages] = useState([])  // images generated during this modal session
   const [viewingUrl, setViewingUrl] = useState(image?.url)
+  const [showPrompt, setShowPrompt] = useState(false)
   const textareaRef = useRef(null)
   const abortRef = useRef(null)
 
@@ -102,7 +103,11 @@ export default function ImageEditModal({
         seed: seedLocked && seed ? parseInt(seed, 10) : null,
         editInstructions: editInstructions.trim(),
         parentUrl: image?.url,  // reference to source image
-        params_snapshot: { aspectRatio, editInstructions: editInstructions.trim() },
+        params_snapshot: { 
+          aspectRatio, 
+          editInstructions: editInstructions.trim(),
+          prompt: finalPrompt,
+        },
         poseId: image?.poseId ?? null,
         emotionEntry: image?.emotionEntry ?? null,
       }
@@ -301,6 +306,35 @@ export default function ImageEditModal({
                   Character identity (face, hair, eyes) remains locked. Focus edits on pose, expression, or permitted changes.
                 </p>
               </div>
+
+              {/* Original Prompt (collapsible) */}
+              {image?.params_snapshot?.prompt && (
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowPrompt(!showPrompt)}
+                    className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest"
+                    style={{ color: theme.labelColor }}
+                  >
+                    {showPrompt ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    <FileText className="w-3.5 h-3.5" />
+                    Original Prompt
+                  </button>
+                  {showPrompt && (
+                    <div
+                      className="p-3 rounded-xl text-xs overflow-y-auto"
+                      style={{
+                        background: theme.fieldBg,
+                        border: `1px solid ${theme.fieldBorder}`,
+                        color: theme.textBody,
+                        maxHeight: '150px',
+                      }}
+                    >
+                      {image.params_snapshot.prompt}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Error */}
               {error && (
