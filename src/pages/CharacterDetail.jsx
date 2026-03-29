@@ -406,10 +406,11 @@ function CharacterDetailInner() {
   const handleRegenerateImage = async () => {
     const promptToUse = sessionAppearanceDesc || savedChar?.appearance_description || '';
     if (!promptToUse) { toast.error('No appearance description available.'); return; }
+    const paddingPrompt = `${promptToUse}. Generate in 3:4 portrait orientation with slight padding at top and bottom to prevent cutoff.`;
     setIsRegeneratingImage(true);
     try {
       const result = await generateCharacterImage({
-        prompt: promptToUse,
+        prompt: paddingPrompt,
         seed: seedLocked ? seed : null,
       });
       

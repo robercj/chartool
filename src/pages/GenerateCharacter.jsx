@@ -227,8 +227,9 @@ export default function GenerateCharacterPage() {
     abortControllerRef.current = new AbortController();
 
     try {
+      const paddedPrompt = `${formData.appearance_description}. Generate in 3:4 portrait orientation with slight padding at top and bottom to prevent cutoff.`;
       const result = await generateCharacterImage(
-        { prompt: formData.appearance_description, seed: formData.seed_locked ? formData.seed : null, model: imageModel },
+        { prompt: paddedPrompt, seed: formData.seed_locked ? formData.seed : null, model: imageModel },
         abortControllerRef.current.signal
       );
       const newHistory = [result.url, ...imageHistory.filter(u => u !== result.url)].slice(0, 10);
@@ -258,7 +259,7 @@ export default function GenerateCharacterPage() {
 
     try {
       const basePrompt  = formData.appearance_description || '';
-      const finalPrompt = prompt ? `${basePrompt}. ${prompt}` : basePrompt;
+      const finalPrompt = prompt ? `${basePrompt}. ${prompt}. Generate in 3:4 portrait orientation with slight padding at top and bottom to prevent cutoff.` : `${basePrompt}. Generate in 3:4 portrait orientation with slight padding at top and bottom to prevent cutoff.`;
 
       if (!finalPrompt.trim()) {
         toast.error('No appearance description available — generate one first');
@@ -340,8 +341,9 @@ export default function GenerateCharacterPage() {
         manifest = manifestResult.manifest;
 
         if (!finalImageUrl && manifestResult.imagePrompt) {
+          const paddedPrompt = `${manifestResult.imagePrompt}. Generate in 3:4 portrait orientation with slight padding at top and bottom to prevent cutoff.`;
           const imgResult = await generateCharacterImage(
-            { prompt: manifestResult.imagePrompt, seed: formData.seed_locked ? formData.seed : null, model: imageModel },
+            { prompt: paddedPrompt, seed: formData.seed_locked ? formData.seed : null, model: imageModel },
             abortControllerRef.current?.signal
           );
           finalImageUrl     = imgResult.url;

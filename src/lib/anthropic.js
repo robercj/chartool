@@ -338,9 +338,10 @@ ${JSON.stringify(summary, null, 2)}`;
 // @param {string}   prompt         Image generation prompt
 // @param {number}  [seed]         Optional seed for reproducibility
 // @param {string}  [model]        fal.ai model to use (default: nano-banana-2)
+// @param {string}  [aspectRatio]  Aspect ratio (default: '3:4')
 // @param {AbortSignal} [signal]    Optional abort signal
-export async function generateCharacterImage({ prompt, seed = null, model = null }, signal = null) {
-  const result = await callEdgeFunction('fal-generate-character', { prompt, seed, model }, signal);
+export async function generateCharacterImage({ prompt, seed = null, model = null, aspectRatio = '3:4' }, signal = null) {
+  const result = await callEdgeFunction('fal-generate-character', { prompt, seed, model, aspect_ratio: aspectRatio }, signal);
 
   const images = result?.images;
   if (!images?.[0]) throw new Error('fal.ai returned no image');
