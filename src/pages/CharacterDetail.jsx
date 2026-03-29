@@ -2135,6 +2135,7 @@ function AllImagesSection({
   const [deleteError, setDeleteError] = useState(null);
   const [enlargedImg, setEnlargedImg] = useState(null);
   const [enlargedPrimaryImg, setEnlargedPrimaryImg] = useState(null);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
   // Combine and dedupe all images
   const allImages = useMemo(() => {
@@ -2177,6 +2178,37 @@ function AllImagesSection({
       URL.revokeObjectURL(blobUrl);
     } catch {
       toast.error('Download failed. Try right-clicking the image to save.');
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (allImages.length === 0 || isDownloadingAll) return;
+    setIsDownloadingAll(true);
+    try {
+      const JSZip = (await import('https://esm.sh/jszip@3.10.1')).default;
+      const zip = new JSZip();
+      const charName = (character?.name || 'character').replace(/[^a-z0-9]/gi, '_').slice(0, 50);
+
+      for (let i = 0; i < allImages.length; i++) {
+        const img = allImages[i];
+        const label = img.label || (img.type === 'primary' ? `primary_${i + 1}` : `image_${i + 1}`);
+        const cleanName = label.replace(/[^a-z0-9]/gi, '_').slice(0, 50);
+        const response = await fetch(img.url);
+        const blob = await response.blob();
+        zip.file(`${cleanName}.png`, blob);
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(content);
+      a.download = `${charName}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(`Downloaded ${allImages.length} images`);
+    } catch {
+      toast.error('Failed to create zip. Please try again.');
+    } finally {
+      setIsDownloadingAll(false);
     }
   };
 
@@ -2246,8 +2278,19 @@ function AllImagesSection({
             <div className="flex items-center gap-2">
               <ImageIcon className="w-4 h-4 text-primary" />
               <span className="font-semibold text-sm text-base-content">All Images</span>
+              <span className="badge badge-sm">{allImages.length}</span>
             </div>
-            <span className="badge badge-sm">{allImages.length}</span>
+            {allImages.length > 0 && (
+              <button
+                onClick={handleDownloadAll}
+                disabled={isDownloadingAll}
+                className="btn btn-ghost btn-xs gap-1 text-base-content/70 hover:text-primary"
+                title="Download all images as zip"
+              >
+                {isDownloadingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                {isDownloadingAll ? 'Zipping...' : 'Download All'}
+              </button>
+            )}
           </div>
           <div
             className="grid gap-3 mt-2"
