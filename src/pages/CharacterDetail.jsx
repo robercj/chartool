@@ -2129,6 +2129,7 @@ function AllImagesSection({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [enlargedImg, setEnlargedImg] = useState(null);
+  const [enlargedPrimaryImg, setEnlargedPrimaryImg] = useState(null);
 
   // Combine and dedupe all images
   const allImages = useMemo(() => {
@@ -2257,7 +2258,7 @@ function AllImagesSection({
                 <div key={imgId} className="relative group">
                   <div 
                     className="aspect-[3/4] rounded-lg overflow-hidden bg-base-300 cursor-pointer"
-                    onClick={() => isSprite && setEnlargedImg(img)}
+                    onClick={() => isSprite ? setEnlargedImg(img) : img.type === 'primary' && setEnlargedPrimaryImg(img)}
                   >
                     <img
                       src={img.url}
@@ -2362,6 +2363,26 @@ function AllImagesSection({
           onNewImageGenerated={(newImg) => {
             setEnlargedImg(newImg);
             queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
+          }}
+        />
+      )}
+
+      {/* Enlarged image modal for primary images */}
+      {enlargedPrimaryImg && (
+        <PrimaryImageModal
+          img={enlargedPrimaryImg}
+          character={character}
+          currentPrimaryUrl={currentPrimaryUrl}
+          sessionCurrentImage={sessionCurrentImage}
+          characterId={characterId}
+          onClose={() => setEnlargedPrimaryImg(null)}
+          onDelete={() => { setDeleteTargetId(enlargedPrimaryImg.id); setDeleteTargetType('primary'); }}
+          onDownload={() => handleDownload(enlargedPrimaryImg.url)}
+          onSetPrimary={() => handleSetPrimary(enlargedPrimaryImg.url)}
+          onRegenerate={(newUrl) => {
+            setSessionCurrentImage(newUrl);
+            setSessionImgHistory(prev => [newUrl, ...prev.filter(u => u !== newUrl)].slice(0, 10));
+            queryClient.invalidateQueries({ queryKey: ['character', characterId] });
           }}
         />
       )}
@@ -2861,6 +2882,358 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PrimaryImageModal ─────────────────────────────────────────────────────────
+// Modal for viewing and editing primary character images with:
+// - Full image preview with zoom
+// - Download
+// - Set as Primary
+// - Seed display and editing
+// - Edit instructions + regenerate functionality
+// - Delete
+function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentImage, characterId, onClose, onDelete, onDownload, onSetPrimary, onRegenerate }) {
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const [editInstructions, setEditInstructions] = useState('');
+  const [seed, setSeed] = useState('');
+  const [seedLocked, setSeedLocked] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState(null);
+  const [viewingUrl, setViewingUrl] = useState(img?.url);
+  const [fullSizeView, setFullSizeView] = useState(false);
+  const [isPrimary, setIsPrimary] = useState(img?.url === currentPrimaryUrl || img?.url === sessionCurrentImage);
+  const abortRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    setIsPrimary(img?.url === currentPrimaryUrl || img?.url === sessionCurrentImage);
+  }, [img, currentPrimaryUrl, sessionCurrentImage]);
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
+
+  const handleRegenerate = useCallback(async () => {
+    if (generating) return;
+    if (!editInstructions.trim()) {
+      textareaRef.current?.focus();
+      return;
+    }
+
+    setGenerating(true);
+    setError(null);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const identityLock = character?.character_identity_lock || null;
+      const consistencyPrompt = character?.character_consistency_prompt || '';
+      const basePrompt = character?.appearance_description || '';
+      const finalPrompt = compileEditPrompt({
+        identityLock,
+        consistencyPrompt,
+        originalPoseId: null,
+        originalEmotionEntry: null,
+        editInstructions: editInstructions.trim(),
+        allowClothing: true,
+        allowProps: true,
+      }) || `${basePrompt}. ${editInstructions.trim()}. Generate in 3:4 portrait orientation with slight padding at top and bottom to prevent cutoff.`;
+
+      const imageUrl = await generateCharacterImage({
+        prompt: finalPrompt,
+        ...(seedLocked && seed ? { seed: parseInt(seed, 10) } : {}),
+      }, controller.signal);
+
+      const newUrl = imageUrl;
+      setViewingUrl(newUrl);
+      onRegenerate(newUrl);
+      toast.success('Image regenerated!');
+    } catch (err) {
+      if (err.name === 'AbortError' || err.message === 'Request cancelled') return;
+      if (err instanceof LimitError) {
+        setError(err.message);
+      } else {
+        setError(err.message || 'Regeneration failed. Please try again.');
+      }
+    } finally {
+      setGenerating(false);
+    }
+  }, [generating, editInstructions, character, seedLocked, seed, onRegenerate]);
+
+  const displayPrompt = character?.appearance_description || character?.character_consistency_prompt || 'Prompt not available';
+
+  if (fullSizeView) {
+    return (
+      <div
+        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-0"
+        onClick={() => setFullSizeView(false)}
+      >
+        <button
+          className="absolute top-4 right-4 btn btn-ghost btn-sm text-white hover:bg-white/10 gap-2"
+          onClick={() => setFullSizeView(false)}
+        >
+          <X className="w-5 h-5" /> Close
+        </button>
+        <img
+          src={viewingUrl}
+          alt="Primary"
+          className="max-w-[95vw] max-h-[95vh] object-contain"
+          onClick={e => e.stopPropagation()}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative w-full sm:max-w-2xl sm:rounded-2xl overflow-hidden flex flex-col"
+        style={{
+          background: 'var(--fallback-b1, oklch(var(--b1)))',
+          border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+          maxHeight: '96vh',
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+          style={{ borderBottom: '1px solid var(--fallback-b3, oklch(var(--b3)))' }}
+        >
+          <div className="flex items-center gap-2">
+            <ImageIcon className="w-4 h-4 text-primary" />
+            <p className="text-sm font-semibold text-base-content">
+              Primary Image
+            </p>
+            {isPrimary && <span className="badge badge-primary badge-xs">Current</span>}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setFullSizeView(true)}
+              className="btn btn-ghost btn-sm btn-square"
+              style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+              aria-label="View full size"
+              title="View full size"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onDownload}
+              className="btn btn-ghost btn-sm btn-square"
+              style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+              aria-label="Download image"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            {!isPrimary && (
+              <button
+                onClick={() => { onSetPrimary(); setIsPrimary(true); }}
+                className="btn btn-ghost btn-sm gap-1"
+                style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+                aria-label="Set as primary"
+                title="Set as primary"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={onDelete}
+              className="btn btn-ghost btn-sm btn-square text-error"
+              aria-label="Delete image"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="btn btn-ghost btn-sm btn-square"
+              style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Image */}
+          <div
+            className="relative w-full bg-black flex items-center justify-center"
+            style={{ minHeight: '200px', maxHeight: '50vh' }}
+          >
+            <img
+              src={viewingUrl}
+              alt="Primary"
+              className="w-full h-full object-contain"
+              style={{ maxHeight: '50vh' }}
+            />
+            {generating && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <span className="loading loading-spinner loading-lg text-primary" />
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="p-4 space-y-4">
+            {/* Seed */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}
+                >
+                  Seed
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSeedLocked(s => !s)}
+                  className="flex items-center gap-1.5 text-xs transition-colors"
+                  style={{
+                    color: seedLocked ? 'var(--fallback-p, oklch(var(--p)))' : 'var(--fallback-bc, oklch(var(--bc))/0.5)',
+                  }}
+                >
+                  {seedLocked
+                    ? <><Lock className="w-3 h-3" /> Locked</>
+                    : <><Unlock className="w-3 h-3" /> Unlocked</>
+                  }
+                </button>
+              </div>
+              <input
+                type="number"
+                value={seed}
+                onChange={e => setSeed(e.target.value)}
+                placeholder="Auto-generated"
+                disabled={seedLocked && !seed}
+                className="w-full px-3 py-2 text-sm rounded-lg"
+                style={{
+                  background: 'var(--fallback-b2, oklch(var(--b2)))',
+                  border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+                  color: 'var(--fallback-bc, oklch(var(--bc)))',
+                }}
+              />
+            </div>
+
+            {/* Collapsible Prompt */}
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={() => setPromptExpanded(e => !e)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <label
+                  className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}
+                >
+                  Prompt
+                </label>
+                {promptExpanded ? (
+                  <ChevronUp className="w-4 h-4" style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }} />
+                ) : (
+                  <ChevronDown className="w-4 h-4" style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }} />
+                )}
+              </button>
+              {promptExpanded && (
+                <div
+                  className="p-3 rounded-lg text-sm whitespace-pre-wrap"
+                  style={{
+                    background: 'var(--fallback-b2, oklch(var(--b2)))',
+                    border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+                    color: 'var(--fallback-bc, oklch(var(--bc)))',
+                  }}
+                >
+                  {displayPrompt}
+                </div>
+              )}
+            </div>
+
+            {/* Edit Instructions */}
+            <div className="space-y-1.5">
+              <label
+                className="text-xs font-semibold uppercase tracking-widest"
+                style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}
+              >
+                Edit Instructions
+              </label>
+              <textarea
+                ref={textareaRef}
+                value={editInstructions}
+                onChange={e => setEditInstructions(e.target.value)}
+                placeholder="Describe what to change (e.g. 'change hair color to blonde', 'different outfit', 'looking at camera')"
+                rows={3}
+                className="w-full px-3 py-2.5 text-sm rounded-xl resize-none"
+                style={{
+                  background: 'var(--fallback-b2, oklch(var(--b2)))',
+                  border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+                  color: 'var(--fallback-bc, oklch(var(--bc)))',
+                  outline: 'none',
+                }}
+                onFocus={e => { e.target.style.borderColor = 'var(--fallback-p, oklch(var(--p)))'; }}
+                onBlur={e => { e.target.style.borderColor = 'var(--fallback-b3, oklch(var(--b3)))'; }}
+              />
+              <p className="text-xs" style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.5)' }}>
+                Character identity remains locked. Focus edits on pose, expression, clothing, or other changes.
+              </p>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div
+                className="flex items-start gap-2 p-3 rounded-xl text-sm"
+                style={{ background: '#ef444415', border: '1px solid #ef444440', color: '#ef4444' }}
+              >
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
+          style={{ borderTop: '1px solid var(--fallback-b3, oklch(var(--b3)))' }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn btn-ghost btn-sm flex-1"
+            style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
+          >
+            Done
+          </button>
+          <button
+            type="button"
+            onClick={handleRegenerate}
+            disabled={generating || !editInstructions.trim()}
+            className="btn btn-primary btn-sm flex-1 gap-2"
+          >
+            {generating
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating…</>
+              : <><Sparkles className="w-3.5 h-3.5" /> Regenerate</>
+            }
+          </button>
         </div>
       </div>
     </div>
