@@ -1226,6 +1226,7 @@ function CharacterDetailInner() {
               currentPrimaryUrl={savedChar?.generated_image_url}
               sessionCurrentImage={sessionCurrentImage}
               onSetPrimary={setPendingPrimaryImage}
+              onClearSessionImage={() => { setSessionCurrentImage(null); setSessionImgHistory([]); }}
               queryClient={queryClient}
               character={savedChar}
             />
@@ -2117,11 +2118,13 @@ function AllImagesSection({
   currentPrimaryUrl, 
   sessionCurrentImage,
   onSetPrimary,
+  onClearSessionImage,
   queryClient,
   character
 }) {
   const [ctxOpenImg, setCtxOpenImg] = useState(null);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [deleteTargetType, setDeleteTargetType] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [enlargedImg, setEnlargedImg] = useState(null);
@@ -2181,13 +2184,43 @@ function AllImagesSection({
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      await CharacterImage.delete(deleteTargetId);
-      queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
+      if (deleteTargetType === 'sprite') {
+        await CharacterImage.delete(deleteTargetId);
+        queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
+      } else if (deleteTargetType === 'primary') {
+        const urlToDelete = deleteTargetId.replace('primary-', '');
+        const isSessionCurrent = sessionCurrentImage === urlToDelete;
+        const isCurrentPrimary = currentPrimaryUrl === urlToDelete;
+        const savedHistory = character?.image_history || [];
+        
+        if (isSessionCurrent) {
+          onClearSessionImage();
+        } else if (isCurrentPrimary) {
+          const otherImages = [...savedHistory].filter(u => u !== urlToDelete);
+          let newGeneratedUrl = null;
+          let newImageHistory = [];
+          if (otherImages.length > 0) {
+            newGeneratedUrl = otherImages[0];
+            newImageHistory = otherImages.slice(1);
+          }
+          await Character.update(characterId, {
+            generated_image_url: newGeneratedUrl,
+            image_history: newImageHistory,
+          });
+          queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+        } else {
+          await Character.update(characterId, {
+            image_history: savedHistory.filter(u => u !== urlToDelete),
+          });
+          queryClient.invalidateQueries({ queryKey: ['character', characterId] });
+        }
+      }
       if (ctxOpenImg === deleteTargetId) setCtxOpenImg(null);
       setDeleteTargetId(null);
+      setDeleteTargetType(null);
       toast.success('Image deleted.');
     } catch (err) {
-      console.error('Delete sprite image failed:', err);
+      console.error('Delete image failed:', err);
       setDeleteError("Couldn't delete image. Please try again.");
     } finally {
       setIsDeleting(false);
@@ -2267,9 +2300,9 @@ function AllImagesSection({
                           Set as Primary
                         </button>
                       )}
-                      {isSprite && (
+                      {(isSprite || img.type === 'primary') && (
                         <button
-                          onClick={() => { setDeleteTargetId(img.id); setCtxOpenImg(null); }}
+                          onClick={() => { setDeleteTargetId(img.id); setDeleteTargetType(img.type); setCtxOpenImg(null); }}
                           className="w-full px-3 py-2 text-left text-sm hover:bg-error/10 text-error flex items-center gap-2"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2289,7 +2322,7 @@ function AllImagesSection({
       {deleteTargetId && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-          onClick={() => { if (!isDeleting) setDeleteTargetId(null); }}
+          onClick={() => { if (!isDeleting) { setDeleteTargetId(null); setDeleteTargetType(null); } }}
         >
           <div
             className="w-full max-w-sm bg-base-100 rounded-2xl border border-base-300 shadow-2xl p-6 space-y-4"
@@ -2301,7 +2334,7 @@ function AllImagesSection({
             </p>
             {deleteError && <p className="text-sm text-error">{deleteError}</p>}
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setDeleteTargetId(null)} disabled={isDeleting} className="btn btn-ghost flex-1">
+              <button onClick={() => { setDeleteTargetId(null); setDeleteTargetType(null); }} disabled={isDeleting} className="btn btn-ghost flex-1">
                 Cancel
               </button>
               <button onClick={handleDeleteConfirm} disabled={isDeleting} className="btn btn-error flex-1 gap-2">
