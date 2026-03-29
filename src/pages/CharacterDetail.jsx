@@ -2960,13 +2960,14 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
         allowProps: true,
       }) || `${basePrompt}. ${editInstructions.trim()}. Generate in 3:4 portrait orientation with slight padding at top and bottom to prevent cutoff.`;
 
-      const imageUrl = await generateCharacterImage({
+      const result = await generateCharacterImage({
         prompt: finalPrompt,
         ...(seedLocked && seed ? { seed: parseInt(seed, 10) } : {}),
       }, controller.signal);
 
-      const newUrl = imageUrl;
+      const newUrl = result.url;
       setViewingUrl(newUrl);
+      setSeed(String(result.seed ?? seed));
       onRegenerate(newUrl);
       toast.success('Image regenerated!');
     } catch (err) {
