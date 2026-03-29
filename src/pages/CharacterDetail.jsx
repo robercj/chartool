@@ -2132,7 +2132,7 @@ function AllImagesSection({
   // Combine and dedupe all images
   const allImages = useMemo(() => {
     const combined = [
-      ...(primaryImages || []).map((url, i) => ({ type: 'primary', url, id: `primary-${i}` })),
+      ...(primaryImages || []).map((url, i) => ({ type: 'primary', url, id: `primary-${i}`, index: i })),
       ...(spriteImages || []).map(img => ({ type: 'sprite', id: img.id, url: img.url, label: img.label, params_snapshot: img.params_snapshot, emotion_entry: img.emotion_entry, pose_id: img.pose_id })),
     ];
     // Dedupe by URL
@@ -2188,7 +2188,11 @@ function AllImagesSection({
         await CharacterImage.delete(deleteTargetId);
         queryClient.invalidateQueries({ queryKey: ['character-images', characterId] });
       } else if (deleteTargetType === 'primary') {
-        const urlToDelete = deleteTargetId.replace('primary-', '');
+        const imgIndex = primaryImages.findIndex((_, i) => `primary-${i}` === deleteTargetId);
+        const urlToDelete = imgIndex >= 0 ? primaryImages[imgIndex] : null;
+        if (!urlToDelete) {
+          throw new Error('Image not found');
+        }
         const isSessionCurrent = sessionCurrentImage === urlToDelete;
         const isCurrentPrimary = currentPrimaryUrl === urlToDelete;
         const savedHistory = character?.image_history || [];
