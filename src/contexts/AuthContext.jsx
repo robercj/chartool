@@ -10,6 +10,9 @@ export function AuthProvider({ children }) {
   const [usage, setUsage] = useState({ image: 0, story: 0, character: 0 });
   const [loadingProfile, setLoadingProfile] = useState(false);
   const mountedRef = useRef(true);
+  // Tracks the in-flight loadProfile call; replaced on each new call so a
+  // stale call can detect it has been superseded and bail out early.
+  const loadTokenRef = useRef(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -25,6 +28,15 @@ export function AuthProvider({ children }) {
       setUsage({ image: 0, story: 0, character: 0 });
       return;
     }
+
+    // Create a cancellation token. If loadProfile is called again before this
+    // one finishes (e.g. both getSession and onAuthStateChange fire at startup),
+    // the earlier call will see its token replaced and bail out without updating
+    // state, preventing a double-write and the duplicate network requests.
+    const token = {};
+    loadTokenRef.current = token;
+    const isStale = () => loadTokenRef.current !== token || !mountedRef.current;
+
     setLoadingProfile(true);
     try {
       const { data: profileData, error: profileError } = await supabase
@@ -34,7 +46,7 @@ export function AuthProvider({ children }) {
         .single();
 
       if (profileError) throw profileError;
-      if (!mountedRef.current) return;
+      if (isStale()) return;
       setProfile(profileData);
       setTier(profileData.tier);
 
@@ -45,19 +57,23 @@ export function AuthProvider({ children }) {
         .eq('user_id', userId)
         .eq('period', period);
 
-      if (!mountedRef.current) return;
+      if (isStale()) return;
       const usageMap = { image: 0, story: 0, character: 0 };
       (usageRows || []).forEach(row => { usageMap[row.type] = row.count; });
       setUsage(usageMap);
     } catch (err) {
-      console.error('loadProfile error:', err);
+      if (!isStale()) console.error('loadProfile error:', err);
     } finally {
-      if (mountedRef.current) setLoadingProfile(false);
+      if (!isStale()) setLoadingProfile(false);
     }
   }, []);
 
   // ─── Session listener ────────────────────────────────────────────────────────
   useEffect(() => {
+    // getSession() restores any persisted session on first load. onAuthStateChange
+    // will also fire INITIAL_SESSION for the same user immediately after, so both
+    // paths call loadProfile — the cancellation token in loadProfile ensures only
+    // the second (more recent) call actually commits its state.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mountedRef.current) return;
       setSession(session);

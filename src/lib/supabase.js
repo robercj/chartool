@@ -24,10 +24,26 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     clockTolerance: 60,
   },
   global: {
-    fetch: (url, options) => {
+    fetch: (url, options = {}) => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 30 * 60 * 1000);
-      return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
+
+      // Respect any signal the caller already provides (e.g. gotrue-js lock cancellation).
+      // Without this, aborting the caller's signal has no effect and the lock-steal
+      // recovery path throws unhandled AbortErrors.
+      const callerSignal = options.signal;
+      if (callerSignal) {
+        if (callerSignal.aborted) {
+          clearTimeout(timeout);
+          controller.abort();
+        } else {
+          callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
+      }
+
+      return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+        clearTimeout(timeout)
+      );
     },
   },
 });
