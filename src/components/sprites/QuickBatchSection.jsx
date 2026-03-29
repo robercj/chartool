@@ -119,6 +119,7 @@ export default function QuickBatchSection({
             emotion: item.emotion,
             intensity: item.intensity,
             batch_index: index + 1,
+            prompt: finalPrompt,
           },
         },
       }
