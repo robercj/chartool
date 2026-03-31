@@ -367,8 +367,7 @@ export default function Layout({ children }) {
         </div>
       )}
 
-      {/* ── Generation queue progress bar ─────────────────────────────────────── */}
-      <GenerationProgressBar />
+
 
       {/* ── Mobile Nav Drawer ──────────────────────────────────────────────── */}
       <div

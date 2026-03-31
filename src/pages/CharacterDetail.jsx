@@ -297,6 +297,16 @@ function CharacterDetailInner() {
   const [selectedHistImg,  setSelectedHistImg]  = useState(null); // from strip
   const [showMobileGallery, setShowMobileGallery] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
+  const [lastViewedImageCount, setLastViewedImageCount] = useState(0); // for glow effect
+
+  // Track when gallery is opened to update the "last viewed" count
+  const handleOpenGallery = useCallback(() => {
+    setLastViewedImageCount(uniqueImages.length + characterImages.length);
+    setShowMobileGallery(true);
+  }, [uniqueImages.length, characterImages.length]);
+
+  // Detect if there are new images since last viewed (for glow effect)
+  const hasNewImages = (uniqueImages.length + characterImages.length) > lastViewedImageCount && lastViewedImageCount > 0;
 
   // Close mobile overflow menu on outside click
   useEffect(() => {
@@ -765,8 +775,8 @@ function CharacterDetailInner() {
           {/* Gallery button — opens right-side drawer */}
           {(uniqueImages.length > 0 || characterImages.length > 0) && (
             <button
-              onClick={() => setShowMobileGallery(true)}
-              className="btn btn-ghost btn-sm btn-square touch-target relative"
+              onClick={handleOpenGallery}
+              className={`btn btn-ghost btn-sm btn-square touch-target relative ${hasNewImages ? 'animate-pulse-ring' : ''}`}
               aria-label={`View gallery (${uniqueImages.length + characterImages.length} images)`}
             >
               <ImageIcon className="w-4 h-4" />

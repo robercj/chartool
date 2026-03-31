@@ -367,13 +367,15 @@ const useGenerationQueueStore = create((set, get) => ({
         });
       } else if (failed > 0) {
         toast.warning(`${complete} images ready, ${failed} failed for ${job.characterName}`, {
-          description: 'Check the character gallery',
+          description: 'Tap to view gallery',
           duration: 5000,
+          onClick: () => { window.location.href = `/characters/${job.contextId}`; },
         });
       } else {
         toast.success(`All ${complete} images ready for ${job.characterName}!`, {
-          description: 'Check the character gallery',
+          description: 'Tap to view gallery',
           duration: 5000,
+          onClick: () => { window.location.href = `/characters/${job.contextId}`; },
         });
       }
     }
