@@ -27,7 +27,9 @@ import { getPoseById } from './constants/POSE_PRESETS'
 import { getArtStyleById } from './constants/ART_STYLES'
 
 // ─── Build Identity Lock Section ──────────────────────────────────────────────
-function buildIdentityLockSection(identityLock) {
+// When artStyleOverrideActive is true, the DEFAULT ART STYLE section from
+// the identity lock is excluded — it's replaced by the art style override.
+function buildIdentityLockSection(identityLock, artStyleOverrideActive = false) {
   if (!identityLock) return ''
 
   const lines = [
@@ -74,6 +76,41 @@ function buildIdentityLockSection(identityLock) {
     lines.push('')
   }
 
+  // Include default art style description only when no art style override is active
+  if (!artStyleOverrideActive && identityLock.default_art_style_description) {
+    lines.push('**DEFAULT ART STYLE**:')
+    lines.push(identityLock.default_art_style_description)
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+// ─── Build Image Reference Context Section ──────────────────────────────────
+// Tells the generation model the role of each image by position in image_urls.
+function buildImageReferenceContext(characterRefCount, hasArtStyleRef) {
+  if (characterRefCount <= 1 && !hasArtStyleRef) return ''
+
+  const totalImages = characterRefCount + (hasArtStyleRef ? 1 : 0)
+  const lines = [
+    '## IMAGE REFERENCE GUIDE',
+    '',
+  ]
+
+  lines.push('Generate a sprite variation of this character.')
+  lines.push('The first image is the primary character reference — match all physical traits, clothing, and design elements exactly.')
+
+  if (characterRefCount > 1) {
+    const lastCharRef = characterRefCount
+    lines.push(`Images 2 through ${lastCharRef} show the same character from additional angles for reference.`)
+  }
+
+  if (hasArtStyleRef) {
+    lines.push(`The LAST image (image ${totalImages}) is the art style reference ONLY — do not use it for character identity.`)
+    lines.push('ALL immutable character traits (face, body, hair, distinguishing marks, outfit design) must be preserved exactly as described in the identity lock above. Only the rendering technique changes.')
+  }
+
+  lines.push('')
   return lines.join('\n')
 }
 
@@ -123,8 +160,36 @@ function buildForbiddenSection(identityLock, allowClothing, allowProps) {
 }
 
 // ─── Build Art Style Section ───────────────────────────────────────────────────
-function buildArtStyleSection(artStyleId, identityLock) {
-  // If no art style specified, check identity lock for default
+// Handles three cases:
+//   1. Art style reference override (artStyleOverride provided) — uses custom analysis
+//   2. Preset art style (artStyleId from selector) — uses ART_STYLES constant
+//   3. Default art style from identity lock — no explicit section needed
+function buildArtStyleSection(artStyleId, identityLock, artStyleOverride = null) {
+  // Case 1: Art style reference image override
+  if (artStyleOverride?.analysis) {
+    const lines = [
+      '## ART STYLE DIRECTIVE — REFERENCE IMAGE OVERRIDE',
+      '<!-- CRITICAL: Adopt ONLY the rendering style from the art style reference. DO NOT adopt any character features. -->',
+      '',
+      `**Art Style Description**: ${artStyleOverride.analysis}`,
+      '',
+      'IMPORTANT — Render this character using ONLY the art style described above and shown in the LAST image in the reference set.',
+      'Adopt its line work, shading technique, color palette approach, and rendering fidelity EXACTLY.',
+      'Do NOT adopt any character features, clothing, accessories, poses, or subject matter from the style reference image — use it EXCLUSIVELY for visual rendering style.',
+      '',
+      'Transform the rendering style while maintaining EXACT character identity:',
+      '- EYE COLOR IS ABSOLUTELY IMMUTABLE — never alter eye color regardless of art style',
+      '- DO NOT add accessories or jewelry not present in the reference image',
+      '- Preserve all immutable facial features, hair, eyes, and outfit exactly as specified in the identity lock',
+      '- Only change: linework style, shading technique, color palette, lighting approach, and artistic rendering method',
+      '- The character must remain immediately recognizable — only the art style transforms',
+      '- Do NOT alter any identity-locked traits regardless of the art style requirements',
+      '',
+    ]
+    return lines.join('\n')
+  }
+
+  // Case 2: Preset art style from selector
   const styleId = artStyleId || identityLock?.art_style || null
   if (!styleId) return ''
 
@@ -354,7 +419,10 @@ function buildCriticalConstraintsSection() {
  * @param {string}  options.clothingDescription  — Clothing change description (if allowed)
  * @param {boolean} options.allowProps           — Whether prop additions are permitted
  * @param {string}  options.editInstructions     — Edit instructions (image edit modal only)
- * @param {string}  options.artStyle             — Art style ID to apply ( Nano Banana 2 optimized)
+ * @param {string}  options.artStyle             — Art style ID to apply (Nano Banana 2 optimized)
+ * @param {object}  options.artStyleOverride     — Art style reference override { analysis: string }
+ * @param {number}  options.characterRefCount    — Number of character reference images in image_urls (default 1)
+ * @param {boolean} options.hasArtStyleRef       — Whether an art style reference image is in image_urls
  * @returns {string}  Final compiled prompt ready for generation
  */
 export function compileSpritePrompt({
@@ -369,19 +437,30 @@ export function compileSpritePrompt({
   allowProps = false,
   editInstructions = '',
   artStyle = null,
+  artStyleOverride = null,
+  characterRefCount = 1,
+  hasArtStyleRef = false,
 }) {
   const sections = []
+  const artStyleOverrideActive = !!(artStyleOverride?.analysis)
 
   // ── SECTION 1: Identity Lock (MANDATORY FIRST) ─────────────────────────
+  // When art style override is active, exclude DEFAULT ART STYLE from identity lock
   if (identityLock) {
-    sections.push(buildIdentityLockSection(identityLock))
+    sections.push(buildIdentityLockSection(identityLock, artStyleOverrideActive))
   } else if (consistencyPrompt) {
     // Fallback: use the flat-text consistency prompt from older analysis
+    // When art style override is active, strip the DEFAULT ART STYLE section if present
+    let promptText = consistencyPrompt.trim()
+    if (artStyleOverrideActive) {
+      // Remove DEFAULT ART STYLE section from flat text if present
+      promptText = promptText.replace(/\n*DEFAULT ART STYLE[:\s]*[\s\S]*$/i, '').trim()
+    }
     sections.push([
       '## CHARACTER IDENTITY LOCK',
       '<!-- THIS SECTION IS ABSOLUTE. DO NOT DEVIATE FROM THESE TRAITS. -->',
       '',
-      consistencyPrompt.trim(),
+      promptText,
       '',
     ].join('\n'))
   }
@@ -389,8 +468,16 @@ export function compileSpritePrompt({
   // ── SECTION 2: Forbidden Changes ───────────────────────────────────────
   sections.push(buildForbiddenSection(identityLock, allowClothing, allowProps))
 
-  // ── SECTION 3: Art Style Transformation (after identity lock, before pose) ─
-  sections.push(buildArtStyleSection(artStyle, identityLock))
+  // ── SECTION 3: Art Style (override, preset, or default) ────────────────
+  // Art style override takes precedence over preset selector
+  sections.push(buildArtStyleSection(
+    artStyleOverrideActive ? null : artStyle,
+    identityLock,
+    artStyleOverrideActive ? artStyleOverride : null,
+  ))
+
+  // ── SECTION 3.5: Image Reference Context (multi-ref + art style) ───────
+  sections.push(buildImageReferenceContext(characterRefCount, hasArtStyleRef))
 
   // ── SECTION 4: Pose & Emotion ───────────────────────────────────────────
   sections.push(buildPoseEmotionSection(poseId, emotionEntry))
@@ -436,6 +523,9 @@ export function compileSpritePrompt({
  * @param {boolean} options.allowClothing
  * @param {boolean} options.allowProps
  * @param {string} options.artStyle               — Art style ID to apply
+ * @param {object} options.artStyleOverride        — Art style reference override
+ * @param {number} options.characterRefCount       — Number of character ref images
+ * @param {boolean} options.hasArtStyleRef         — Whether art style ref is in image_urls
  * @returns {string}
  */
 export function compileEditPrompt({
@@ -447,6 +537,9 @@ export function compileEditPrompt({
   allowClothing = false,
   allowProps = false,
   artStyle = null,
+  artStyleOverride = null,
+  characterRefCount = 1,
+  hasArtStyleRef = false,
 }) {
   return compileSpritePrompt({
     identityLock,
@@ -460,6 +553,9 @@ export function compileEditPrompt({
     allowProps,
     editInstructions,
     artStyle,
+    artStyleOverride,
+    characterRefCount,
+    hasArtStyleRef,
   })
 }
 

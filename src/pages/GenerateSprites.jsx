@@ -25,13 +25,13 @@ import { toast } from 'sonner'
 import {
   ArrowLeft, Upload, X, Sparkles, User, Search, Check,
   AlertCircle, RefreshCw, Loader2, Lock, ChevronDown, ChevronUp,
-  Wand2, ZoomIn,
+  Wand2, ZoomIn, Palette,
 } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 import { useProgress } from '../contexts/ProgressContext'
 import { useAuth } from '../contexts/AuthContext'
 import { Character, CharacterImage } from '../lib/storage'
-import { analyzeReferenceImage, LimitError, parseAppearanceFromIdentityLock } from '../lib/anthropic'
+import { analyzeReferenceImage, analyzeArtStyle, LimitError, parseAppearanceFromIdentityLock } from '../lib/anthropic'
 import { supabase } from '../lib/supabase'
 import { compileSpritePrompt, resolveVariationSpecs } from '../lib/promptCompiler'
 import { RANDOM_POOL } from '../lib/constants/EMOTION_PRESETS'
@@ -41,6 +41,7 @@ import VariationControls from '../components/sprites/VariationControls'
 import ImageEditModal from '../components/sprites/ImageEditModal'
 import ArtStyleSelector from '../components/sprites/ArtStyleSelector'
 import QuickBatchSection from '../components/sprites/QuickBatchSection'
+import MultiReferencePanel, { getModelLimits } from '../components/sprites/MultiReferencePanel'
 import useGenerationQueueStore from '../lib/stores/generationQueueStore'
 
 // ─── Aspect ratio options ─────────────────────────────────────────────────────
@@ -124,6 +125,17 @@ export default function GenerateSprites() {
   const [customPrompt, setCustomPrompt] = useState('')
   const [selectedArtStyle, setSelectedArtStyle] = useState('')
 
+  // ── Multi-reference state ─────────────────────────────────────────────────
+  const [additionalRefs, setAdditionalRefs] = useState([])  // Array<{ id, file, previewUrl }>
+  const [analysisStale, setAnalysisStale] = useState(false)
+
+  // ── Art style override state (session-only, never persisted) ──────────────
+  const [artStyleRef, setArtStyleRef] = useState(null)       // { file, previewUrl } | null
+  const [artStyleAnalysis, setArtStyleAnalysis] = useState(null) // string | null
+  const [artStyleAnalysisStatus, setArtStyleAnalysisStatus] = useState(null) // null | 'running' | 'done' | 'error'
+  const [artStyleAnalysisError, setArtStyleAnalysisError] = useState(null)
+  const artStyleSectionRef = useRef(null)
+
   // ── Image edit modal ──────────────────────────────────────────────────────
   const [editModalImage, setEditModalImage] = useState(null)
 
@@ -177,16 +189,19 @@ export default function GenerateSprites() {
   }, [newCharName, userId, mode])
 
   // ── Gate: fire analysis only when BOTH name valid AND image uploaded ───────
+  // Auto-analysis is suppressed when multiple images are staged (FDD §3.2)
   useEffect(() => {
     if (!readyToAnalyze) return
     if (mode !== 'new') return
     if (!referenceImageBase64) return
     if (!newCharName.trim() || nameError || nameChecking) return
     if (analysisStatus === 'running' || analysisStatus === 'done') return
+    // Suppress auto-analysis when additional refs are staged
+    if (additionalRefs.length > 0) return
     setReadyToAnalyze(false)
     runAnalysis(referenceImageBase64, null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readyToAnalyze, referenceImageBase64, newCharName, nameError, nameChecking, analysisStatus, mode])
+  }, [readyToAnalyze, referenceImageBase64, newCharName, nameError, nameChecking, analysisStatus, mode, additionalRefs.length])
 
   // ── Reset all state ────────────────────────────────────────────────────────
   const resetAll = useCallback(() => {
@@ -216,6 +231,13 @@ export default function GenerateSprites() {
     setToggles(DEFAULT_TOGGLES)
     setCustomPrompt('')
     setEditModalImage(null)
+    // Multi-reference & art style reset
+    setAdditionalRefs([])
+    setAnalysisStale(false)
+    setArtStyleRef(null)
+    setArtStyleAnalysis(null)
+    setArtStyleAnalysisStatus(null)
+    setArtStyleAnalysisError(null)
   }, [])
 
   // ── Upload reference image ─────────────────────────────────────────────────
@@ -253,36 +275,132 @@ export default function GenerateSprites() {
     setAutoFillConfirmed(false)
     setCreatedCharacter(null)
     setReadyToAnalyze(false)
+    setAnalysisStale(false)
 
     const reader = new FileReader()
     reader.onload = (e) => {
       setReferenceImageBase64(e.target.result)
-      setReadyToAnalyze(true)
+      // Only auto-analyze if no additional refs are staged (single-image flow)
+      if (additionalRefs.length === 0) {
+        setReadyToAnalyze(true)
+      }
     }
     reader.readAsDataURL(file)
   }
 
+  // ── Handle additional refs change — marks analysis as stale ────────────────
+  const handleAdditionalRefsChange = useCallback((newRefs) => {
+    setAdditionalRefs(newRefs)
+    if (analysisStatus === 'done') {
+      setAnalysisStale(true)
+    }
+  }, [analysisStatus])
+
+  // ── Art style reference change — triggers art style analysis ───────────────
+  const handleArtStyleRefChange = useCallback(async (newRef) => {
+    setArtStyleRef(newRef)
+    setArtStyleAnalysis(null)
+    setArtStyleAnalysisStatus(null)
+    setArtStyleAnalysisError(null)
+
+    if (!newRef) return // Cleared
+
+    // Read file as base64 and trigger art style analysis
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const base64 = e.target.result
+      setArtStyleAnalysisStatus('running')
+      try {
+        const result = await analyzeArtStyle(base64)
+        if (!mountedRef.current) return
+        setArtStyleAnalysis(result)
+        setArtStyleAnalysisStatus('done')
+      } catch (err) {
+        if (!mountedRef.current) return
+        console.error('Art style analysis failed:', err)
+        setArtStyleAnalysisStatus('error')
+        setArtStyleAnalysisError(err.message || 'Analysis failed')
+      }
+    }
+    reader.readAsDataURL(newRef.file)
+  }, [])
+
+  // ── Retry art style analysis ───────────────────────────────────────────────
+  const handleArtStyleRetry = useCallback(() => {
+    if (artStyleRef) {
+      handleArtStyleRefChange(artStyleRef)
+    }
+  }, [artStyleRef, handleArtStyleRefChange])
+
+  // ── Manual analysis trigger (Analyze References button) ────────────────────
+  const handleManualAnalyze = useCallback(async () => {
+    if (!referenceImageBase64 && !(mode === 'existing' && selectedCharacter?.generated_image_url)) return
+
+    // Collect all character reference images as base64
+    const imageInputs = []
+
+    // Primary image
+    if (referenceImageBase64) {
+      imageInputs.push(referenceImageBase64)
+    } else if (mode === 'existing' && selectedCharacter?.generated_image_url) {
+      try {
+        const base64 = await fetchImageAsBase64(selectedCharacter.generated_image_url)
+        imageInputs.push(base64)
+      } catch (err) {
+        toast.error('Could not load primary image for analysis.')
+        return
+      }
+    }
+
+    // Additional reference images
+    for (const ref of additionalRefs) {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(ref.file)
+      })
+      imageInputs.push(base64)
+    }
+
+    // Run analysis with all images
+    const existingChar = mode === 'existing' ? selectedCharacter : null
+    await runAnalysis(imageInputs, existingChar)
+    setAnalysisStale(false)
+  }, [referenceImageBase64, mode, selectedCharacter, additionalRefs])
+
+  // ── Scroll to art style section ────────────────────────────────────────────
+  const scrollToArtStyle = useCallback(() => {
+    artStyleSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [])
+
   // ── Run analysis ───────────────────────────────────────────────────────────
-  const runAnalysis = async (imageBase64, existingCharacter) => {
+  // Accepts a single base64 string or array of base64 strings (multi-image).
+  const runAnalysis = async (imageInputs, existingCharacter) => {
     setAnalysisStatus('running')
     setAnalysisError(null)
     try {
-      const result = await analyzeReferenceImage(imageBase64)
+      const result = await analyzeReferenceImage(imageInputs)
       if (!mountedRef.current) return
 
-      const { consistencyPrompt: cp, identityLock: il } = result
+      const { consistencyPrompt: cp, identityLock: il, imageCount } = result
       setConsistencyPrompt(cp)
       setIdentityLock(il)
       setAnalysisStatus('done')
 
       if (existingCharacter) {
-        // Mode B: persist on existing character
-        await Character.update(existingCharacter.id, {
-          character_consistency_prompt: cp,
-          character_identity_lock: il || null,
-        })
-        queryClient.invalidateQueries({ queryKey: ['characters', userId] })
-        queryClient.invalidateQueries({ queryKey: ['character', existingCharacter.id] })
+        // Mode B: persist on existing character (session-only for multi-ref re-analysis)
+        // Only persist to DB if this is the initial single-image analysis
+        const isSingleImage = imageCount === 1
+        if (isSingleImage) {
+          await Character.update(existingCharacter.id, {
+            character_consistency_prompt: cp,
+            character_identity_lock: il || null,
+            analysis_image_count: imageCount,
+          })
+          queryClient.invalidateQueries({ queryKey: ['characters', userId] })
+          queryClient.invalidateQueries({ queryKey: ['character', existingCharacter.id] })
+        }
         setSelectedCharacter(prev => ({
           ...prev,
           character_consistency_prompt: cp,
@@ -296,7 +414,9 @@ export default function GenerateSprites() {
             setSuggestedAppearance(parsed)
           }
         }
-        await createCharacterRecord(cp, il, imageBase64)
+        // For Mode A, pass the primary image base64 for record creation
+        const primaryBase64 = Array.isArray(imageInputs) ? imageInputs[0] : imageInputs
+        await createCharacterRecord(cp, il, primaryBase64, imageCount)
       }
     } catch (err) {
       if (!mountedRef.current) return
@@ -359,17 +479,25 @@ export default function GenerateSprites() {
   }
 
   // ── Readiness checks ───────────────────────────────────────────────────────
-  const canGenerateNew = mode === 'new' && createdCharacter !== null && analysisStatus === 'done'
+  const modelLimits = getModelLimits(model)
+  const totalImageCount = 1 + additionalRefs.length + (artStyleRef ? 1 : 0)
+  const isOverModelLimit = totalImageCount > modelLimits.maxTotal
+
+  const canGenerateNew = mode === 'new' && createdCharacter !== null && analysisStatus === 'done' && !isOverModelLimit
   const canGenerateExisting = (
     mode === 'existing' &&
     selectedCharacter !== null &&
     selectedCharacter.generated_image_url &&
-    analysisStatus === 'done'
+    analysisStatus === 'done' &&
+    !isOverModelLimit
   )
   const canGenerate = canGenerateNew || canGenerateExisting
 
+  // Art style override is active when ref is attached and analyzed
+  const artStyleOverrideActive = !!(artStyleRef && artStyleAnalysisStatus === 'done' && artStyleAnalysis)
+
   // ── Create character record (Mode A) ──────────────────────────────────────
-  const createCharacterRecord = async (prompt, lockData, imageBase64) => {
+  const createCharacterRecord = async (prompt, lockData, imageBase64, imageCount = 1) => {
     let storedUrl = imageBase64
     if (referenceImageFile) {
       try {
@@ -378,6 +506,21 @@ export default function GenerateSprites() {
         console.warn('Storage upload failed, using base64 fallback:', uploadErr)
         storedUrl = imageBase64
       }
+    }
+
+    // Upload additional reference images to storage (URLs only, per FDD §8.3 Option A)
+    let additionalRefUrls = null
+    if (additionalRefs.length > 0) {
+      additionalRefUrls = []
+      for (let i = 0; i < additionalRefs.length; i++) {
+        try {
+          const url = await uploadReferenceImage(additionalRefs[i].file)
+          if (url) additionalRefUrls.push({ url, upload_order: i + 1 })
+        } catch (err) {
+          console.warn(`Additional ref ${i + 1} upload failed:`, err)
+        }
+      }
+      if (additionalRefUrls.length === 0) additionalRefUrls = null
     }
 
     const record = await Character.create(userId, {
@@ -392,6 +535,8 @@ export default function GenerateSprites() {
       appearance_description:       null,
       appearance:                   suggestedAppearance || null,
       sprite_images:                null,
+      additional_reference_urls:    additionalRefUrls,
+      analysis_image_count:         imageCount,
     })
 
     if (!mountedRef.current) return
@@ -447,8 +592,43 @@ export default function GenerateSprites() {
     const lock = identityLock || character.character_identity_lock || null
     const prompt = consistencyPrompt || character.character_consistency_prompt || ''
 
+    // ── Build image_urls array per FDD §2.2 ──────────────────────────────
+    // Order: [primary, ...additional_char_refs, art_style_ref (if present)]
+    const allRefImageUrls = [refImageBase64 || refImageUrl].filter(Boolean)
+
+    // Add additional character reference images (as base64 for generation)
+    for (const ref of additionalRefs) {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(ref.file)
+      })
+      allRefImageUrls.push(base64)
+    }
+
+    // Art style reference goes LAST (if present)
+    let artStyleBase64 = null
+    if (artStyleRef && artStyleOverrideActive) {
+      artStyleBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(artStyleRef.file)
+      })
+      allRefImageUrls.push(artStyleBase64)
+    }
+
+    const characterRefCount = 1 + additionalRefs.length
+    const hasArtStyleRefInUrls = !!(artStyleRef && artStyleOverrideActive)
+
     // Resolve all N variation specs (emotion + pose per sprite)
     const specs = resolveVariationSpecs(emotionEntries, variationCount, RANDOM_POOL, RANDOM_POSE_POOL)
+
+    // Build art style override object for prompt compiler
+    const artStyleOverride = artStyleOverrideActive
+      ? { analysis: artStyleAnalysis }
+      : null
 
     // Build form snapshot for session hydration
     const formSnapshot = {
@@ -467,6 +647,8 @@ export default function GenerateSprites() {
       identityLock: lock,
       referenceImageBase64,
       referenceImageUrl,
+      additionalRefCount: additionalRefs.length,
+      artStyleOverrideActive,
     }
 
     // Build jobs for dispatch
@@ -480,7 +662,10 @@ export default function GenerateSprites() {
         customPrompt,
         allowClothing: toggles.allowClothing,
         allowProps: toggles.allowProps,
-        artStyle: selectedArtStyle || null,
+        artStyle: artStyleOverrideActive ? null : (selectedArtStyle || null),
+        artStyleOverride,
+        characterRefCount,
+        hasArtStyleRef: hasArtStyleRefInUrls,
       })
 
       return {
@@ -490,20 +675,23 @@ export default function GenerateSprites() {
         label: `Sprite ${i + 1}`,
         generationParams: {
           prompt: finalPrompt,
-          referenceImageUrls: [refImageBase64 || refImageUrl].filter(Boolean),
+          referenceImageUrls: allRefImageUrls,
           aspectRatio,
           model,
           seed: seedValue ? parseInt(seedValue, 10) : null,
           poseId: spec.poseId,
           emotionEntry: spec.emotionEntry,
-          artStyle: selectedArtStyle || null,
+          artStyle: artStyleOverrideActive ? null : (selectedArtStyle || null),
+          artStyleOverride: artStyleOverrideActive,
           paramsSnapshot: {
             variationCount, aspectRatio, model,
             poseId: spec.poseId,
             emotionEntry: spec.emotionEntry,
-            artStyle: selectedArtStyle || null,
+            artStyle: artStyleOverrideActive ? 'custom_override' : (selectedArtStyle || null),
             toggles,
             prompt: finalPrompt,
+            characterRefCount,
+            hasArtStyleRef: hasArtStyleRefInUrls,
           },
         },
       }
@@ -619,6 +807,25 @@ export default function GenerateSprites() {
   // ─────────────────────────────────────────────────────────────────────────
   const generationSection = (
     <>
+      {/* Art style override active indicator */}
+      {artStyleOverrideActive && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg"
+          style={{ background: `${theme.accent}15`, border: `1px solid ${theme.accent}30` }}
+        >
+          <Palette className="w-3.5 h-3.5" style={{ color: theme.accent }} />
+          <span className="text-xs font-medium" style={{ color: theme.accent }}>Art style override active</span>
+          <button
+            onClick={() => handleArtStyleRefChange(null)}
+            className="ml-auto w-4 h-4 flex items-center justify-center rounded-full hover:opacity-80"
+            style={{ background: `${theme.accent}30` }}
+            aria-label="Remove art style override"
+          >
+            <X className="w-2.5 h-2.5" style={{ color: theme.accent }} />
+          </button>
+        </div>
+      )}
+
       {/* Generation settings */}
       <GenerationControls
         variationCount={variationCount}
@@ -637,6 +844,8 @@ export default function GenerateSprites() {
         onSeedChange={setSeedValue}
         artStyle={selectedArtStyle}
         onArtStyleChange={setSelectedArtStyle}
+        artStyleOverrideActive={artStyleOverrideActive}
+        onScrollToArtStyle={scrollToArtStyle}
         theme={theme}
       />
 
@@ -720,16 +929,13 @@ export default function GenerateSprites() {
             )}
           </div>
 
-          {/* Reference Image Upload */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.labelColor }}>
-              Reference Image
-            </label>
-            <ImageUploadZone
-              theme={theme}
-              imageBase64={referenceImageBase64}
-              onFileSelect={handleFileSelect}
-              onClear={() => {
+          {/* Multi-Reference Image Panel */}
+          <div ref={artStyleSectionRef}>
+            <MultiReferencePanel
+              primaryImageBase64={referenceImageBase64}
+              primaryImageUrl={null}
+              onPrimaryFileSelect={handleFileSelect}
+              onPrimaryClear={() => {
                 setReferenceImageBase64(null)
                 setReferenceImageUrl(null)
                 setReferenceImageFile(null)
@@ -740,17 +946,38 @@ export default function GenerateSprites() {
                 setSuggestedAppearance(null)
                 setAutoFillConfirmed(false)
                 setCreatedCharacter(null)
+                setAdditionalRefs([])
+                setAnalysisStale(false)
               }}
+              isPrimaryFixed={false}
+              additionalRefs={additionalRefs}
+              onAdditionalRefsChange={handleAdditionalRefsChange}
+              artStyleRef={artStyleRef}
+              artStyleAnalysis={artStyleAnalysis}
+              artStyleAnalysisStatus={artStyleAnalysisStatus}
+              artStyleAnalysisError={artStyleAnalysisError}
+              onArtStyleRefChange={handleArtStyleRefChange}
+              onArtStyleRetry={handleArtStyleRetry}
+              analysisStatus={analysisStatus}
+              analysisError={analysisError}
+              analysisStale={analysisStale}
+              onAnalyze={handleManualAnalyze}
+              onRetryAnalysis={() => referenceImageBase64 && handleManualAnalyze()}
+              model={model}
+              theme={theme}
+              mode="new"
             />
           </div>
 
-          {/* Analysis status */}
-          <AnalysisStatus
-            status={analysisStatus}
-            error={analysisError}
-            onRetry={() => referenceImageBase64 && runAnalysis(referenceImageBase64, null)}
-            theme={theme}
-          />
+          {/* Analysis status (only for auto-analysis single-image flow) */}
+          {additionalRefs.length === 0 && (
+            <AnalysisStatus
+              status={analysisStatus}
+              error={analysisError}
+              onRetry={() => referenceImageBase64 && runAnalysis(referenceImageBase64, null)}
+              theme={theme}
+            />
+          )}
 
           {/* Identity lock summary (shown after analysis) */}
           {analysisStatus === 'done' && identityLock && (
@@ -935,6 +1162,12 @@ export default function GenerateSprites() {
                     setIdentityLock(null)
                     setLiveImages([])
                     setGenerationError(null)
+                    setAdditionalRefs([])
+                    setAnalysisStale(false)
+                    setArtStyleRef(null)
+                    setArtStyleAnalysis(null)
+                    setArtStyleAnalysisStatus(null)
+                    setArtStyleAnalysisError(null)
                   }}
                   className="text-xs hover:underline"
                   style={{ color: theme.textMuted }}
@@ -944,23 +1177,35 @@ export default function GenerateSprites() {
               </div>
             </div>
 
-            {/* Reference image */}
+            {/* Reference image + Multi-Reference Panel */}
             {selectedCharacter.generated_image_url ? (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.labelColor }}>
-                  Reference: {selectedCharacter.character_name}'s primary image
-                </p>
-                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.fieldBorder}` }}>
-                  <img
-                    src={selectedCharacter.generated_image_url}
-                    alt="Reference"
-                    className="w-full max-h-64 object-contain"
-                    style={{ background: theme.fieldBg }}
-                  />
-                </div>
-                <p className="text-xs" style={{ color: theme.textMuted }}>
-                  Reference image is fixed to this character's primary image.
-                </p>
+              <div ref={artStyleSectionRef}>
+                <MultiReferencePanel
+                  primaryImageBase64={referenceImageBase64}
+                  primaryImageUrl={selectedCharacter.generated_image_url}
+                  onPrimaryFileSelect={null}
+                  onPrimaryClear={null}
+                  isPrimaryFixed={true}
+                  additionalRefs={additionalRefs}
+                  onAdditionalRefsChange={handleAdditionalRefsChange}
+                  artStyleRef={artStyleRef}
+                  artStyleAnalysis={artStyleAnalysis}
+                  artStyleAnalysisStatus={artStyleAnalysisStatus}
+                  artStyleAnalysisError={artStyleAnalysisError}
+                  onArtStyleRefChange={handleArtStyleRefChange}
+                  onArtStyleRetry={handleArtStyleRetry}
+                  analysisStatus={analysisStatus}
+                  analysisError={analysisError}
+                  analysisStale={analysisStale}
+                  onAnalyze={handleManualAnalyze}
+                  onRetryAnalysis={() => {
+                    if (referenceImageBase64) handleManualAnalyze()
+                    else if (selectedCharacter.generated_image_url) handleSelectCharacter(selectedCharacter)
+                  }}
+                  model={model}
+                  theme={theme}
+                  mode="existing"
+                />
               </div>
             ) : (
               <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background: '#f59e0b15', border: '1px solid #f59e0b40' }}>
@@ -971,17 +1216,19 @@ export default function GenerateSprites() {
               </div>
             )}
 
-            {/* Analysis status */}
-            <AnalysisStatus
-              status={analysisStatus}
-              error={analysisError}
-              characterName={selectedCharacter.character_name}
-              onRetry={() => {
-                if (referenceImageBase64) runAnalysis(referenceImageBase64, selectedCharacter)
-                else if (selectedCharacter.generated_image_url) handleSelectCharacter(selectedCharacter)
-              }}
-              theme={theme}
-            />
+            {/* Analysis status (when no additional refs — single-image auto-analysis) */}
+            {additionalRefs.length === 0 && (
+              <AnalysisStatus
+                status={analysisStatus}
+                error={analysisError}
+                characterName={selectedCharacter.character_name}
+                onRetry={() => {
+                  if (referenceImageBase64) runAnalysis(referenceImageBase64, selectedCharacter)
+                  else if (selectedCharacter.generated_image_url) handleSelectCharacter(selectedCharacter)
+                }}
+                theme={theme}
+              />
+            )}
 
             {/* Identity lock summary */}
             {analysisStatus === 'done' && identityLock && (
@@ -1318,6 +1565,8 @@ function GenerationControls({
   onSeedChange,
   artStyle,
   onArtStyleChange,
+  artStyleOverrideActive,
+  onScrollToArtStyle,
   theme,
 }) {
   return (
@@ -1371,6 +1620,8 @@ function GenerationControls({
         value={artStyle}
         onChange={onArtStyleChange}
         theme={theme}
+        artStyleOverrideActive={artStyleOverrideActive}
+        onScrollToArtStyle={onScrollToArtStyle}
       />
 
       <div className="space-y-1">

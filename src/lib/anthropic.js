@@ -481,7 +481,7 @@ async function compressBase64Image(dataUrl) {
 }
 
 // ─── analyzeReferenceImage ────────────────────────────────────────────────────
-// Runs Claude vision analysis on a reference image.
+// Runs Claude vision analysis on one or more reference images.
 //
 // Returns BOTH:
 //   consistencyPrompt  — flat text description (legacy, backward-compatible)
@@ -491,35 +491,73 @@ async function compressBase64Image(dataUrl) {
 // section-by-section prompt assembly. The flat text is kept for display
 // and as a fallback for characters analyzed before this version.
 //
-// Accepts:
-//   imageInput — base64 data URL (data:image/...;base64,...) for uploads
-//              — OR a plain CDN/HTTP URL (fetched server-side via URL source)
+// Multi-image support:
+//   When multiple images are provided, all are sent in a single Claude call.
+//   Claude cross-references images to identify consistent immutable traits.
+//   Art style reference images are NEVER included — use analyzeArtStyle() separately.
 //
-// @param {string} imageInput  base64 data URL or HTTP(S) URL
-// @returns {Promise<{ consistencyPrompt: string, identityLock: object|null }>}
-export async function analyzeReferenceImage(imageInput) {
-  let imageDataUrl = imageInput;
+// Accepts:
+//   imageInputs — single string OR array of strings
+//                 each: base64 data URL (data:image/...;base64,...) or HTTP(S) URL
+//
+// @param {string|string[]} imageInputs  base64 data URL(s) or HTTP(S) URL(s)
+// @returns {Promise<{ consistencyPrompt: string, identityLock: object|null, imageCount: number }>}
+export async function analyzeReferenceImage(imageInputs) {
+  // Normalize to array for unified handling
+  const inputs = Array.isArray(imageInputs) ? imageInputs : [imageInputs]
+  const imageCount = inputs.length
+  const isMultiImage = imageCount > 1
 
-  if (imageInput.startsWith('data:')) {
-    imageDataUrl = await compressBase64Image(imageInput);
-  }
+  const content = []
 
-  const content = [];
+  // Add all images to the content array
+  for (const imageInput of inputs) {
+    let imageDataUrl = imageInput
+    if (imageInput.startsWith('data:')) {
+      imageDataUrl = await compressBase64Image(imageInput)
+    }
 
-  if (imageDataUrl.startsWith('data:')) {
-    const [meta, imageData] = imageDataUrl.split(',');
-    const metaMatch = meta.match(/:(.*?);/);
-    const mediaType = metaMatch?.[1] ?? 'image/jpeg';
-    content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } });
-  } else {
-    content.push({ type: 'image', source: { type: 'url', url: imageDataUrl } });
+    if (imageDataUrl.startsWith('data:')) {
+      const [meta, imageData] = imageDataUrl.split(',')
+      const metaMatch = meta.match(/:(.*?);/)
+      const mediaType = metaMatch?.[1] ?? 'image/jpeg'
+      content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } })
+    } else {
+      content.push({ type: 'image', source: { type: 'url', url: imageDataUrl } })
+    }
   }
 
   // ── Structured identity lock analysis prompt ──────────────────────────────
   // Requests BOTH a flat consistency prompt AND structured JSON in one call.
+  // Multi-image variant includes cross-referencing instructions.
+  const multiImagePreamble = isMultiImage
+    ? `You are analyzing ${imageCount} reference images of the SAME character from different angles/contexts. Image 1 is the PRIMARY reference (identity anchor). Images 2–${imageCount} are supplementary references showing additional angles.\n\n`
+    : ''
+
+  const multiImageCrossRef = isMultiImage
+    ? `
+MULTI-IMAGE CROSS-REFERENCING INSTRUCTIONS:
+1. Cross-reference ALL ${imageCount} images to identify consistent traits across angles.
+   Traits that appear in ALL images are HIGH-CONFIDENCE IMMUTABLE traits.
+   Traits that appear in MOST images are PROBABLE IMMUTABLE traits.
+   Traits that appear in only ONE image may be angle-specific or contextual — note them but flag their single-source status.
+
+2. For each immutable trait category, synthesize a SINGLE canonical description that accounts for how the trait appears from multiple angles:
+   - Facial structure (jawline, cheekbones, nose shape, eye shape, brow line)
+   - Hair (color, length, texture, style, any distinctive features)
+   - Body proportions (build, height relative to frame, posture)
+   - Distinguishing marks (scars, tattoos, birthmarks, piercings)
+   - Eye color and distinctive eye features
+   - Skin tone
+   - Clothing design elements that define the character
+   - Accessories that are character-defining
+
+`
+    : ''
+
   content.push({
     type: 'text',
-    text: `Analyze this character image in thorough detail. You must produce TWO outputs in your response, clearly labeled:
+    text: `${multiImagePreamble}Analyze this character ${isMultiImage ? 'across all provided images' : 'image'} in thorough detail. You must produce TWO outputs in your response, clearly labeled:
 
 --- CONSISTENCY_PROMPT ---
 Write a detailed, specific character consistency description for use as an image generation reference prompt. Include:
@@ -528,14 +566,15 @@ Write a detailed, specific character consistency description for use as an image
 - Eyes: exact color, shape — IF HETEROCHROMIA IS PRESENT, specify LEFT eye color and RIGHT eye color SEPARATELY with explicit "left eye: [color]" and "right eye: [color]" notation
 - Clothing: exact colors, patterns, style, layers, any insignia or details
 - Accessories: jewelry, bags, weapons, tools, hats, glasses, etc.
-- Art style: anime/manga style, line weight, shading technique, color palette
 - Any unique design elements, motifs, or identifiers
 Be extremely specific and detailed. Write in direct descriptive style for an image generation prompt.
-
+${multiImageCrossRef}
 IMPORTANT HETEROCHROMIA RULE: If the character has heterochromia (different colored eyes), you MUST:
 1. Explicitly note "heterochromia: yes" in your analysis
 2. List each eye color separately with left/right designation
 3. Note that eye colors must NEVER be blended, merged, normalized, or confused between eyes
+
+The art style of the reference image(s) should be described as a SEPARATE section labeled "DEFAULT ART STYLE" at the end of the CONSISTENCY_PROMPT. This section will be used as the baseline art style when no art style override is provided. Describe: line weight, shading technique, color saturation approach, level of detail/rendering fidelity, and any distinctive stylistic signatures.
 
 --- IDENTITY_LOCK_JSON ---
 Return ONLY valid JSON (no extra text, no markdown fences) with this exact schema:
@@ -547,6 +586,7 @@ Return ONLY valid JSON (no extra text, no markdown fences) with this exact schem
     "outfit": ["list each outfit element separately — every garment, color, pattern, layer; list each accessory separately"]
   },
   "art_style": "the art style of the reference image (e.g. 'anime', 'manga', 'manhwa', 'western comic', 'etc.) - leave as null if unclear",
+  "default_art_style_description": "A detailed description of the reference art style: line weight, shading technique, color saturation, rendering fidelity, distinctive signatures. This is used as the baseline style when no override is applied.",
   "forbidden_changes": [
     "list each forbidden change as a specific actionable constraint",
     "e.g. 'wardrobe swap or outfit change of any kind'",
@@ -559,19 +599,28 @@ Return ONLY valid JSON (no extra text, no markdown fences) with this exact schem
     "e.g. any art style consistency requirements",
     "IF HETEROCHROMIA: include explicit note about heterochromia enforcement — each eye must maintain its exact color with no blending, merging, or normalization"
   ]
-}`,
+}
+
+Your output MUST include a clearly labeled section within the IDENTITY_LOCK_JSON: the "immutable_traits" object containing ONLY physical and design traits that must be preserved across ALL generations regardless of pose, expression, or art style. This is the enforcement anchor.`,
   })
 
   const systemPrompt = `You are a character visual identity analyst specializing in AI image generation consistency.
 Your task is to extract immutable character traits with maximum specificity.
 Every trait you list becomes an absolute constraint for future image generation.
 Be exhaustive — omitting a trait means it can change between generations.
-Produce both outputs exactly as requested: the CONSISTENCY_PROMPT section first, then IDENTITY_LOCK_JSON second.`
+Produce both outputs exactly as requested: the CONSISTENCY_PROMPT section first, then IDENTITY_LOCK_JSON second.${isMultiImage ? `
+
+When multiple reference images are provided:
+- Cross-reference all images to build a comprehensive, multi-angle understanding of the character.
+- Prioritize traits that are consistent across all images (high-confidence immutable).
+- Note any angle-specific details that appear in only one image.
+- Synthesize a single canonical description per trait category, not separate per-image descriptions.` : ''}`
 
   const data = await callEdgeFunction('anthropic-proxy', {
     _generation_type: 'image',
     model: 'claude-sonnet-4-5',
-    max_tokens: 3000,
+    max_tokens: isMultiImage ? 4000 : 3000,
+    temperature: 0.3,
     system: systemPrompt,
     messages: [{ role: 'user', content }],
   })
@@ -604,7 +653,67 @@ Produce both outputs exactly as requested: the CONSISTENCY_PROMPT section first,
     identityLock = null
   }
 
-  return { consistencyPrompt, identityLock }
+  return { consistencyPrompt, identityLock, imageCount }
+}
+
+// ─── analyzeArtStyle ──────────────────────────────────────────────────────────
+// Analyzes a single image for its art style attributes ONLY.
+// Never describes character content, subject, or composition.
+// Returns a concise style directive paragraph for use in generation prompts.
+//
+// This is called independently of character analysis — art style images
+// are NEVER mixed into the character analysis call.
+//
+// @param {string} imageInput  base64 data URL or HTTP(S) URL of the art style reference
+// @returns {Promise<string>}  Art style description paragraph
+export async function analyzeArtStyle(imageInput) {
+  let imageDataUrl = imageInput
+  if (imageInput.startsWith('data:')) {
+    imageDataUrl = await compressBase64Image(imageInput)
+  }
+
+  const content = []
+
+  if (imageDataUrl.startsWith('data:')) {
+    const [meta, imageData] = imageDataUrl.split(',')
+    const metaMatch = meta.match(/:(.*?);/)
+    const mediaType = metaMatch?.[1] ?? 'image/jpeg'
+    content.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: imageData } })
+  } else {
+    content.push({ type: 'image', source: { type: 'url', url: imageDataUrl } })
+  }
+
+  content.push({
+    type: 'text',
+    text: `Analyze ONLY the art style of this image. Do not describe the character, subject, or content. Describe exclusively: line work (weight, consistency, style), shading technique (cel-shaded, crosshatch, gradient, flat), color palette approach (saturated, muted, monochromatic, complementary), rendering fidelity (sketch, clean lineart, painterly, photorealistic), any distinctive stylistic signatures (halftone dots, speed lines, glow effects, texture overlays). Output a concise paragraph suitable for use as an image generation style directive.`,
+  })
+
+  const systemPrompt = `You are an art style analyst. You receive a single image and extract ONLY its visual art style — never its content, subject, composition, or narrative elements.
+
+Your output is a concise, directive paragraph that an image generation model can use to replicate this exact art style on a DIFFERENT subject.
+
+Focus exclusively on:
+- Line work: weight (thin/thick/varied), consistency (clean/sketchy/organic), outline style (hard edge/soft edge/no outline)
+- Shading: technique (cel-shaded/gradient/crosshatch/stipple/flat), shadow depth, highlight treatment
+- Color: palette type (warm/cool/neutral), saturation level, contrast approach, any color grading effects
+- Rendering: fidelity level (loose sketch/clean illustration/semi-realistic/photorealistic), texture presence, detail density
+- Distinctive signatures: any unique visual techniques (halftone, speed lines, chromatic aberration, film grain, watercolor bleed, etc.)
+
+Do NOT mention: characters, people, objects, backgrounds, poses, expressions, clothing items, or any content-specific elements. Your output must be transferable to ANY subject.
+
+Output: A single paragraph, 2-5 sentences, written as a direct style instruction.
+Example: "Render in clean cel-shaded anime style with uniform 2px black outlines, flat color fills with minimal gradient shading, high saturation warm palette, and sharp shadow edges without blending."`
+
+  const data = await callEdgeFunction('anthropic-proxy', {
+    _generation_type: 'image',
+    model: 'claude-sonnet-4-5',
+    max_tokens: 500,
+    temperature: 0.2,
+    system: systemPrompt,
+    messages: [{ role: 'user', content }],
+  })
+
+  return data.content?.[0]?.text?.trim() || ''
 }
 
 // ─── parseAppearanceFromIdentityLock ─────────────────────────────────────────

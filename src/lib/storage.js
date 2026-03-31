@@ -2,13 +2,18 @@
 // Supabase Postgres data layer. All tables have Row-Level Security enabled —
 // every query is automatically scoped to the authenticated user.
 //
-// Entity modules: Storyline, CharacterBatch, GeneratedImage, StorylinePrompt,
-//                 CharacterDraft, Character
+// Entity modules (8 total):
+//   Storyline, CharacterBatch, GeneratedImage, StorylinePrompt,
+//   CharacterDraft, Character, CharacterImage, PromptHistory
 //
 // All methods are async. `create` methods require the authenticated userId
 // so the user_id column is populated server-side before insert.
 //
 // useLocalStorage: thin hook kept for client-side theme/genre preference only.
+//
+// NOTE: Generated images are stored on fal.ai's CDN — the URL string is
+// saved in the database, not the binary image data. No Supabase Storage
+// buckets are used for generated images.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabase';
@@ -41,27 +46,21 @@ export function useLocalStorage(key, defaultValue) {
 // DB table: public.storylines
 // Extra relation: character_batches.storyline_id populates the batch_ids[] field
 export const Storyline = {
-  /** List all storylines for user, newest first, with batch_ids */
+  /** List all storylines for user, newest first, with batch_ids.
+   *  Uses an embedded select to fetch batch IDs in a single query
+   *  (eliminates the previous N+1 pattern of querying character_batches separately). */
   async list(userId) {
     const { data, error } = await supabase
       .from('storylines')
-      .select('*')
+      .select('*, character_batches(id)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    // Attach batch_ids array by querying character_batches
-    const ids = (data || []).map(s => s.id);
-    if (ids.length === 0) return data || [];
-    const { data: batches } = await supabase
-      .from('character_batches')
-      .select('id, storyline_id')
-      .in('storyline_id', ids);
-    const batchMap = {};
-    (batches || []).forEach(b => {
-      if (!batchMap[b.storyline_id]) batchMap[b.storyline_id] = [];
-      batchMap[b.storyline_id].push(b.id);
+    // Reshape embedded character_batches rows into a flat batch_ids[] array
+    return (data || []).map(s => {
+      const { character_batches, ...rest } = s;
+      return { ...rest, batch_ids: (character_batches || []).map(b => b.id) };
     });
-    return (data || []).map(s => ({ ...s, batch_ids: batchMap[s.id] || [] }));
   },
 
   /** Light query for folder list rendering - only needed columns */
@@ -75,20 +74,16 @@ export const Storyline = {
     return data || [];
   },
 
-  /** Get a single storyline by id */
+  /** Get a single storyline by id (single query with embedded batch IDs). */
   async get(id) {
     const { data, error } = await supabase
       .from('storylines')
-      .select('*')
+      .select('*, character_batches(id)')
       .eq('id', id)
       .single();
     if (error) throw error;
-    // Attach batch_ids
-    const { data: batches } = await supabase
-      .from('character_batches')
-      .select('id')
-      .eq('storyline_id', id);
-    return { ...data, batch_ids: (batches || []).map(b => b.id) };
+    const { character_batches, ...rest } = data;
+    return { ...rest, batch_ids: (character_batches || []).map(b => b.id) };
   },
 
   /** Create a new storyline */
@@ -254,13 +249,14 @@ export const GeneratedImage = {
     if (error) throw error;
   },
 
-  /** Get images for a specific batch, newest first, optional limit */
+  /** Get images for a specific batch, newest first, optional limit.
+   *  Selects only the columns used by the batch detail image grid. */
   async filter({ batch_id }, orderBy = '-created_at', limit = 100) {
     const desc = orderBy.startsWith('-');
     const field = orderBy.replace('-', '').replace('created_date', 'created_at');
     let q = supabase
       .from('generated_images')
-      .select('*')
+      .select('id, batch_id, user_id, url, label, category, created_at')
       .eq('batch_id', batch_id)
       .order(field, { ascending: !desc });
     if (limit) q = q.limit(limit);
@@ -519,7 +515,7 @@ export const Character = {
   async listForSelection(userId) {
     const { data, error } = await supabase
       .from('characters')
-      .select('id, character_name, generated_image_url, creation_status, character_consistency_prompt, character_identity_lock')
+      .select('id, character_name, generated_image_url, creation_status, character_consistency_prompt, character_identity_lock, additional_reference_urls, analysis_image_count')
       .eq('user_id', userId)
       .eq('creation_status', 'finalized')
       .order('character_name', { ascending: true });
@@ -611,12 +607,12 @@ export const Character = {
     if (!name?.trim()) return false;
     let q = supabase
       .from('characters')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('character_name', name.trim());
     if (excludeId) q = q.neq('id', excludeId);
-    const { data } = await q;
-    return (data || []).length > 0;
+    const { count } = await q;
+    return (count ?? 0) > 0;
   },
 
   /** Atomically append a sprite image entry to the character's sprite_images JSONB array.
@@ -639,22 +635,15 @@ export const Character = {
     if (error) throw error;
   },
 
-  /** Delete a character and all related data (images, prompt history).
-   *  Uses a database function if available, otherwise deletes manually.
+  /** Delete a character and all related data.
+   *  Both character_images and character_prompt_history have ON DELETE CASCADE
+   *  FKs to characters(id), so a single delete triggers automatic cleanup.
    *  @param {string} id Character UUID
    */
   async deleteWithRelated(id) {
     await Character.delete(id);
-    const { error: imgError } = await supabase
-      .from('character_images')
-      .delete()
-      .eq('character_id', id);
-    if (imgError) console.warn('Failed to delete character_images:', imgError);
-    const { error: histError } = await supabase
-      .from('character_prompt_history')
-      .delete()
-      .eq('character_id', id);
-    if (histError) console.warn('Failed to delete character_prompt_history:', histError);
+    // No manual cleanup needed — ON DELETE CASCADE (migrations 009, 014)
+    // handles character_images and character_prompt_history automatically.
   },
 };
 
@@ -663,10 +652,14 @@ export const Character = {
 // Uses denormalized user_id for fast RLS checks.
 // ─────────────────────────────────────────────────────────────────────────────
 export const CharacterImage = {
+  /** Fetch all images for a character, newest first.
+   *  Selects only the columns needed for gallery rendering — avoids pulling
+   *  the large params_snapshot JSONB column which is only needed for
+   *  regeneration workflows. */
   async forCharacter(characterId) {
     const { data, error } = await supabase
       .from('character_images')
-      .select('*')
+      .select('id, character_id, user_id, url, label, seed, pose_id, emotion_entry, generation_type, job_id, created_at')
       .eq('character_id', characterId)
       .order('created_at', { ascending: false });
     if (error) throw error;
