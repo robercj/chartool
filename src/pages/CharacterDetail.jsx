@@ -295,6 +295,17 @@ function CharacterDetailInner() {
   const [editIdentityLock, setEditIdentityLock] = useState(null);
   const [isRerunningIdentityLock, setIsRerunningIdentityLock] = useState(false);
   const [selectedHistImg,  setSelectedHistImg]  = useState(null); // from strip
+  const [showMobileGallery, setShowMobileGallery] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
+
+  // Close mobile overflow menu on outside click
+  useEffect(() => {
+    if (!showMobileActions) return;
+    const handler = () => setShowMobileActions(false);
+    // Delay to avoid closing on the same click that opened it
+    const id = setTimeout(() => document.addEventListener('click', handler), 0);
+    return () => { clearTimeout(id); document.removeEventListener('click', handler); };
+  }, [showMobileActions]);
 
   // ── Section collapse state (localStorage-persisted) ─────────────────────────
   const defaultExpanded = { 'identity-role': true, demographics: true, personality: true,
@@ -736,7 +747,7 @@ function CharacterDetailInner() {
           {/* Back to character list */}
           <button
             onClick={() => navigate('/characters')}
-            className="btn btn-ghost btn-sm btn-square flex-shrink-0"
+            className="btn btn-ghost btn-sm btn-square flex-shrink-0 touch-target"
             aria-label="Back to characters"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -751,12 +762,62 @@ function CharacterDetailInner() {
             <p className="font-semibold text-sm truncate">{savedChar.character_name}</p>
             <span className="text-xs px-1.5 py-0.5 rounded-full bg-base-content/20 text-base-content/60">Complete</span>
           </div>
-          <button onClick={() => copyPrompt(displayPrompt)} className="btn btn-ghost btn-sm btn-square">
-            <Copy className="w-4 h-4" />
-          </button>
-          <button onClick={() => setShowHistory(true)} className="btn btn-ghost btn-sm btn-square">
+          {/* Gallery button — opens right-side drawer */}
+          {(uniqueImages.length > 0 || characterImages.length > 0) && (
+            <button
+              onClick={() => setShowMobileGallery(true)}
+              className="btn btn-ghost btn-sm btn-square touch-target relative"
+              aria-label={`View gallery (${uniqueImages.length + characterImages.length} images)`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span className="absolute -top-0.5 -right-0.5 badge badge-primary badge-xs text-[10px] min-w-[16px] h-4">
+                {uniqueImages.length + characterImages.length}
+              </span>
+            </button>
+          )}
+          <button onClick={() => setShowHistory(true)} className="btn btn-ghost btn-sm btn-square touch-target">
             <History className="w-4 h-4" />
           </button>
+          {/* Overflow menu — surfaces left-panel actions on mobile */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMobileActions(v => !v)}
+              className="btn btn-ghost btn-sm btn-square touch-target"
+              aria-label="More actions"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            {showMobileActions && (
+              <div
+                className="absolute top-full right-0 mt-1 z-50 min-w-[180px] rounded-xl border shadow-lg overflow-hidden"
+                style={{ background: 'var(--fallback-b1, oklch(var(--b1)))', border: '1px solid var(--fallback-b3, oklch(var(--b3)))' }}
+              >
+                <button
+                  onClick={() => { copyPrompt(displayPrompt); setShowMobileActions(false); }}
+                  className="w-full px-4 py-3 text-left text-sm hover:bg-base-200 flex items-center gap-2.5 touch-min"
+                >
+                  <Copy className="w-4 h-4 text-base-content/60" />
+                  Copy Prompt
+                </button>
+                <button
+                  onClick={() => { setShowPromptModal(true); setShowMobileActions(false); }}
+                  className="w-full px-4 py-3 text-left text-sm hover:bg-base-200 flex items-center gap-2.5 touch-min"
+                >
+                  <Eye className="w-4 h-4 text-base-content/60" />
+                  View Prompt
+                </button>
+                {(savedChar.character_consistency_prompt || savedChar.character_identity_lock || savedChar.appearance_description || sessionAppearanceDesc) && (
+                  <button
+                    onClick={() => { setShowImagePromptModal(true); setShowMobileActions(false); }}
+                    className="w-full px-4 py-3 text-left text-sm hover:bg-base-200 flex items-center gap-2.5 touch-min"
+                  >
+                    <Image className="w-4 h-4 text-secondary/80" />
+                    View Image Prompt
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Scrollable form */}
@@ -1238,6 +1299,31 @@ function CharacterDetailInner() {
           )}
         </div>
       </div>
+
+      {/* ── Mobile Gallery Drawer ─────────────────────────────────────────── */}
+      <MobileGalleryDrawer
+        isOpen={showMobileGallery}
+        onClose={() => setShowMobileGallery(false)}
+        imageCount={uniqueImages.length + characterImages.length}
+        characterId={characterId}
+        primaryImages={uniqueImages}
+        spriteImages={characterImages}
+        currentPrimaryUrl={savedChar?.generated_image_url}
+        sessionCurrentImage={sessionCurrentImage}
+        onSetPrimary={setPendingPrimaryImage}
+        onClearSessionImage={() => { setSessionCurrentImage(null); setSessionImgHistory([]); }}
+        onRegenerate={(newUrl) => {
+          setSessionCurrentImage(newUrl);
+          setSessionImgHistory(prev => [newUrl, ...prev.filter(u => u !== newUrl)].slice(0, 10));
+        }}
+        queryClient={queryClient}
+        character={savedChar}
+        uniqueImages={uniqueImages}
+        selectedHistImg={selectedHistImg}
+        setSelectedHistImg={setSelectedHistImg}
+        savedPrimaryUrl={savedChar?.generated_image_url}
+        setPendingPrimaryImage={setPendingPrimaryImage}
+      />
 
       {/* ── MODALS & DRAWERS ─────────────────────────────────────────────── */}
 
@@ -1925,12 +2011,31 @@ function PrimaryImageDisplay({ url, name }) {
             className="relative max-w-2xl w-full"
             onClick={e => e.stopPropagation()}
           >
-            <button
-              onClick={() => setLightboxOpen(false)}
-              className="absolute -top-10 right-0 btn btn-ghost btn-sm text-white gap-1"
-            >
-              <X className="w-4 h-4" /> Close
-            </button>
+            <div className="absolute -top-10 right-0 flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const resp = await fetch(url);
+                    const blob = await resp.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.download = `character-${Date.now()}.png`;
+                    a.click();
+                    URL.revokeObjectURL(blobUrl);
+                  } catch { toast.error('Download failed.'); }
+                }}
+                className="btn btn-ghost btn-sm text-white gap-1 touch-target"
+              >
+                <Download className="w-4 h-4" /> Download
+              </button>
+              <button
+                onClick={() => setLightboxOpen(false)}
+                className="btn btn-ghost btn-sm text-white gap-1 touch-target"
+              >
+                <X className="w-4 h-4" /> Close
+              </button>
+            </div>
             <img
               src={url}
               alt={name}
@@ -2110,6 +2215,172 @@ function IdentityLockSection({ identityLock, sectionExpanded, onToggle, onRerun,
         </div>
       )}
     </div>
+  );
+}
+
+// ─── MobileGalleryDrawer ──────────────────────────────────────────────
+// Right-side pull-over drawer for mobile. Surfaces the full image gallery
+// (AllImagesSection) plus the image history strip. Swipe-right-to-dismiss,
+// backdrop tap, X button, and Escape key all close the drawer.
+function MobileGalleryDrawer({
+  isOpen, onClose, imageCount,
+  characterId, primaryImages, spriteImages, currentPrimaryUrl,
+  sessionCurrentImage, onSetPrimary, onClearSessionImage, onRegenerate,
+  queryClient, character,
+  uniqueImages, selectedHistImg, setSelectedHistImg,
+  savedPrimaryUrl, setPendingPrimaryImage,
+}) {
+  const drawerRef = useRef(null);
+  const touchStartX = useRef(null);
+  const touchCurrentX = useRef(null);
+
+  // Lock body scroll when open
+  useEffect(() => {
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [isOpen]);
+
+  // Escape key dismissal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, onClose]);
+
+  // Swipe-right-to-dismiss handlers
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchCurrentX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    if (touchStartX.current === null) return;
+    touchCurrentX.current = e.touches[0].clientX;
+    const delta = touchCurrentX.current - touchStartX.current;
+    if (delta > 10 && drawerRef.current) {
+      drawerRef.current.style.transform = `translateX(${Math.max(0, delta)}px)`;
+      drawerRef.current.style.transition = 'none';
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (touchStartX.current === null) return;
+    const delta = (touchCurrentX.current || 0) - touchStartX.current;
+    if (drawerRef.current) {
+      drawerRef.current.style.transition = 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)';
+      if (delta > 80) {
+        drawerRef.current.style.transform = 'translateX(100%)';
+        setTimeout(onClose, 300);
+      } else {
+        drawerRef.current.style.transform = 'translateX(0)';
+      }
+    }
+    touchStartX.current = null;
+    touchCurrentX.current = null;
+  }, [onClose]);
+
+  // Reset transform when re-opened so CSS class takes over
+  useEffect(() => {
+    if (isOpen && drawerRef.current) {
+      drawerRef.current.style.transform = '';
+      drawerRef.current.style.transition = '';
+    }
+  }, [isOpen]);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className={`lg:hidden fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Drawer panel */}
+      <div
+        ref={drawerRef}
+        className={`lg:hidden fixed top-0 right-0 bottom-0 z-50 w-[82%] max-w-sm flex flex-col shadow-2xl transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        style={{
+          background: 'var(--fallback-b2, oklch(var(--b2)))',
+          borderLeft: '1px solid var(--fallback-b3, oklch(var(--b3)))',
+          paddingRight: 'var(--safe-right, 0px)',
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image gallery"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+          style={{ borderBottom: '1px solid var(--fallback-b3, oklch(var(--b3)))' }}
+        >
+          <div className="flex items-center gap-2">
+            <ImageIcon className="w-4 h-4 text-primary" />
+            <span className="font-semibold text-sm text-base-content">All Images</span>
+            <span className="badge badge-sm">{imageCount}</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="btn btn-ghost btn-sm btn-square touch-target"
+            aria-label="Close gallery"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Image history strip (primary image versions) */}
+        {uniqueImages && uniqueImages.length > 1 && (
+          <div
+            className="flex gap-2 px-4 py-3 overflow-x-auto flex-shrink-0"
+            style={{ borderBottom: '1px solid var(--fallback-b3, oklch(var(--b3)))' }}
+          >
+            {uniqueImages.map((url, i) => (
+              <div key={i} className="relative group/thumb flex-shrink-0">
+                <button
+                  onClick={() => setSelectedHistImg(url === selectedHistImg ? null : url)}
+                  className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-colors ${
+                    url === (selectedHistImg || savedPrimaryUrl)
+                      ? 'border-primary' : 'border-transparent'
+                  }`}
+                >
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                </button>
+                {url !== savedPrimaryUrl && (
+                  <button
+                    onClick={() => { setPendingPrimaryImage(url); setSelectedHistImg(url); toast('Image staged as primary — save to commit.'); }}
+                    className="absolute bottom-0 left-0 right-0 text-[10px] bg-primary text-primary-content text-center py-0.5 opacity-0 group-hover/thumb:opacity-100 active:opacity-100 transition-opacity rounded-b-lg"
+                  >
+                    Use
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Scrollable gallery content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <AllImagesSection
+            characterId={characterId}
+            primaryImages={primaryImages}
+            spriteImages={spriteImages}
+            currentPrimaryUrl={currentPrimaryUrl}
+            sessionCurrentImage={sessionCurrentImage}
+            onSetPrimary={onSetPrimary}
+            onClearSessionImage={onClearSessionImage}
+            onRegenerate={onRegenerate}
+            queryClient={queryClient}
+            character={character}
+          />
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -2325,11 +2596,11 @@ function AllImagesSection({
                   <button
                     id={`ctx-btn-${imgId}`}
                     onClick={(e) => { e.stopPropagation(); setCtxOpenImg(ctxOpenImg === imgId ? null : imgId); }}
-                    className="absolute top-1 right-1 z-10 flex items-center justify-center rounded-lg bg-black/60 hover:bg-primary border-none text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ width: '24px', height: '24px' }}
+                    className="absolute top-1 right-1 z-10 flex items-center justify-center rounded-lg bg-black/60 hover:bg-primary border-none text-white opacity-0 group-hover:opacity-100 max-lg:opacity-100 transition-opacity touch-target"
+                    style={{ width: '28px', height: '28px' }}
                     aria-label={`Options for image ${i + 1}`}
                   >
-                    <MoreVertical className="w-3 h-3" />
+                    <MoreVertical className="w-3.5 h-3.5" />
                   </button>
                   {/* Context menu dropdown */}
                   {ctxOpenImg === imgId && (
@@ -2732,7 +3003,7 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
           <div className="flex items-center gap-1">
             <button
               onClick={() => setFullSizeView(true)}
-              className="btn btn-ghost btn-sm btn-square"
+              className="btn btn-ghost btn-sm btn-square touch-target"
               style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
               aria-label="View full size"
               title="View full size"
@@ -2741,7 +3012,7 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
             </button>
             <button
               onClick={onDownload}
-              className="btn btn-ghost btn-sm btn-square"
+              className="btn btn-ghost btn-sm btn-square touch-target"
               style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
               aria-label="Download image"
             >
@@ -2749,7 +3020,7 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
             </button>
             <button
               onClick={onClose}
-              className="btn btn-ghost btn-sm btn-square"
+              className="btn btn-ghost btn-sm btn-square touch-target"
               style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
               aria-label="Close"
             >
@@ -3097,7 +3368,7 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
           <div className="flex items-center gap-1">
             <button
               onClick={() => setFullSizeView(true)}
-              className="btn btn-ghost btn-sm btn-square"
+              className="btn btn-ghost btn-sm btn-square touch-target"
               style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
               aria-label="View full size"
               title="View full size"
@@ -3106,7 +3377,7 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
             </button>
             <button
               onClick={onDownload}
-              className="btn btn-ghost btn-sm btn-square"
+              className="btn btn-ghost btn-sm btn-square touch-target"
               style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
               aria-label="Download image"
             >
@@ -3115,7 +3386,7 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
             {!isPrimary && (
               <button
                 onClick={() => { onSetPrimary(); setIsPrimary(true); }}
-                className="btn btn-ghost btn-sm gap-1"
+                className="btn btn-ghost btn-sm gap-1 touch-target"
                 style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
                 aria-label="Set as primary"
                 title="Set as primary"
@@ -3125,7 +3396,7 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
             )}
             <button
               onClick={onDelete}
-              className="btn btn-ghost btn-sm btn-square text-error"
+              className="btn btn-ghost btn-sm btn-square text-error touch-target"
               aria-label="Delete image"
               title="Delete"
             >
@@ -3133,7 +3404,7 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
             </button>
             <button
               onClick={onClose}
-              className="btn btn-ghost btn-sm btn-square"
+              className="btn btn-ghost btn-sm btn-square touch-target"
               style={{ color: 'var(--fallback-bc, oklch(var(--bc))/0.6)' }}
               aria-label="Close"
             >
