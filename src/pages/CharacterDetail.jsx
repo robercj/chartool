@@ -3054,10 +3054,11 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
             {/* Download overlay button */}
             <button
               onClick={onDownload}
-              className="absolute top-2 right-2 btn btn-circle btn-sm bg-black/50 hover:bg-black/70 border-none touch-target"
+              className="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 border-none flex items-center justify-center transition-transform hover:scale-105"
+              style={{ minWidth: '40px', minHeight: '40px' }}
               aria-label="Download image"
             >
-              <Download className="w-4 h-4 text-white" />
+              <Download className="w-5 h-5 text-white" />
             </button>
             {generating && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
@@ -3446,10 +3447,11 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
             {/* Download overlay button */}
             <button
               onClick={onDownload}
-              className="absolute top-2 right-2 btn btn-circle btn-sm bg-black/50 hover:bg-black/70 border-none touch-target"
+              className="absolute top-3 right-3 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 border-none flex items-center justify-center transition-transform hover:scale-105"
+              style={{ minWidth: '40px', minHeight: '40px' }}
               aria-label="Download image"
             >
-              <Download className="w-4 h-4 text-white" />
+              <Download className="w-5 h-5 text-white" />
             </button>
             {generating && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
