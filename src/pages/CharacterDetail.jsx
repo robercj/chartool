@@ -2982,11 +2982,11 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="relative w-full sm:max-w-2xl sm:rounded-2xl overflow-hidden flex flex-col"
+        className="relative w-full sm:max-w-2xl sm:rounded-2xl overflow-hidden flex flex-col h-[min(96vh,100dvh-2rem)]"
         style={{
           background: 'var(--fallback-b1, oklch(var(--b1)))',
           border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
-          maxHeight: '96vh',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
         {/* Header */}
@@ -3346,11 +3346,11 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="relative w-full sm:max-w-2xl sm:rounded-2xl overflow-hidden flex flex-col"
+        className="relative w-full sm:max-w-2xl sm:rounded-2xl overflow-hidden flex flex-col h-[min(96vh,100dvh-2rem)]"
         style={{
           background: 'var(--fallback-b1, oklch(var(--b1)))',
           border: '1px solid var(--fallback-b3, oklch(var(--b3)))',
-          maxHeight: '96vh',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
         {/* Header */}
