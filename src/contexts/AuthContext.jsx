@@ -1,3 +1,19 @@
+// ─── AuthContext.jsx ──────────────────────────────────────────────────────────
+// Global authentication state for the entire app.
+//
+// Provides: user, profile (with joined tier), usage counts, and auth methods.
+//
+// Profile loading uses a cancellation-token pattern: if loadProfile is called
+// again before the previous call finishes (e.g. both getSession and
+// onAuthStateChange fire at startup), the earlier call detects it has been
+// superseded and bails out — preventing double-writes and duplicate requests.
+//
+// Usage tracking covers three quota types: image, story, character.
+// Limits are checked client-side (fast, optimistic) and server-side (authoritative).
+//
+// TOKEN_REFRESHED events are handled specially to avoid re-mounting generation
+// pages mid-flight.
+// ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
@@ -10,8 +26,8 @@ export function AuthProvider({ children }) {
   const [usage, setUsage] = useState({ image: 0, story: 0, character: 0 });
   const [loadingProfile, setLoadingProfile] = useState(false);
   const mountedRef = useRef(true);
-  // Tracks the in-flight loadProfile call; replaced on each new call so a
-  // stale call can detect it has been superseded and bail out early.
+  // Cancellation token for in-flight loadProfile calls — replaced on each new
+  // invocation so stale calls can detect supersession and bail out early.
   const loadTokenRef = useRef(null);
 
   useEffect(() => {
@@ -39,27 +55,30 @@ export function AuthProvider({ children }) {
 
     setLoadingProfile(true);
     try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*, tier:tiers(*)')
-        .eq('id', userId)
-        .single();
-
-      if (profileError) throw profileError;
-      if (isStale()) return;
-      setProfile(profileData);
-      setTier(profileData.tier);
-
+      // Run profile+tier and usage queries in parallel — they are independent
+      // and this halves the total wait time vs sequential execution.
       const period = currentPeriod();
-      const { data: usageRows } = await supabase
-        .from('usage')
-        .select('type, count')
-        .eq('user_id', userId)
-        .eq('period', period);
+      const [profileResult, usageResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*, tier:tiers(*)')
+          .eq('id', userId)
+          .single(),
+        supabase
+          .from('usage')
+          .select('type, count')
+          .eq('user_id', userId)
+          .eq('period', period),
+      ]);
 
+      if (profileResult.error) throw profileResult.error;
       if (isStale()) return;
+
+      setProfile(profileResult.data);
+      setTier(profileResult.data.tier);
+
       const usageMap = { image: 0, story: 0, character: 0 };
-      (usageRows || []).forEach(row => { usageMap[row.type] = row.count; });
+      (usageResult.data || []).forEach(row => { usageMap[row.type] = row.count; });
       setUsage(usageMap);
     } catch (err) {
       if (!isStale()) console.error('loadProfile error:', err);

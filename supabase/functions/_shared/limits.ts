@@ -21,12 +21,26 @@ export async function checkLimit(
   userId: string,
   type: string,
 ): Promise<{ allowed: boolean; reason: string | null }> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tier_id, tier:tiers(monthly_image_limit, monthly_story_limit, monthly_character_limit)')
-    .eq('id', userId)
-    .single()
+  // Run profile+tier lookup and usage count in parallel — these are
+  // independent queries and each is on the critical path of every
+  // generation request. Parallelizing halves the latency.
+  const period = currentPeriod()
+  const [profileResult, usageResult] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('tier_id, tier:tiers(monthly_image_limit, monthly_story_limit, monthly_character_limit)')
+      .eq('id', userId)
+      .single(),
+    supabase
+      .from('usage')
+      .select('count')
+      .eq('user_id', userId)
+      .eq('type', type)
+      .eq('period', period)
+      .maybeSingle(),
+  ])
 
+  const profile = profileResult.data
   if (!profile) return { allowed: false, reason: 'Profile not found' }
 
   const tier = profile.tier
@@ -38,16 +52,7 @@ export async function checkLimit(
 
   if (limit === null) return { allowed: true, reason: null }
 
-  const period = currentPeriod()
-  const { data: usageRow } = await supabase
-    .from('usage')
-    .select('count')
-    .eq('user_id', userId)
-    .eq('type', type)
-    .eq('period', period)
-    .single()
-
-  const current: number = usageRow?.count ?? 0
+  const current: number = usageResult.data?.count ?? 0
   if (current >= limit) {
     return { allowed: false, reason: `Monthly ${type} limit (${limit}) reached. Resets on the 1st.` }
   }

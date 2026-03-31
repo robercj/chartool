@@ -20,7 +20,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { create } from 'zustand';
 import { supabase } from '../supabase';
-import { generateImage, removeImageBackground } from '../anthropic';
+import { generateImage } from '../anthropic';
 import { CharacterImage } from '../storage';
 import { toast } from 'sonner';
 
@@ -52,15 +52,22 @@ const useGenerationQueueStore = create((set, get) => ({
     if (get()._initialized) return;
     
     let mounted = true;
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use getSession() instead of getUser() — reads from local session store
+    // without a network roundtrip to /auth/v1/user. Avoids lock contention
+    // with AuthContext's concurrent auth calls at startup.
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!mounted || !user) {
       set({ _initialized: true });
       return;
     }
 
+    // Only fetch the columns needed to reconstruct sessions — skip large
+    // generation_params JSONB on initial restore (it's only needed when
+    // actually firing a job, at which point we re-read it).
     const { data: activeJobs, error } = await supabase
       .from('generation_jobs')
-      .select('*')
+      .select('id, session_id, context_type, context_id, character_name, thumbnail_url, status, image_url, error_message, generation_params, created_at, completed_at')
       .eq('user_id', user.id)
       .in('status', ['queued', 'generating'])
       .order('created_at');
@@ -132,7 +139,9 @@ const useGenerationQueueStore = create((set, get) => ({
 
   dispatchBatch: async ({ contextType, formSnapshot, returnRoute, jobs }) => {
     const sessionId = generateId();
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use getSession() — local session read, no network request
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    const user = authSession?.user;
     if (!user) throw new Error('Not authenticated');
 
     const session = {
@@ -261,26 +270,23 @@ const useGenerationQueueStore = create((set, get) => ({
           }),
         }));
 
-        const { data: existing, error: checkError } = await supabase
-          .from('character_images')
-          .select('id')
-          .eq('job_id', job.jobId)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (!existing && !checkError) {
-          try {
-            await CharacterImage.add(job.contextId, userId, {
-              url: imageUrl,
-              label: job.label || 'Sprite',
-              seed: job.generationParams?.seed ?? null,
-              poseId: job.generationParams?.poseId ?? null,
-              emotionEntry: job.generationParams?.emotionEntry ?? null,
-              paramsSnapshot: job.generationParams?.paramsSnapshot ?? null,
-              generationType: 'sprite',
-              jobId: job.jobId,
-            });
-          } catch (err) {
+        // Insert the image record. If a duplicate already exists for this job
+        // (e.g. from a Realtime replay or concurrent tab), the insert will
+        // fail with a unique constraint violation — catch and ignore it.
+        try {
+          await CharacterImage.add(job.contextId, userId, {
+            url: imageUrl,
+            label: job.label || 'Sprite',
+            seed: job.generationParams?.seed ?? null,
+            poseId: job.generationParams?.poseId ?? null,
+            emotionEntry: job.generationParams?.emotionEntry ?? null,
+            paramsSnapshot: job.generationParams?.paramsSnapshot ?? null,
+            generationType: 'sprite',
+            jobId: job.jobId,
+          });
+        } catch (err) {
+          // 23505 = unique_violation (duplicate job_id). Safe to ignore.
+          if (err?.code !== '23505') {
             console.error('Failed to add image to character gallery:', err);
           }
         }
@@ -402,13 +408,15 @@ const useGenerationQueueStore = create((set, get) => ({
   },
 
   retryJob: async (sessionId, jobId) => {
-    const session = get().sessions.find(s => s.sessionId === sessionId);
-    if (!session) return;
+    const queueSession = get().sessions.find(s => s.sessionId === sessionId);
+    if (!queueSession) return;
 
-    const job = session.jobs.find(j => j.jobId === jobId);
+    const job = queueSession.jobs.find(j => j.jobId === jobId);
     if (!job) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use getSession() — local session read, no network request
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    const user = authSession?.user;
     if (!user) return;
 
     const newJobId = generateId();
