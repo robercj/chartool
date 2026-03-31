@@ -633,12 +633,13 @@ function CharacterDetailInner() {
   const allImages = [...sessionImgHistory, ...(savedChar?.image_history || [])].filter(Boolean);
   const uniqueImages = [...new Set(allImages)];
 
-  // Glow effect for new images — use existing state from line 300
-  const handleOpenGallery = useCallback(() => {
-    setLastViewedImageCount(uniqueImages.length + characterImages.length);
+  // Glow effect for new images
+  const totalImageCount = uniqueImages.length + characterImages.length;
+  const hasNewImages = totalImageCount > lastViewedImageCount && lastViewedImageCount > 0;
+  const handleOpenGallery = () => {
+    setLastViewedImageCount(totalImageCount);
     setShowMobileGallery(true);
-  }, [uniqueImages.length, characterImages.length]);
-  const hasNewImages = (uniqueImages.length + characterImages.length) > lastViewedImageCount && lastViewedImageCount > 0;
+  };
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
