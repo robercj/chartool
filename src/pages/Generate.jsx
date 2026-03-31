@@ -1,3 +1,15 @@
+// ─── Generate.jsx ─────────────────────────────────────────────────────────────
+// Route: /generate (LEGACY — redirects to /sprites/generate)
+//
+// This was the original batch image generation page using a storyline-based
+// workflow with character slots, multi-upload zones, and a handleForge pipeline.
+// It has been superseded by GenerateSprites.jsx which uses the identity lock
+// system, prompt compiler, and generation queue store.
+//
+// The route /generate is kept as a permanent redirect to /sprites/generate so
+// any bookmarked or externally linked URLs continue to work. This file is
+// retained but no longer the primary generation workflow.
+// ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'

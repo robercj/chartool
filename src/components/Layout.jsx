@@ -1,3 +1,17 @@
+// ─── Layout.jsx ──────────────────────────────────────────────────────────────
+// Application shell rendered around all routes. Provides:
+//   - Fixed navbar with genre-themed styling and nav links
+//   - Mobile hamburger drawer with focus trap + Escape key dismissal
+//   - Desktop dropdown user menu with tier badge and usage progress bars
+//   - GenerationProgressBar (queue-aware aggregate progress)
+//   - Ambient decorative orbs (genre-themed background effects)
+//   - Sonner <Toaster> for toast notifications
+//   - AuthModal trigger for unauthenticated sign-in
+//
+// Mobile drawer closes automatically on route change via useEffect on
+// location.pathname. Focus is trapped inside the drawer when open and
+// returned to the hamburger button on close.
+// ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {

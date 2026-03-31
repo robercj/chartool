@@ -1,3 +1,15 @@
+// ─── GenerationContextProvider.jsx ────────────────────────────────────────────
+// Sets up Supabase Realtime WebSocket channels for two tables:
+//   1. generation_jobs (UPDATE) — syncs job status changes into the Zustand queue store
+//   2. character_images (INSERT) — invalidates React Query cache so galleries auto-refresh
+//
+// This component lives high in the provider tree (inside AuthProvider) so the
+// channels stay alive across page navigations. Channels are created once per
+// authenticated user and torn down on sign-out or unmount.
+//
+// Also initializes the generationQueueStore on mount (restores active sessions
+// from the DB for crash recovery).
+// ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { queryClient } from '../main';

@@ -1,3 +1,11 @@
+// ─── GenerationProgressBar.jsx ────────────────────────────────────────────────
+// Queue-aware aggregate progress bar displayed in the Layout navbar area.
+// Reads all sessions from the Zustand queue store and shows a combined
+// progress indicator (e.g. "3/10 images complete"). Clickable — navigates to
+// the /queue page for detailed per-job controls.
+//
+// Auto-hides when no jobs are pending (all complete/failed or empty queue).
+// ─────────────────────────────────────────────────────────────────────────────
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import useGenerationQueueStore from '../lib/stores/generationQueueStore';

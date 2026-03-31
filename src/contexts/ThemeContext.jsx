@@ -1,11 +1,23 @@
+// ─── ThemeContext.jsx ─────────────────────────────────────────────────────────
+// Genre-based visual theming system. Provides 8 genre themes (default, noir,
+// fantasy, cyberpunk, romance, horror, anime, adventure), each with a full
+// colour palette, gradient definitions, and ambient orb configurations.
+//
+// Theme selection is persisted to localStorage under the key `cf_genre`.
+// Components consume the theme via useTheme() → { theme, genreKey, setGenreKey, GENRES }.
+//
+// Runtime switching: ThemeContext sets CSS custom properties on :root that DaisyUI
+// reads automatically. The genre themes define colours in hex/rgba format for
+// inline styles; DaisyUI semantic tokens are set via index.css.
+//
+// Base palette:
+//   space_indigo:    #2b2d42
+//   lavender_grey:   #8d99ae
+//   platinum:        #edf2f4
+//   punch_red:       #ef233c
+//   classic_crimson: #d80032
+// ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useContext, useState, useEffect } from 'react';
-
-// Color palette
-// space_indigo:   #2b2d42 (100–900: #08090d → #ced0df)
-// lavender_grey:  #8d99ae (100–900: #1a1e25 → #e8ebef)
-// platinum:       #edf2f4 (100–900: #24353b → #fbfcfd)
-// punch_red:      #ef233c (100–900: #330409 → #fcd3d8)
-// classic_crimson:#d80032 (100–900: #2b000a → #ffc4d2)
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const GENRES = {

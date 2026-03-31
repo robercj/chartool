@@ -1,3 +1,16 @@
+// ─── ProgressContext.jsx ──────────────────────────────────────────────────────
+// Global generation progress bar state with AbortController-based cancellation.
+//
+// Supports two modes:
+//   - Determinate: total is a number → shows "3/10" fraction and fills bar
+//   - Indeterminate: total is null → shows animated pulse/scan bar
+//
+// The AbortController is created fresh on each startProgress() call and
+// aborted on stopProgress(). Generation loops should call isCancelled() (ref-based,
+// no re-render) or pass getAbortSignal() to fetch calls for cooperative cancellation.
+//
+// Exported via useProgress() hook.
+// ─────────────────────────────────────────────────────────────────────────────
 import { createContext, useContext, useState, useRef, useCallback } from 'react';
 
 const ProgressContext = createContext();

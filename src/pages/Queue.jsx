@@ -1,3 +1,15 @@
+// ─── Queue.jsx ────────────────────────────────────────────────────────────────
+// Route: /queue
+// Real-time generation queue viewer. Displays all active and completed
+// generation sessions with per-job status, grouped by character.
+//
+// Features:
+//   - Per-job status indicators (queued/generating/complete/failed)
+//   - Individual and bulk retry controls for failed jobs
+//   - Session clear (individual or all)
+//   - Progress bars with completion percentages
+//   - Clickable thumbnails → navigate to character image gallery
+// ─────────────────────────────────────────────────────────────────────────────
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';

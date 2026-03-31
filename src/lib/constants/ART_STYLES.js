@@ -1,3 +1,15 @@
+// ─── ART_STYLES.js ───────────────────────────────────────────────────────────
+// 19 art style presets across 4 categories for the sprite generation workflow.
+// Each style includes:
+//   - id:         unique identifier used in generation params
+//   - label:      human-readable display name
+//   - desc:       short description shown in the UI tooltip
+//   - nanoPrompt: prompt fragment optimized for fal.ai nano-banana-2
+//
+// Categories: Anime & Manga, Manhwa / Light Novel, Western Comics, VN / Game
+//
+// Used by: ArtStyleSelector component, GenerateSprites page, promptCompiler
+// ─────────────────────────────────────────────────────────────────────────────
 export const ART_STYLES = [
   {
     category: 'Anime & Manga',

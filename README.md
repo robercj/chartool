@@ -65,8 +65,8 @@ character-forge/
 ├── src/
 │   ├── main.jsx                    # React entry point, provider tree, route definitions
 │   ├── App.jsx                     # DEPRECATED — routes consolidated into main.jsx
-│   ├── index.css                   # Tailwind v4 CSS-first config, DaisyUI theme, design tokens
-│   ├── assets/                     # Images, fonts
+│   ├── index.css                   # Tailwind v4 CSS-first config, DaisyUI theme, design tokens, mobile utilities
+│   ├── assets/                     # Images (hero.png, logos)
 │   ├── contexts/
 │   │   ├── AuthContext.jsx         # Auth state, profile, tier, usage, limit checks
 │   │   ├── ThemeContext.jsx        # Genre-based visual theming (8 genres)
@@ -75,37 +75,65 @@ character-forge/
 │   │   ├── Layout.jsx              # Fixed nav bar, progress bar, auth area, mobile drawer
 │   │   ├── AuthModal.jsx           # Login / register / forgot password modal
 │   │   ├── ProtectedRoute.jsx      # Route guard — shows AuthModal if unauthenticated
-│   │   └── character/
-│   │       ├── AppearanceForm.jsx          # Character appearance accordion form
-│   │       ├── CharacterIdentityForm.jsx   # Full character identity/personality form
-│   │       ├── DerePresetSelector.jsx      # 18 dere-type preset picker
-│   │       ├── ExitConfirmationModal.jsx   # Dirty-state navigation guard
-│   │       ├── ImageEditContext.jsx        # Image history, regenerate, seed control
-│   │       ├── PillTagInput.jsx            # Tag input with pill UI
-│   │       └── PromptPreviewPanel.jsx      # JSON prompt editor + generation trigger
+│   │   ├── GenerationContextProvider.jsx  # Realtime subscriptions for queue & image updates
+│   │   ├── GenerationProgressBar.jsx      # Queue-aware global progress indicator
+│   │   ├── character/
+│   │   │   ├── AppearanceForm.jsx          # Character appearance accordion form
+│   │   │   ├── CharacterIdentityForm.jsx   # Full character identity/personality form
+│   │   │   ├── DerePresetSelector.jsx      # 18 dere-type preset picker
+│   │   │   ├── ExitConfirmationModal.jsx   # Dirty-state navigation guard
+│   │   │   ├── ImageEditContext.jsx        # Image history, regenerate, seed control
+│   │   │   ├── PillTagInput.jsx            # Tag input with pill UI
+│   │   │   └── PromptPreviewPanel.jsx      # JSON prompt editor + generation trigger
+│   │   └── sprites/
+│   │       ├── ArtStyleSelector.jsx        # Art style category/option selector
+│   │       ├── CustomPromptPanel.jsx       # Custom prompt text area
+│   │       ├── EmotionListInput.jsx        # Emotion entry list with fuzzy matching
+│   │       ├── ImageEditModal.jsx          # Full-screen image edit lightbox
+│   │       ├── ModifierToggles.jsx         # Toggle switches for generation options
+│   │       ├── PoseSelector.jsx            # Pose catalog selector
+│   │       ├── QuickBatchSection.jsx       # Quick batch preset buttons (Basic/Comprehensive)
+│   │       └── VariationControls.jsx       # Emotion + pose variation configuration
 │   ├── pages/
-│   │   ├── Generate.jsx            # Batch character image generation (reference-photo workflow)
+│   │   ├── GenerateSprites.jsx     # Sprite generation — identity lock workflow (primary route)
+│   │   ├── Generate.jsx            # Legacy batch generation — redirects to /sprites/generate
 │   │   ├── GenerateCharacter.jsx   # Character creation wizard (3-phase: identity→appearance→generate)
+│   │   ├── CharacterDetail.jsx     # Finalized character view + sprite generation + editing
 │   │   ├── CharacterList.jsx       # Finalized characters + draft management
 │   │   ├── Gallery.jsx             # Storyline and batch library overview
 │   │   ├── BatchDetail.jsx         # Individual character batch — images, edit, restyle, export
 │   │   ├── StorylineDetail.jsx     # Single storyline — batches, group shots
 │   │   ├── StorylineForm.jsx       # Multi-section storyline prompt builder
 │   │   ├── StorylineResult.jsx     # Rendered storyline prompt output
+│   │   ├── Queue.jsx               # Generation queue viewer with retry/clear controls
 │   │   ├── Settings.jsx            # Account, plan, usage, billing, security
 │   │   └── AuthCallback.jsx        # OAuth redirect handler
 │   └── lib/
-│       ├── supabase.js             # Supabase client singleton
+│       ├── supabase.js             # Supabase client singleton (30-min timeout, caller-signal forwarding)
 │       ├── anthropic.js            # AI API wrappers — all calls proxy through edge functions
-│       ├── storage.js              # Supabase data layer: Storyline, CharacterBatch, etc.
+│       ├── storage.js              # Supabase data layer: Storyline, CharacterBatch, Character, etc.
+│       ├── promptCompiler.js       # Identity lock prompt assembly engine
+│       ├── emotionMatcher.js       # Fuzzy emotion input resolver (5-stage pipeline)
 │       ├── stripe.js               # Stripe checkout and portal redirect helpers
-│       ├── seedSettings.js         # DEPRECATED — no-op, safe to delete
 │       ├── constants/
-│       │   └── DERE_PRESETS.ts     # Dere types, archetypes, alignments, and option lists
-│       └── hooks/
-│           └── useDraftPersistence.js  # Dual-layer draft auto-save (localStorage + Supabase)
+│       │   ├── DERE_PRESETS.ts     # 18 dere types, archetypes, alignments, and option lists
+│       │   ├── EMOTION_PRESETS.ts  # 7 base emotions, 3 intensities, 10 specials, 100+ aliases
+│       │   ├── POSE_PRESETS.ts     # 12 pose presets with safeForRandom flags
+│       │   ├── ART_STYLES.js       # 19 art styles across 4 categories with fal.ai nanoPrompts
+│       │   └── QUICK_BATCH_PRESETS.js  # Pre-configured batch configs (10 Basic, 30 Comprehensive)
+│       ├── hooks/
+│       │   └── useDraftPersistence.js  # Dual-layer draft auto-save (localStorage + Supabase)
+│       ├── stores/
+│       │   └── generationQueueStore.js # Zustand store for background job queue + concurrency
+│       └── __tests__/
+│           ├── emotionMatcher.test.js  # Fuzzy matching unit tests (19 tests)
+│           └── promptCompiler.test.js  # Prompt compilation unit tests (23 tests)
 ├── supabase/
+│   ├── DATABASE_UTILITIES.md       # DBA maintenance queries (queue mgmt, egress, user data)
 │   ├── functions/
+│   │   ├── _shared/
+│   │   │   ├── auth.ts             # JWT payload extraction helper
+│   │   │   └── limits.ts           # Usage limit check + increment helpers
 │   │   ├── anthropic-proxy/        # Edge Function: LLM proxy with auth + rate limiting
 │   │   ├── fal-generate/           # Edge Function: reference-guided image generation
 │   │   ├── fal-generate-character/ # Edge Function: text-to-image character generation
@@ -113,22 +141,38 @@ character-forge/
 │   │   ├── stripe-checkout/        # Edge Function: Stripe Checkout Session creation
 │   │   └── stripe-webhook/         # Edge Function: Stripe webhook handler
 │   └── migrations/
-│       ├── 001_initial_schema.sql      # Core tables, RLS, triggers, seed data
-│       ├── 002_rpc_increment_usage.sql # Atomic usage counter upsert RPC
-│       ├── 003_admin_helpers.sql       # Manual admin SQL snippets (commented out)
-│       ├── 004_stripe_billing.sql      # Stripe billing columns + sync_tier_from_subscription RPC
-│       ├── 005_character_generate_feature.sql  # ALTER characters to add character wizard columns
-│       └── 006_add_character_columns.sql       # Comprehensive character column additions
+│       ├── 001_initial_schema.sql          # Core tables, RLS, triggers, seed data
+│       ├── 002_rpc_increment_usage.sql     # Atomic usage counter upsert RPC
+│       ├── 003_admin_helpers.sql           # Manual admin SQL snippets (commented out)
+│       ├── 004_stripe_billing.sql          # Stripe billing columns + sync RPC
+│       ├── 005_character_generate_feature.sql  # Character wizard columns
+│       ├── 006_add_character_columns.sql   # Comprehensive character column additions
+│       ├── 007_v2_schema_changes.sql       # V2 schema updates
+│       ├── 008_character_assignment_rls.sql # Character assignment RLS policies
+│       ├── 009_character_detail_schema.sql  # Character detail schema additions
+│       ├── 010_sprite_generation.sql        # Sprite generation tables
+│       ├── 011_identity_lock_schema.sql     # Identity lock JSONB columns
+│       ├── 012_generation_jobs_queue.sql    # Background job queue table + indexes
+│       ├── 014_character_images_v2.sql      # Character images table (direct binding)
+│       ├── 015_queue_enhancements.sql       # Queue status, retry, session columns
+│       ├── 016_character_quota.sql          # Character creation quota enforcement
+│       ├── 017_sprite_image_rpcs.sql        # Sprite image RPC functions
+│       ├── 018_fix_usage_type_constraint.sql # Fix usage type check constraint
+│       ├── 019_delete_rls_policies.sql      # Delete-related RLS policies
+│       └── 020_character_cards_view.sql     # Character cards database view
 ├── supabasemigrations/
 │   └── 20260316_character_generate_feature.sql  # Standalone: creates character_drafts + characters tables
 ├── .env.example                # Required environment variable template
 ├── vite.config.js
+├── vitest.config.js            # Vitest test configuration (jsdom, v8 coverage)
 ├── tailwind.config.js
+├── postcss.config.js           # PostCSS config (@tailwindcss/postcss plugin)
 ├── eslint.config.js
+├── vercel.json                 # Vercel SPA deployment config
 └── package.json
 ```
 
-> **Note on migrations:** The `supabase/migrations/` folder is used with `supabase db push` (ordered by filename prefix). The `supabasemigrations/` folder contains a standalone migration for the character generation feature that creates the `character_drafts` and `characters` tables — run this first if the tables don't exist yet.
+> **Note on migrations:** The `supabase/migrations/` folder is used with `supabase db push` (ordered by filename prefix). Migration 013 was reverted and removed. The `supabasemigrations/` folder contains a standalone migration for the character generation feature that creates the `character_drafts` and `characters` tables — run this first if the tables don't exist yet.
 
 ---
 
@@ -137,11 +181,15 @@ character-forge/
 ```
 Browser (React SPA)
     │
-    ├─── React Router → pages (Generate, GenerateCharacter, Gallery, …)
+    ├─── React Router → pages (GenerateSprites, GenerateCharacter, Gallery, Queue, …)
     │
     ├─── TanStack Query → caches Supabase data
     │
+    ├─── Zustand → generationQueueStore (background job queue)
+    │
     ├─── AuthContext → Supabase Auth session + profile + tier
+    │
+    ├─── Supabase Realtime → generation_jobs (UPDATE) + character_images (INSERT)
     │
     └─── lib/anthropic.js ──► supabase.functions.invoke()
                                      │
@@ -159,33 +207,31 @@ All AI API keys (`ANTHROPIC_KEY`, `FAL_KEY`, `STRIPE_SECRET_KEY`) are stored exc
 
 ## Pages & Features
 
-### `Generate.jsx` — Batch Character Image Generation
+### `GenerateSprites.jsx` — Sprite Generation (Primary Workflow)
 
-Reference-photo workflow for generating multiple images of existing characters.
+Route: `/sprites/generate` (canonical entry point — `/` and `/generate` redirect here)
 
-**Step 1 — Storyline Selection**
-- **New Storyline**: Name input, images-per-character slider (1–20), genre picker, keep-integrity toggle, art style selector.
-- **Existing Storyline**: Select from user's saved storylines.
-- **Recent Characters**: Last 5 batches shown for quick resume. Clicking navigates to the batch detail page.
+Identity-lock-based sprite generation from a character reference image.
 
-**Step 2 — Character Configuration**
-Each `CharacterSlot` supports:
-- Multi-image source upload (multiple reference angles; primary labelled)
-- Character name, archetypes (28 options), character arc textarea
-- Keep Integrity / Remove Background toggles
-- Shot type (Portrait / Half-body / Full-body) and aspect ratio (10 options: 21:9 → 9:16)
-- Held items toggle with prop reference image upload
-- Layer overrides: Pose, Expression, Outfit (preset chips + custom tags)
-- Live preview grid showing images as they complete
+**Two modes:**
+- **Mode A — New Character**: Upload reference → Claude analysis → identity lock + consistency prompt → auto-fill appearance → create character record → variation controls → generate
+- **Mode B — Existing Character**: Select from library → pre-load reference image → analysis (if needed) → variation controls → generate
 
-**Generation Pipeline (`handleForge`)**
-1. Creates storyline in DB if new
-2. Per character:
-   - Phase 1: Claude analyzes all reference images → detailed character description
-   - Phase 2: Claude generates N pose/emotion variation objects (JSON)
-   - Creates `CharacterBatch` record in DB
-   - Per variation: `fal-generate` → optional `fal-rembg` → `GeneratedImage.create` → live preview update
-   - Failed images tracked with full prompt + reference URLs for per-image retry
+**Identity Lock Enhancement**: After Claude analysis, structured identity lock data (face, hair, eyes, outfit as immutable traits) is stored alongside a flat consistency prompt. The prompt compiler (`promptCompiler.js`) uses this to produce rigidly ordered generation prompts that keep the character's appearance pixel-perfect across all variations.
+
+**Variation Controls**: Users configure emotions (with fuzzy matching from `emotionMatcher.js`), poses (from `POSE_PRESETS`), art styles (from `ART_STYLES`), aspect ratio, and optional modifiers (clothing/prop changes, custom direction).
+
+**Quick Batch**: One-click presets — Basic (10 images: one per emotion) or Comprehensive (30 images: three intensities per emotion). Uses `QUICK_BATCH_PRESETS`.
+
+**Generation Queue**: Jobs are dispatched via `generationQueueStore.dispatchBatch()` and run in the background. Each job: compiles prompt → calls `fal-generate` edge function → saves to `character_images` table → Realtime subscription auto-refreshes gallery.
+
+---
+
+### `Generate.jsx` — Legacy Batch Generation (Deprecated)
+
+Route: `/generate` — permanently redirects to `/sprites/generate`.
+
+This was the original batch image generation page using a storyline-based workflow with character slots, multi-upload zones, and a `handleForge` pipeline. It has been superseded by `GenerateSprites.jsx` which uses the identity lock system, prompt compiler, and generation queue store. The file is retained for backward compatibility of any bookmarked URLs.
 
 ---
 
@@ -210,6 +256,39 @@ Three-phase wizard for building fully-specified characters from scratch.
 - **Finalized tab**: Character grid with image, name, archetype, creation date
 - **Drafts tab**: List with thumbnail, name, last modified, delete button
 - "New Character" navigates to `/characters/generate`
+
+---
+
+### `CharacterDetail.jsx` — Finalized Character View
+
+Route: `/characters/:characterId`
+
+Full view and edit interface for finalized characters. Draft/in-progress characters are silently redirected to the creation flow (`/characters/generate/:id`).
+
+**Features:**
+- Character identity display with all fields (demographics, personality, psychology, relationships, voice)
+- Inline editing of all character fields with dirty-state tracking per section
+- Sprite generation directly from the character detail page (uses identity lock)
+- Image gallery with generated sprites, download, delete
+- Prompt history browser showing past generation prompts
+- Character manifest viewer (AI-generated roleplay system prompt)
+- Image edit modal with regeneration controls and seed locking
+
+---
+
+### `Queue.jsx` — Generation Queue Viewer
+
+Route: `/queue`
+
+Real-time view of all background image generation jobs.
+
+**Features:**
+- Jobs grouped by character for clean display
+- Per-job status indicators: queued / generating / complete / failed
+- Individual and bulk retry controls for failed jobs
+- Session clear (individual or all sessions)
+- Visual progress bars with completion percentages
+- Clickable thumbnails that navigate to the character's image gallery
 
 ---
 
@@ -301,6 +380,12 @@ Three-mode modal: `login`, `register`, `forgot`
 - Shows loading spinner while session resolves on initial load
 - Shows non-dismissible AuthModal over a blurred placeholder for unauthenticated users
 
+### `GenerationContextProvider.jsx`
+Sets up Supabase Realtime channels for `generation_jobs` (UPDATE) and `character_images` (INSERT). Syncs the Zustand queue store from DB changes and invalidates React Query cache when new images arrive, enabling auto-refresh of galleries across tabs.
+
+### `GenerationProgressBar.jsx`
+Queue-aware aggregate progress bar. Displays across all active sessions (e.g. "3/10 images complete") and links to `/queue` on click. Automatically hides when no jobs are pending.
+
 ### `character/` Components
 
 | Component | Purpose |
@@ -312,6 +397,19 @@ Three-mode modal: `login`, `register`, `forgot`
 | `ImageEditContext.jsx` | Image history strip, regenerate controls, seed lock |
 | `PillTagInput.jsx` | Tag input with pill UI |
 | `PromptPreviewPanel.jsx` | JSON prompt editor with live validation + generation trigger |
+
+### `sprites/` Components
+
+| Component | Purpose |
+|---|---|
+| `ArtStyleSelector.jsx` | Art style picker — 4 categories × 19 options with fal.ai nanoPrompts |
+| `CustomPromptPanel.jsx` | Custom prompt direction text area |
+| `EmotionListInput.jsx` | Emotion entry list with fuzzy matching via `emotionMatcher.js` |
+| `ImageEditModal.jsx` | Full-screen image lightbox with describe-changes + regenerate |
+| `ModifierToggles.jsx` | Toggle switches for allowClothing, allowProps, removeBg |
+| `PoseSelector.jsx` | Pose catalog selector from `POSE_PRESETS` |
+| `QuickBatchSection.jsx` | Quick batch preset buttons (Basic 10 / Comprehensive 30) |
+| `VariationControls.jsx` | Emotion + pose variation config panel |
 
 ---
 
@@ -361,7 +459,7 @@ Provides global generation progress bar state and `AbortController` for cancella
 
 ### `src/lib/supabase.js`
 
-Creates and exports the Supabase client singleton. Reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from environment. Throws on missing values.
+Creates and exports the Supabase client singleton. Reads `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from environment. Throws on missing values. Configures a 30-minute fetch timeout and forwards any caller-provided `AbortSignal` to prevent unhandled AbortError cascades from gotrue-js lock contention.
 
 ### `src/lib/anthropic.js`
 
@@ -373,9 +471,13 @@ All AI calls are proxied through Supabase Edge Functions. No API keys in the bro
 | `callStorylineAPI({ formPayload, maxTokens })` | Claude claude-opus-4-5 for rich storyline generation |
 | `generateImage({ prompt, referenceImageUrls, referenceImageUrl, propImageUrl, aspectRatio })` | fal.ai nano-banana-2/edit; returns CDN URL |
 | `removeImageBackground(imageUrl)` | fal.ai rembg background removal; returns CDN URL |
-| `synthesizeCharacterImagePrompt(characterData)` | Claude claude-sonnet-4-5 → image prompt string for character wizard |
+| `generateCharacterIdentityPrompt(characterData)` | Claude claude-sonnet-4-5 → image prompt string for character wizard |
+| `generateAppearanceDescription(characterData)` | Claude → structured appearance description from identity data |
 | `generateCharacterManifest(characterData)` | Claude → `{ manifest, imagePrompt? }` for character finalization |
 | `generateCharacterImage({ prompt, seed })` | fal.ai nano-banana-2 text-to-image; returns `{ url, seed, jobId }` |
+| `analyzeReferenceImage(imageUrls)` | Claude Vision → structured identity lock JSON + consistency prompt |
+| `parseAppearanceFromIdentityLock(identityLock)` | Extracts appearance fields from identity lock data for auto-fill |
+| `compressBase64Image(base64, maxWidth)` | Client-side image compression for reference uploads |
 | `LimitError` | Thrown on HTTP 429 (usage limit reached) |
 
 ### `src/lib/storage.js`
@@ -410,12 +512,68 @@ Supabase-backed data layer. All methods are async.
 - `forStoryline(storylineId)` — Finalized characters in a storyline
 - `unassigned(userId)` — Characters with no assigned storyline
 
+**`CharacterImage`**
+- `list(characterId)` — All images for a character, newest first
+- `add(userId, data)` — Insert a new character image record
+- `delete(id)` — Delete a single image
+
+**`PromptHistory`**
+- `list(characterId)` — All prompt history entries for a character
+- `create(userId, data)` — Record a prompt used for generation
+
+### `src/lib/promptCompiler.js`
+
+Identity Lock Prompt Compiler — assembles the final generation prompt from structured components in a rigid, mandatory order. The identity lock section MUST always appear first, verbatim and unmodified.
+
+**Compilation Order (ABSOLUTE):**
+1. Character Identity Lock (mandatory first)
+2. Forbidden Changes (from identity lock; props toggle affects this)
+3. Art Style Transformation (rendering only, never identity traits)
+4. Pose & Emotion (selected or randomized)
+5. User Direction (only if `allowPrompt` toggle is ON)
+6. Clothing Change (only if `allowClothing` toggle is ON)
+7. Edit Instructions (edit modal flow only)
+8. Critical Constraints (final hard reinforcements)
+
+| Export | Description |
+|---|---|
+| `compileSpritePrompt(opts)` | Full sprite prompt compilation from identity lock + variation spec |
+| `compileEditPrompt(opts)` | Edit-mode prompt with describe-changes instructions |
+| `resolveVariationSpecs(entries)` | Resolves emotion/pose entries to canonical variation objects |
+
+### `src/lib/emotionMatcher.js`
+
+Fuzzy matching engine for user-typed emotion input. Five-stage resolution pipeline:
+1. Normalize (lowercase, trim, strip punctuation)
+2. Exact match in `EMOTION_ALIASES`
+3. Levenshtein distance ≤ 2 fuzzy match
+4. Substring containment (e.g. "joyfully" → "joy")
+5. No match → verbatim passthrough (LLM interprets directly)
+
+| Export | Description |
+|---|---|
+| `resolveEmotion(input)` | Returns `{ resolved, isVerbatim, matchedKey, displayLabel, confidence }` |
+| `getSuggestions(partial, limit)` | Typeahead suggestions for emotion autocomplete |
+
 ### `src/lib/hooks/useDraftPersistence.js`
 
 Custom hook for character draft auto-save with dual-layer persistence:
 - **localStorage**: immediate write on every change
 - **Supabase DB**: debounced 2 s write (when authenticated)
 - Saves on `visibilitychange` (tab hide) and warns on `beforeunload` if dirty
+
+### `src/lib/stores/generationQueueStore.js`
+
+Zustand store for managing the background image generation job queue. Sessions contain multiple jobs; jobs execute with a concurrency limit of 10 parallel generations.
+
+| Feature | Detail |
+|---|---|
+| Job lifecycle | `queued` → `generating` → `complete` \| `failed` |
+| Persistence | Jobs inserted to `generation_jobs` DB table for crash recovery |
+| Auto-retry | Failed jobs retry once automatically after 2s delay |
+| Notifications | Per-image toast on completion; batch summary toast when all images for a character finish |
+| Realtime sync | `GenerationContextProvider` subscribes to DB changes and syncs the store |
+| Restore on refresh | `initialize()` reads active jobs from DB on mount |
 
 ### `src/lib/constants/DERE_PRESETS.ts`
 
@@ -425,12 +583,44 @@ Exported constants for the character wizard:
 - `MORAL_ALIGNMENTS` — 9 D&D alignments
 - `SOCIAL_CLASSES`, `BODY_TYPES`, `SEX_OPTIONS`, `GENDER_EXPRESSION_OPTIONS`, `TONE_OPTIONS`, `ROLE_OPTIONS`
 
+### `src/lib/constants/EMOTION_PRESETS.ts`
+
+TypeScript constants for the emotion system:
+- `BASE_EMOTIONS` — 7 base emotions (happy, sad, anger, surprise, concern, aversion, thinking) with face/pose cues
+- 3 intensity tiers: subtle, average, high
+- 8 modifier overlays (e.g. blushing, tears, trembling)
+- `SPECIAL_PRESETS` — 10 standalone emotions (confident, proud, smug, determined, flustered, sad_smile, embarrassed, despair, contempt, panic)
+- `EMOTION_ALIASES` — 100+ user-friendly aliases mapped to canonical emotions
+- `RANDOM_POOL` — safe-for-random emotion subset
+
+### `src/lib/constants/POSE_PRESETS.ts`
+
+TypeScript constants for pose selection:
+- 12 pose presets with descriptive prompts
+- `safeForRandom` flag — unsafe poses (kneeling, crouching, lying, back_turned) excluded from random selection to avoid obscuring identity-locked traits
+
+### `src/lib/constants/ART_STYLES.js`
+
+19 art style presets across 4 categories:
+- **Anime & Manga** (5): Shōnen, Shōjo, Seinen, Josei, Dark Fantasy
+- **Manhwa / Light Novel** (5): Clean Manhwa, Webtoon, Chinese Xianxia, Japanese LN, Soft Watercolor
+- **Western Comics** (5): Western Comic, Modern Western, Chibi, Pixel Art, Sticker
+- **Visual Novel / Game** (4): VN CG, JRPG, Gacha, Semi-Realistic
+
+Each style includes a `nanoPrompt` string optimized for fal.ai nano-banana-2.
+
+### `src/lib/constants/QUICK_BATCH_PRESETS.js`
+
+Pre-configured batch generation configs:
+- `QUICK_BATCH_BASIC` — 10 images (one per emotion at average intensity)
+- `QUICK_BATCH_COMPREHENSIVE` — 30 images (three intensities per emotion)
+
 ### `src/lib/stripe.js`
 
 | Function | Description |
 |---|---|
 | `redirectToCheckout(priceId)` | Calls `stripe-checkout` edge function; redirects browser to Stripe-hosted checkout |
-| `redirectToCustomerPortal()` | Calls `stripe-portal` edge function; redirects to Stripe Customer Portal |
+| `redirectToCustomerPortal()` | Calls `stripe-portal` edge function; redirects to Stripe Customer Portal. **Note:** The `stripe-portal` edge function has not been implemented yet — deploy it before enabling this feature. |
 
 ---
 
@@ -552,7 +742,9 @@ Implements manual HMAC-SHA256 signature verification and idempotency via `stripe
 | `character_batches` | `user_id`, `storyline_id`, `name`, `reference_image_url`, `reference_image_urls (text[])`, `prop_image_url`, `character_description`, `status`, `image_count`, `aspect_ratio` |
 | `generated_images` | `user_id`, `batch_id (FK→character_batches, CASCADE)`, `url`, `label`, `category` |
 | `character_drafts` | `user_id`, all identity/personality/appearance/image-generation fields, `creation_status`, timestamps |
-| `characters` | `user_id`, full character record (mirrors drafts), `character_manifest (text)`, `image_history (jsonb)`, `draft_id (FK→character_drafts)`, immutable after finalization |
+| `characters` | `user_id`, full character record (mirrors drafts), `character_manifest (text)`, `character_identity_lock (jsonb)`, `character_consistency_prompt (text)`, `draft_id (FK→character_drafts)`, immutable after finalization |
+| `character_images` | `id`, `character_id (FK→characters, CASCADE)`, `user_id` (denormalized for RLS), `url`, `label`, `seed`, `pose_id`, `emotion_entry (jsonb)`, `params_snapshot (jsonb)`, `generation_type`, `job_id (FK→generation_jobs)` |
+| `generation_jobs` | `id`, `user_id`, `session_id`, `context_type` (`sprite`/`character_appearance`/`storyline`), `context_id`, `character_name`, `thumbnail_url`, `status` (`queued`/`generating`/`complete`/`failed`), `image_url`, `error_message`, `generation_params (jsonb)` |
 | `stripe_events` | `id (PK = Stripe event ID)`, `type`, `data (jsonb)`, `processed_at` |
 
 ### RLS
@@ -631,7 +823,7 @@ Tier defaults:
    supabase functions deploy stripe-webhook
    ```
 
-6. **(Optional)** Set up the [Stripe Customer Portal](https://dashboard.stripe.com/settings/billing/portal) and deploy the `stripe-portal` edge function for self-serve subscription management.
+6. **(Optional — Not Yet Implemented)** Set up the [Stripe Customer Portal](https://dashboard.stripe.com/settings/billing/portal) and create a `stripe-portal` edge function for self-serve subscription management. The client-side `redirectToCustomerPortal()` helper in `stripe.js` already calls this function, but the edge function has not been deployed yet.
 
 ---
 
@@ -685,11 +877,8 @@ supabase db push
 
 # Option B: run manually in Supabase SQL Editor in this order:
 #   supabasemigrations/20260316_character_generate_feature.sql  (creates character_drafts + characters)
-#   supabase/migrations/001_initial_schema.sql
-#   supabase/migrations/002_rpc_increment_usage.sql
-#   supabase/migrations/004_stripe_billing.sql
-#   supabase/migrations/005_character_generate_feature.sql
-#   supabase/migrations/006_add_character_columns.sql
+#   supabase/migrations/001_initial_schema.sql through 020_character_cards_view.sql
+#   (Note: migration 013 was reverted and does not exist)
 
 # 4. Deploy edge functions (requires Supabase project linked)
 supabase functions deploy anthropic-proxy --no-verify-jwt

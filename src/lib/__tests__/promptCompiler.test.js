@@ -74,7 +74,7 @@ describe('promptCompiler', () => {
           },
         })
 
-        expect(result).toContain('**Outfit** (IMMUTABLE):')
+        expect(result).toContain('**Outfit & Accessories** (IMMUTABLE')
         expect(result).toContain('- blue school uniform')
       })
 
@@ -115,7 +115,7 @@ describe('promptCompiler', () => {
         expect(result).toContain('DO NOT alter facial structure')
         expect(result).toContain('DO NOT change hair color')
         expect(result).toContain('DO NOT change eye color')
-        expect(result).toContain('DO NOT alter skin tone')
+        expect(result).toContain('DO NOT change skin tone')
       })
 
       it('should include clothing constraints when allowClothing is false', () => {

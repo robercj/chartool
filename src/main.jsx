@@ -1,3 +1,14 @@
+// ─── main.jsx ─────────────────────────────────────────────────────────────────
+// Application entry point. Renders the React root with the full provider tree
+// and all route definitions.
+//
+// Provider nesting order (outermost → innermost):
+//   QueryClientProvider → ThemeProvider → ProgressProvider → AuthProvider
+//   → GenerationContextProvider → BrowserRouter → Layout → Routes
+//
+// All pages except /auth/callback are wrapped in <ProtectedRoute> which
+// shows a non-dismissible AuthModal for unauthenticated users.
+// ─────────────────────────────────────────────────────────────────────────────
 /* eslint-disable react-refresh/only-export-components */
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -22,8 +33,11 @@ import AuthCallback from './pages/AuthCallback'
 import QueuePage from './pages/Queue'
 import { GenerationContextProvider } from './components/GenerationContextProvider'
 import './index.css'
-// seedSettings.js no longer needed — API keys are managed by Supabase Edge Function secrets
 
+/**
+ * Shared QueryClient — exported so GenerationContextProvider can
+ * invalidate queries from outside the React tree.
+ */
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -33,6 +47,7 @@ export const queryClient = new QueryClient({
   },
 })
 
+/** 404 fallback page for unmatched routes. */
 function NotFound() {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -44,7 +59,7 @@ function NotFound() {
   )
 }
 
-// Wrap a route element in ProtectedRoute
+/** Shorthand wrapper — renders children inside ProtectedRoute auth guard. */
 function Protected({ children }) {
   return <ProtectedRoute>{children}</ProtectedRoute>
 }
@@ -61,22 +76,33 @@ createRoot(document.getElementById('root')).render(
                 <Routes>
                   {/* Root redirect → canonical sprites route */}
                   <Route path="/" element={<Navigate to="/sprites/generate" replace />} />
+
+                  {/* OAuth redirect handler (unprotected) */}
                   <Route path="/auth/callback" element={<AuthCallback />} />
-                  {/* New canonical route */}
+
+                  {/* Primary sprite generation route */}
                   <Route path="/sprites/generate"      element={<Protected><GenerateSprites /></Protected>} />
-                  {/* Legacy route — permanent redirect to new canonical path */}
+
+                  {/* Legacy route — permanent redirect to canonical path */}
                   <Route path="/generate"              element={<Navigate to="/sprites/generate" replace />} />
+
+                  {/* Character management */}
                   <Route path="/characters"            element={<Protected><CharacterList /></Protected>} />
                   <Route path="/characters/generate"   element={<Protected><GenerateCharacter /></Protected>} />
                   <Route path="/characters/generate/:draftId" element={<Protected><GenerateCharacter /></Protected>} />
                   <Route path="/characters/:characterId" element={<Protected><CharacterDetail /></Protected>} />
+
+                  {/* Gallery & storylines */}
                   <Route path="/gallery"               element={<Protected><Gallery /></Protected>} />
                   <Route path="/storyline"             element={<Protected><StorylineDetail /></Protected>} />
                   <Route path="/storyline/new"         element={<Protected><StorylineForm /></Protected>} />
                   <Route path="/storyline/result/:id"  element={<Protected><StorylineResult /></Protected>} />
                   <Route path="/batch"                 element={<Protected><BatchDetail /></Protected>} />
+
+                  {/* Generation queue & settings */}
                   <Route path="/queue"                element={<Protected><QueuePage /></Protected>} />
                   <Route path="/settings"              element={<Protected><Settings /></Protected>} />
+
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Layout>
