@@ -297,16 +297,6 @@ function CharacterDetailInner() {
   const [selectedHistImg,  setSelectedHistImg]  = useState(null); // from strip
   const [showMobileGallery, setShowMobileGallery] = useState(false);
   const [showMobileActions, setShowMobileActions] = useState(false);
-  const [lastViewedImageCount, setLastViewedImageCount] = useState(0); // for glow effect
-
-  // Track when gallery is opened to update the "last viewed" count
-  const handleOpenGallery = useCallback(() => {
-    setLastViewedImageCount(uniqueImages.length + characterImages.length);
-    setShowMobileGallery(true);
-  }, [uniqueImages.length, characterImages.length]);
-
-  // Detect if there are new images since last viewed (for glow effect)
-  const hasNewImages = (uniqueImages.length + characterImages.length) > lastViewedImageCount && lastViewedImageCount > 0;
 
   // Close mobile overflow menu on outside click
   useEffect(() => {
@@ -641,6 +631,14 @@ function CharacterDetailInner() {
 
   const allImages = [...sessionImgHistory, ...(savedChar?.image_history || [])].filter(Boolean);
   const uniqueImages = [...new Set(allImages)];
+
+  // Glow effect for new images — track last viewed count
+  const [lastViewedImageCount, setLastViewedImageCount] = useState(0);
+  const handleOpenGallery = useCallback(() => {
+    setLastViewedImageCount(uniqueImages.length + characterImages.length);
+    setShowMobileGallery(true);
+  }, [uniqueImages.length, characterImages.length]);
+  const hasNewImages = (uniqueImages.length + characterImages.length) > lastViewedImageCount && lastViewedImageCount > 0;
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
