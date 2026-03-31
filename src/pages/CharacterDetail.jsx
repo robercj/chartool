@@ -3051,6 +3051,14 @@ function SpriteImageModal({ img, character, onClose, onDelete, onDownload, onNew
               className="w-full h-full object-contain"
               style={{ maxHeight: '50vh' }}
             />
+            {/* Download overlay button */}
+            <button
+              onClick={onDownload}
+              className="absolute top-2 right-2 btn btn-circle btn-sm bg-black/50 hover:bg-black/70 border-none touch-target"
+              aria-label="Download image"
+            >
+              <Download className="w-4 h-4 text-white" />
+            </button>
             {generating && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                 <span className="loading loading-spinner loading-lg text-primary" />
@@ -3435,6 +3443,14 @@ function PrimaryImageModal({ img, character, currentPrimaryUrl, sessionCurrentIm
               className="w-full h-full object-contain"
               style={{ maxHeight: '50vh' }}
             />
+            {/* Download overlay button */}
+            <button
+              onClick={onDownload}
+              className="absolute top-2 right-2 btn btn-circle btn-sm bg-black/50 hover:bg-black/70 border-none touch-target"
+              aria-label="Download image"
+            >
+              <Download className="w-4 h-4 text-white" />
+            </button>
             {generating && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                 <span className="loading loading-spinner loading-lg text-primary" />
